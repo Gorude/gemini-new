@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Google Sans', sans-serif; background-color: #131314; color: #e3e3e3; }
+        .sidebar { width: 280px; background-color: #1e1f20; flex-shrink: 0; }
+        .main-content { background-color: #131314; flex-grow: 1; position: relative; }
+        .input-wrapper { background-color: #1e1f20; border-radius: 32px; border: 1px solid transparent; }
+        .input-wrapper:focus-within { background-color: #28292a; border-color: #3c3d3e; }
+        .user-msg { background-color: #28292a; border-radius: 24px; padding: 12px 24px; margin-left: auto; max-width: 85%; }
+        
+        /* Estilização do Markdown */
+        .response-body { font-size: 16px; }
+        .response-body h1, .response-body h2, .response-body h3 { font-weight: bold; margin: 15px 0 10px 0; color: #fff; }
+        .response-body p { margin-bottom: 12px; }
+        .response-body ul, .response-body ol { margin-left: 25px; margin-bottom: 15px; list-style-position: outside; }
+        .response-body ul { list-style-type: disc; }
+        .response-body ol { list-style-type: decimal; }
+        .response-body li { margin-bottom: 5px; }
+        .response-body code { background-color: #2d2d2d; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; color: #f8f8f2; }
+        .response-body pre { background-color: #1e1e1e; padding: 16px; border-radius: 12px; margin: 15px 0; overflow-x: auto; border: 1px solid #333; }
+        .response-body pre code { background-color: transparent; padding: 0; }
+        
+        .thought-container { color: #9ca3af; font-style: italic; background: #1a1a1c; border-radius: 12px; padding: 14px; margin-bottom: 20px; border-left: 3px solid #4f46e5; }
+        .gemini-gradient { background: linear-gradient(70deg, #4285f4, #9b72cb, #d96570); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .shimmer-line { height: 15px; background: linear-gradient(90deg, #1e1f20 25%, #2d2e30 50%, #1e1f20 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite linear; border-radius: 4px; margin-bottom: 10px; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <aside class="sidebar hidden md:flex flex-col p-4">
+        <div class="p-2 mb-6 cursor-pointer hover:bg-gray-800 w-fit rounded-full transition">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#e3e3e3"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+        </div>
+        <button onclick="window.location.reload()" class="flex items-center gap-3 bg-[#1a1b1c] hover:bg-[#2b2c2d] px-5 py-3 rounded-full text-sm font-medium transition mb-8 w-fit shadow-sm text-white">
+            <span class="text-xl">+</span> Nova conversa
+        </button>
+    </aside>
+
+    <main class="main-content flex flex-col h-full">
+        <header class="p-4 flex justify-between items-center px-8 border-b border-gray-800/50">
+            <div class="text-xl font-medium flex items-center gap-2">Gemini <span class="text-[10px] bg-gray-800 px-2 py-0.5 rounded text-gray-400">3 FLASH</span></div>
+            <div class="flex items-center gap-4">
+                <input type="password" id="api-key" placeholder="API Key" class="bg-[#1e1f20] text-xs px-4 py-2 rounded-full outline-none border border-gray-700 focus:border-gray-500 w-40 transition-all">
+                <div class="w-9 h-9 bg-indigo-700 rounded-full flex items-center justify-center text-sm font-bold border border-indigo-500 text-white shadow-lg">U</div>
+            </div>
+        </header>
+
+        <section id="chat-window" class="flex-1 overflow-y-auto px-4 md:px-32 lg:px-64 py-8 space-y-10">
+            <div id="welcome-screen" class="h-full flex flex-col justify-center items-center text-center mt-20">
+                <h2 class="text-5xl font-medium mb-6 gemini-gradient">Olá, Usuário</h2>
+                <p class="text-gray-500 text-xl font-light">Como posso ajudar você hoje?</p>
+            </div>
+        </section>
+
+        <footer class="p-4 md:px-32 lg:px-64 pb-8 bg-gradient-to-t from-[#131314] via-[#131314] to-transparent">
+            <div class="max-w-5xl mx-auto">
+                <div class="input-wrapper p-3 shadow-2xl">
+                    <textarea id="user-input" rows="1" placeholder="Digite aqui..." 
+                              class="w-full bg-transparent border-none px-4 pt-2 pb-1 focus:outline-none resize-none text-[18px] text-gray-200 placeholder-gray-500 overflow-hidden"
+                              oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"></textarea>
+                    
+                    <div class="flex justify-between items-center px-2 mt-1">
+                        <div class="flex gap-1 text-gray-400">
+                            <button class="p-2.5 hover:bg-gray-700 rounded-full transition">🖼️</button>
+                            <button class="p-2.5 hover:bg-gray-700 rounded-full text-sm font-medium transition">🛠️ Ferramentas</button>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <select id="model-select" class="bg-transparent text-xs text-gray-500 outline-none cursor-pointer hover:text-white transition">
+                                <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
+                            </select>
+                            <button id="send-btn" class="bg-gray-100 hover:bg-white text-black p-2.5 rounded-full transition shadow-md disabled:opacity-20">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <script>
+        const chatWindow = document.getElementById('chat-window');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const apiKeyInput = document.getElementById('api-key');
+        const welcomeScreen = document.getElementById('welcome-screen');
+
+        // Configuração segura do Marked.js
+        const renderer = new marked.Renderer();
+        marked.setOptions({
+            renderer: renderer,
+            highlight: function(code, lang) {
+                const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                return hljs.highlight(code, { language }).value;
+            },
+            langPrefix: 'hljs language-',
+            breaks: true,
+            gfm: true
+        });
+
+        // Função para garantir que o input seja string antes do Marked
+        function safeMarkdown(content) {
+            if (typeof content !== 'string') return "";
+            return marked.parse(content);
+        }
+
+        function addMessage(role, text, thoughts = "") {
+            if (welcomeScreen) welcomeScreen.remove();
+            const loader = document.getElementById('temp-loading');
+            if (loader) loader.remove();
+
+            const wrapper = document.createElement('div');
+            wrapper.className = role === 'user' ? 'flex justify-end mb-6' : 'flex flex-col mb-8 w-full';
+            
+            if (role === 'ai') {
+                // Filtro para ignorar 'true' ou outros objetos não textuais
+                const cleanThoughts = (typeof thoughts === 'string' && thoughts.length > 5) ? thoughts : "";
+                
+                wrapper.innerHTML = `
+                    <div class="ai-msg">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 via-purple-500 to-pink-500 shadow-md"></div>
+                        </div>
+                        ${cleanThoughts ? `
+                            <details class="thought-container">
+                                <summary class="cursor-pointer text-xs font-bold uppercase opacity-60 tracking-widest">Processo de Raciocínio</summary>
+                                <div class="mt-3 text-sm opacity-90 leading-relaxed font-normal">${safeMarkdown(cleanThoughts)}</div>
+                            </details>` : ''}
+                        <div class="response-body text-gray-200 antialiased">${safeMarkdown(text)}</div>
+                    </div>
+                `;
+            } else {
+                wrapper.innerHTML = `<div class="user-msg text-gray-100 shadow-lg">${text}</div>`;
+            }
+            
+            chatWindow.appendChild(wrapper);
+            chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+            
+            // Força o realce de código após renderizar
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            const key = apiKeyInput.value.trim();
+            const model = document.getElementById('model-select').value;
+            if (!text || !key) return;
+
+            addMessage('user', text);
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            sendBtn.disabled = true;
+
+            const loader = document.createElement('div');
+            loader.id = "temp-loading";
+            loader.className = "flex flex-col mb-8 w-full animate-pulse";
+            loader.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-gray-800 mb-4 border border-gray-700"></div>
+                <div class="shimmer-line w-3/4"></div>
+                <div class="shimmer-line w-1/2"></div>
+                <div class="shimmer-line w-2/3"></div>
+            `;
+            chatWindow.appendChild(loader);
+            chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: "user", parts: [{ text: text }] }],
+                        generationConfig: { 
+                            thinkingConfig: { includeThoughts: true, thinkingLevel: "HIGH" },
+                            maxOutputTokens: 8192,
+                            temperature: 0.7
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+
+                const parts = data.candidates[0].content.parts;
+                let aiThought = "", aiResponse = "";
+
+                parts.forEach(part => {
+                    if (part.thought) aiThought = part.thought;
+                    else if (part.text && !aiResponse) {
+                        // Lógica para separar se o primeiro for pensamento em texto puro
+                        if (parts.length > 1 && part === parts[0]) aiThought = part.text;
+                        else aiResponse = part.text;
+                    } else if (part.text && aiResponse) {
+                        aiResponse += "\n" + part.text;
+                    }
+                });
+
+                // Se não houver resposta final, usa o pensamento como resposta
+                const finalResponse = aiResponse || aiThought || "O modelo não gerou uma resposta textual.";
+                const finalThought = aiResponse ? aiThought : "";
+
+                addMessage('ai', finalResponse, finalThought);
+            } catch (error) {
+                const loader = document.getElementById('temp-loading');
+                if (loader) loader.remove();
+                addMessage('ai', "❌ **Erro do Sistema:** " + error.message);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        sendBtn.onclick = sendMessage;
+        userInput.onkeydown = (e) => { 
+            if(e.key === 'Enter' && !e.shiftKey) { 
+                e.preventDefault(); 
+                sendMessage(); 
+            } 
+        };
+    </script>
+</body>
+</html>

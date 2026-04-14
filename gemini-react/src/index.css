@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&display=swap');
+
+body[data-theme="escuro"] {
+  --bg-main: #131314;
+  --bg-sidebar: #1e1f20;
+  --bg-chat-hover: #1a1b1c;
+  --bg-chat-active: #2b2c2d;
+  --bg-nav-active: #1D3153;
+  --text-nav-active: #A8C7FA;
+  --bg-user-bubble: #2b2c2d;
+  --bg-input: #1e1f20;
+  --border-main: #333333;
+  --border-light: rgba(55, 65, 81, 0.5); /* border-gray-800/50 fallback */
+  --text-primary: #e3e3e3;
+  --text-secondary: #9ca3af; /* gray-400 */
+  --text-placeholder: #6b7280; /* gray-500 */
+  --code-bg: #1e1e1e;
+  --inline-code-bg: #2d2d2d;
+  --code-border: #333;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #3c3d3e;
+  --scrollbar-thumb-hover: #5a5b5c;
+}
+
+body[data-theme="claro"] {
+  --bg-main: #f3f4f6;
+  --bg-sidebar: #ffffff;
+  --bg-chat-hover: #f9fafb;
+  --bg-chat-active: #e5e7eb;
+  --bg-nav-active: #D3E3FD;
+  --text-nav-active: #041E49;
+  --bg-user-bubble: #e5e7eb;
+  --bg-input: #ffffff;
+  --border-main: #d1d5db;
+  --border-light: rgba(209, 213, 219, 0.5);
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-placeholder: #9ca3af;
+  --code-bg: #f3f4f6;
+  --inline-code-bg: #e5e7eb;
+  --code-border: #d1d5db;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #d1d5db;
+  --scrollbar-thumb-hover: #9ca3af;
+}
+
+body[data-theme="areia"] {
+  --bg-main: #f4f1ea;
+  --bg-sidebar: #ebdcc9;
+  --bg-chat-hover: #f1ebd8;
+  --bg-chat-active: #d6bfa3;
+  --bg-nav-active: #D6C2A5;
+  --text-nav-active: #4F3824;
+  --bg-user-bubble: #ebdcc9;
+  --bg-input: #fdfbf7;
+  --border-main: #d6bfa3;
+  --border-light: rgba(214, 191, 163, 0.5);
+  --text-primary: #4a3f35;
+  --text-secondary: #8c7b68;
+  --text-placeholder: #a69888;
+  --code-bg: #ebdcc9;
+  --inline-code-bg: #d6bfa3;
+  --code-border: #c4ab89;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #d6bfa3;
+  --scrollbar-thumb-hover: #c4ab89;
+}
+
+body[data-theme="galaxia"] {
+  --bg-main: #0B0A1A;
+  --bg-sidebar: #12102A;
+  --bg-chat-hover: #1A163B;
+  --bg-chat-active: #251D55;
+  --bg-nav-active: #2A216A;
+  --text-nav-active: #CABDFF;
+  --bg-user-bubble: #1F184B;
+  --bg-input: #12102A;
+  --border-main: #3D2D78;
+  --border-light: rgba(61, 45, 120, 0.5);
+  --text-primary: #E9E1FF;
+  --text-secondary: #A99BDE;
+  --text-placeholder: #7B6BA6;
+  --code-bg: #12102A;
+  --inline-code-bg: #251D55;
+  --code-border: #3D2D78;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: #3D2D78;
+  --scrollbar-thumb-hover: #4B3996;
+}
+
+body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main); color: var(--text-primary); transition: background-color 0.3s ease, color 0.3s ease; }
+.sidebar { width: 280px; background-color: var(--bg-sidebar); flex-shrink: 0; transition: background-color 0.3s ease; }
+.main-content { background-color: var(--bg-main); flex-grow: 1; position: relative; transition: background-color 0.3s ease; }
+.input-wrapper { background-color: var(--bg-input); border-radius: 32px; border: 1px solid transparent; transition: background-color 0.3s ease, border-color 0.3s ease; }
+.input-wrapper:focus-within { background-color: var(--bg-user-bubble); border-color: var(--border-main); }
+.user-msg { background-color: var(--bg-user-bubble); border-radius: 24px; padding: 12px 24px; margin-left: auto; max-width: 85%; transition: background-color 0.3s ease; }
+
+/* Estilização do Markdown */
+.response-body { font-size: 16px; }
+.response-body h1, .response-body h2, .response-body h3 { font-weight: bold; margin: 15px 0 10px 0; color: var(--text-primary); }
+.response-body p { margin-bottom: 12px; }
+.response-body ul, .response-body ol { margin-left: 25px; margin-bottom: 15px; list-style-position: outside; }
+.response-body ul { list-style-type: disc; }
+.response-body ol { list-style-type: decimal; }
+.response-body li { margin-bottom: 5px; }
+.response-body code { background-color: var(--inline-code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; color: var(--text-primary); transition: background-color 0.3s ease; }
+.response-body pre { background-color: var(--code-bg); padding: 16px; border-radius: 12px; margin: 15px 0; overflow-x: auto; border: 1px solid var(--code-border); transition: background-color 0.3s ease, border-color 0.3s ease; }
+.response-body pre code { background-color: transparent; padding: 0; }
+
+.thought-container { color: var(--text-secondary); font-style: italic; background: var(--bg-sidebar); border-radius: 12px; padding: 14px; margin-bottom: 20px; border-left: 3px solid #4f46e5; transition: background-color 0.3s ease; }
+.gemini-gradient { background: linear-gradient(70deg, #4285f4, #9b72cb, #d96570); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.shimmer-line { height: 15px; background: linear-gradient(90deg, var(--bg-sidebar) 25%, var(--bg-chat-hover) 50%, var(--bg-sidebar) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite linear; border-radius: 4px; margin-bottom: 10px; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Scrollbar Customization */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* Custom Dark Select */
+.custom-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+/* Fix break words for AI/User msg */
+.user-msg, .ai-msg {
+  word-break: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+.response-body p, .response-body ul {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@keyframes aura-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.aura-loader {
+  background: linear-gradient(90deg, 
+    rgba(30, 31, 32, 0) 0%, 
+    rgba(155, 114, 203, 0.5) 25%, 
+    rgba(66, 133, 244, 0.7) 50%, 
+    rgba(155, 114, 203, 0.5) 75%, 
+    rgba(30, 31, 32, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: aura-sweep 2s infinite linear;
+}
