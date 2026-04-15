@@ -98,16 +98,80 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
 .user-msg { background-color: var(--bg-user-bubble); border-radius: 24px; padding: 12px 24px; margin-left: auto; max-width: 85%; transition: background-color 0.3s ease; }
 
 /* Estilização do Markdown */
-.response-body { font-size: 16px; }
-.response-body h1, .response-body h2, .response-body h3 { font-weight: bold; margin: 15px 0 10px 0; color: var(--text-primary); }
-.response-body p { margin-bottom: 12px; }
-.response-body ul, .response-body ol { margin-left: 25px; margin-bottom: 15px; list-style-position: outside; }
+.response-body { font-size: 16px; line-height: 1.55; }
+.response-body h1, .response-body h2, .response-body h3 { font-weight: bold; margin: 10px 0 6px 0; color: var(--text-primary); }
+.response-body p { margin: 0 0 2px 0; }
+.response-body p:empty { display: none; margin: 0; padding: 0; line-height: 0; }
+.response-body br { display: block; content: ""; margin: 0; line-height: 0.5em; }
+.response-body ul, .response-body ol { margin-left: 25px; margin-bottom: 0px; list-style-position: outside; }
 .response-body ul { list-style-type: disc; }
 .response-body ol { list-style-type: decimal; }
-.response-body li { margin-bottom: 5px; }
+.response-body li { margin-bottom: 3px; }
 .response-body code { background-color: var(--inline-code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; color: var(--text-primary); transition: background-color 0.3s ease; }
 .response-body pre { background-color: var(--code-bg); padding: 16px; border-radius: 12px; margin: 15px 0; overflow-x: auto; border: 1px solid var(--code-border); transition: background-color 0.3s ease, border-color 0.3s ease; }
 .response-body pre code { background-color: transparent; padding: 0; }
+
+.table-wrapper {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  margin: 15px 0;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+}
+
+.response-body table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.response-body table th, .response-body table td {
+  padding: 12px 20px;
+  border: 1px solid var(--border-light);
+  text-align: left;
+  min-width: 180px;
+}
+
+.response-body th {
+  background-color: var(--bg-sidebar);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.response-body tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Scroll button premium glassmorphism */
+.scroll-to-bottom-btn {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-scroll-button {
+  animation: slideUpFade 0.3s ease-out forwards;
+}
+/* Thinking Drawer */
+.thinking-drawer summary { list-style: none; }
+.thinking-drawer summary::-webkit-details-marker { display: none; }
+.thinking-drawer .thought-content {
+  max-height: 400px;
+  overflow-y: auto;
+  animation: thoughtExpand 0.3s ease-out;
+}
+@keyframes thoughtExpand {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 400px; }
+}
 
 .thought-container { color: var(--text-secondary); font-style: italic; background: var(--bg-sidebar); border-radius: 12px; padding: 14px; margin-bottom: 20px; border-left: 3px solid #4f46e5; transition: background-color 0.3s ease; }
 .gemini-gradient { background: linear-gradient(70deg, #4285f4, #9b72cb, #d96570); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -157,4 +221,47 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
   );
   background-size: 200% 100%;
   animation: aura-sweep 2s infinite linear;
+}
+
+/* AI Generation LED Strip */
+@keyframes led-sweep {
+  0% { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.ai-led-strip {
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg,
+    #4285F4 0%,
+    #9B72CB 25%,
+    #D96570 50%,
+    #9B72CB 75%,
+    #4285F4 100%
+  );
+  background-size: 200% 100%;
+  animation: led-sweep 3.5s infinite linear;
+  flex-shrink: 0;
+}
+
+/* Gemini spinning ring loader */
+@keyframes gemini-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.gemini-spinner {
+  border-radius: 50%;
+  padding: 2px;
+  background: conic-gradient(
+    from 0deg,
+    #4285F4,
+    #9B72CB,
+    #D96570,
+    #9B72CB,
+    #4285F4
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: gemini-spin 1.2s linear infinite;
 }

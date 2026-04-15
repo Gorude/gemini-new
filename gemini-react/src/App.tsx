@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
-import { Pin, PinOff, Edit2, Archive, ArchiveRestore, Trash2, FileText, AlertCircle, ChevronDown, ChevronRight, X, Plus, Send, Bot, Settings, RotateCcw, Copy, Check, Globe, Square } from 'lucide-react';
-import { safeMarkdown, generateGeminiContent, streamGeminiContent, type Message } from './services/gemini';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { Pin, PinOff, Edit2, Archive, ArchiveRestore, Trash2, FileText, AlertCircle, ChevronDown, ChevronRight, X, Plus, Send, Bot, Settings, RotateCcw, Copy, Check, Globe, Square, Loader2, Lightbulb, Image, Camera, Download } from 'lucide-react';
+import { safeMarkdown, generateGeminiContent, streamGeminiContent, generateImagenContent, type Message } from './services/gemini';
 
 type ChatSession = {
   id: string;
@@ -15,6 +15,9 @@ export const MODEL_LIMITS: Record<string, { name: string; rpd: number }> = {
   'gemma-4-31b-it': { name: 'Gemma 4 31B', rpd: 1500 },
   'gemini-3.1-flash-lite-preview': { name: 'Gemini 3.1 Flash Lite', rpd: 500 },
   'gemini-3-flash-preview': { name: 'Gemini 3 Flash', rpd: 20 },
+  'imagen-4.0-fast-generate-001': { name: 'Imagen 4 Fast', rpd: 25 },
+  'imagen-4.0-generate-001': { name: 'Imagen 4 Standard', rpd: 25 },
+  'imagen-4.0-ultra-generate-001': { name: 'Imagen 4 Ultra', rpd: 25 },
 };
 
 export const MODEL_OPTIONS = [
@@ -25,6 +28,12 @@ export const MODEL_OPTIONS = [
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Alta performance com pesquisa', hasSearch: true, isOptional: true },
   { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', desc: 'Versão eficiente estabilizada', hasSearch: true, isOptional: true },
   { id: 'gemma-4-26b-a4b-it', name: 'Gemma 4 (26B)', desc: 'Eficiência local balanceada', hasSearch: true, isOptional: true }
+];
+
+export const IMAGEN_OPTIONS = [
+  { id: 'imagen-4.0-fast-generate-001', name: 'Fast Generate', desc: 'Geração veloz para rascunhos' },
+  { id: 'imagen-4.0-generate-001', name: 'Standard Generate', desc: 'Equilíbrio e detalhamento' },
+  { id: 'imagen-4.0-ultra-generate-001', name: 'Ultra Generate', desc: 'Fidelidade máxima e realismo' }
 ];
 
 type ModelUsage = {
@@ -58,6 +67,12 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [model, setModel] = useState('gemma-4-31b-it');
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [imageGenEnabled, setImageGenEnabled] = useState(false);
+  const [imagenModel, setImagenModel] = useState('imagen-4.0-fast-generate-001');
+  const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9'>('1:1');
+  const [showImagenSettings, setShowImagenSettings] = useState(false);
+  const [expandedSourcesMsgId, setExpandedSourcesMsgId] = useState<string | null>(null);
   
   // Analytics State
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -98,6 +113,14 @@ function App() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingMsgText, setEditingMsgText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+
+  // Lazy Loading / Virtualization State
+  const [visibleMessagesCount, setVisibleMessagesCount] = useState(15);
+  const previousScrollHeightRef = useRef<number>(0);
+  const isLazyLoadingRef = useRef<boolean>(false);
+
+  // Removed initial activeChatId useEffect completely
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -194,9 +217,27 @@ function App() {
     const handleClickOutside = () => { 
       setMenuOpenId(null); 
       setIsModelMenuOpen(false); 
+      setShowImagenSettings(false);
+      setExpandedSourcesMsgId(null);
     };
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMenuOpenId(null);
+        setIsModelMenuOpen(false);
+        setShowImagenSettings(false);
+        setExpandedSourcesMsgId(null);
+        setShowDnaModal(false);
+        setShowAnalytics(false);
+      }
+    };
+
     window.addEventListener('click', handleClickOutside);
-    return () => window.removeEventListener('click', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const activeChat = chats.find(c => c.id === activeChatId);
@@ -241,18 +282,59 @@ function App() {
     }).catch(err => console.error("Erro ao salvar histórico: ", err));
   }, [chats, isHistoryLoaded]);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (force = false, instant = false) => {
     if (chatWindowRef.current) {
-      chatWindowRef.current.scrollTo({
-        top: chatWindowRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+      const { scrollTop, scrollHeight, clientHeight } = chatWindowRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      
+      if (force || isNearBottom) {
+        chatWindowRef.current.scrollTo({
+          top: scrollHeight,
+          behavior: instant ? 'auto' : 'smooth'
+        });
+      }
     }
   };
 
   useEffect(() => {
+    setVisibleMessagesCount(15);
+    setTimeout(() => scrollToBottom(true, true), 10);
+  }, [activeChatId]);
+
+  useEffect(() => {
+    // During active generation, we only scroll if the user is already at the bottom.
+    // We don't want to force them back down if they are reading something above.
     scrollToBottom();
   }, [messages, isLoading, pendingFiles]);
+
+  const handleScroll = () => {
+    if (chatWindowRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatWindowRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 300;
+      setShowScrollButton(!isNearBottom);
+
+      // Lazy Loading trigger
+      const activeChat = chats.find(c => c.id === activeChatId);
+      const totalMessages = activeChat?.messages.length || 0;
+
+      if (scrollTop < 50 && visibleMessagesCount < totalMessages && !isLazyLoadingRef.current) {
+        isLazyLoadingRef.current = true;
+        previousScrollHeightRef.current = scrollHeight;
+        
+        setTimeout(() => {
+          setVisibleMessagesCount(prev => prev + 15);
+        }, 300); // UI feedback delay
+      }
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (isLazyLoadingRef.current && chatWindowRef.current) {
+      const newScrollHeight = chatWindowRef.current.scrollHeight;
+      chatWindowRef.current.scrollTop += (newScrollHeight - previousScrollHeightRef.current);
+      isLazyLoadingRef.current = false;
+    }
+  }, [visibleMessagesCount]);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -305,23 +387,36 @@ function App() {
   };
   // ------------------------------------
 
+  const processFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = (event.target?.result as string).split(',')[1];
+      setPendingFiles(prev => [...prev, { name: file.name, data: base64, mimeType: file.type }]);
+      fetch('/api/upload', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ filename: file.name, data: base64 })
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles) return;
+    Array.from(selectedFiles).forEach(processFile);
+  };
 
-    Array.from(selectedFiles).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const base64 = (event.target?.result as string).split(',')[1];
-        setPendingFiles(prev => [...prev, { name: file.name, data: base64, mimeType: file.type }]);
-        fetch('/api/upload', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ filename: file.name, data: base64 })
-        });
-      };
-      reader.readAsDataURL(file);
-    });
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        const file = items[i].getAsFile();
+        if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
+          processFile(file);
+        }
+      }
+    }
   };
 
   const executeAIRequest = async (targetChatId: string, userText: string, filesToSend: any[], apiHistory: any[], isFirstMessage: boolean, replaceId?: string) => {
@@ -340,11 +435,14 @@ function App() {
       const startTime = performance.now();
       const currentAiMsgId = replaceId || (Date.now() + 1).toString() + '-ai';
 
+      // Force scroll to bottom to show the new message interaction
+      setTimeout(() => scrollToBottom(true), 50);
+
       // Initialize AI message in the chat
       setChats(prev => prev.map(c => {
         if (c.id === targetChatId) {
           const updatedChat = { ...c };
-          const freshMsg: Message = { id: currentAiMsgId, role: 'ai', text: '', thoughts: '', duration: 0 };
+          const freshMsg: Message = { id: currentAiMsgId, role: 'ai', text: '', thoughts: '', duration: 0, isSearching: webSearchEnabled };
           if (replaceId) {
             updatedChat.messages = updatedChat.messages.map(m => m.id === replaceId ? freshMsg : m);
           } else {
@@ -355,10 +453,12 @@ function App() {
         return c;
       }));
 
-      const stream = streamGeminiContent(userText, model, apiHistory, systemInstruction, filesToSend, webSearchEnabled, controller.signal);
+      const stream = streamGeminiContent(userText, model, apiHistory, systemInstruction, filesToSend, webSearchEnabled, controller.signal, thinkingEnabled);
       
       let fullText = "";
       let fullThoughts = "";
+      let allSources: { title: string; uri: string }[] = [];
+      let isSearching = false; // Start false, will trigger if API sends queries
       let isGrounded = false;
       let finalUsage = null;
 
@@ -366,7 +466,22 @@ function App() {
         if (chunk.text) fullText += chunk.text;
         if (chunk.thoughts) fullThoughts += chunk.thoughts;
         if (chunk.isGrounded) isGrounded = true;
+        
+        // Sticky searching state: once it starts, it stays true until we get sources
+        if (chunk.isSearching) isSearching = true;
+        if (allSources.length > 0) isSearching = false; 
+
         if (chunk.usage) finalUsage = chunk.usage;
+        
+        if (chunk.sources) {
+          chunk.sources.forEach(src => {
+            // Deduplicate by both URI and Title to handle proxy links for the same site
+            if (!allSources.find(s => s.uri === src.uri || (s.title && s.title === src.title))) {
+              allSources.push(src);
+            }
+          });
+        }
+
 
         const currentDuration = (performance.now() - startTime) / 1000;
 
@@ -375,7 +490,16 @@ function App() {
             return {
               ...c,
               messages: c.messages.map(m => 
-                m.id === currentAiMsgId ? { ...m, text: fullText, thoughts: fullThoughts, isGrounded: isGrounded, duration: currentDuration } : m
+                m.id === currentAiMsgId ? { 
+                  ...m, 
+                  text: fullText, 
+                  thoughts: fullThoughts, 
+                  isGrounded: isGrounded, 
+                  isSearching: isSearching,
+                  sources: [...allSources],
+                  duration: currentDuration 
+                } : m
+
               )
             };
           }
@@ -510,6 +634,88 @@ function App() {
     }
   };
 
+  const executeImageRequest = async (targetChatId: string, userText: string) => {
+    const currentUsage = dailyUsage.models[imagenModel]?.requests || 0;
+    const limit = MODEL_LIMITS[imagenModel]?.rpd || 25;
+
+    if (currentUsage >= limit) {
+      alert(`Limite diário atingido para o modelo ${MODEL_LIMITS[imagenModel]?.name}. (Limite: ${limit})`);
+      return;
+    }
+
+    setIsLoading(true);
+    const startTime = performance.now();
+    const currentAiMsgId = (Date.now() + 1).toString() + '-ai';
+
+    // Show generating placeholder
+    setChats(prev => prev.map(c => {
+      if (c.id === targetChatId) {
+        const freshMsg: Message = { id: currentAiMsgId, role: 'ai', text: 'Gerando imagem...', thoughts: '', duration: 0 };
+        return { ...c, messages: [...c.messages, freshMsg] };
+      }
+      return c;
+    }));
+    
+    setTimeout(() => scrollToBottom(true), 50);
+
+    try {
+      const result = await generateImagenContent(userText, imagenModel, aspectRatio);
+      const duration = (performance.now() - startTime) / 1000;
+
+      // Update message with image data
+      setChats(prev => prev.map(c => {
+        if (c.id === targetChatId) {
+          return {
+            ...c,
+            messages: c.messages.map(m => 
+              m.id === currentAiMsgId ? { 
+                ...m, 
+                text: '', 
+                files: [{ name: `generated-${Date.now()}.png`, data: result.data, mimeType: result.mimeType }],
+                duration: duration 
+              } : m
+            )
+          };
+        }
+        return c;
+      }));
+
+      // Update Analytics
+      setDailyUsage(prev => {
+        const today = getPacificDate();
+        const updated = {
+          ...prev,
+          date: today,
+          models: {
+            ...prev.models,
+            [imagenModel]: {
+              requests: (prev.models[imagenModel]?.requests || 0) + 1,
+              tokens: prev.models[imagenModel]?.tokens || { prompt: 0, candidates: 0, total: 0 }
+            }
+          }
+        };
+        localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(updated));
+        return updated;
+      });
+
+    } catch (err: any) {
+      setChats(prev => prev.map(c => {
+        if (c.id === targetChatId) {
+          return {
+            ...c,
+            messages: c.messages.map(m => 
+              m.id === currentAiMsgId ? { ...m, text: `❌ **Erro na geração:** ${err.message}` } : m
+            )
+          };
+        }
+        return c;
+      }));
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => scrollToBottom(true), 50);
+    }
+  };
+
   const handleSend = async () => {
     if ((!input.trim() && pendingFiles.length === 0) || isLoading) return;
 
@@ -554,6 +760,9 @@ function App() {
 
     const activeChatTemp = chats.find(c => c.id === activeChatId);
     const msgsTemp = activeChatTemp ? [...activeChatTemp.messages, newUserMsg] : [newUserMsg];
+    
+    // Reset visible count when a new message is sent
+    setVisibleMessagesCount(15);
 
     const apiHistory = msgsTemp.map(m => {
       const parts: any[] = [];
@@ -570,7 +779,11 @@ function App() {
     });
     
     apiHistory.pop();
-    executeAIRequest(targetChatId, userText, filesToSend, apiHistory, isFirstMessage);
+    if (imageGenEnabled) {
+      executeImageRequest(targetChatId, userText);
+    } else {
+      executeAIRequest(targetChatId, userText, filesToSend, apiHistory, isFirstMessage);
+    }
   };
 
   const handleRegenerate = (chatId: string, aiMsgId: string) => {
@@ -592,6 +805,9 @@ function App() {
       }
       return c;
     }));
+
+    // Force scroll as we start regeneration
+    setTimeout(() => scrollToBottom(true), 50);
 
     // Build history up to that point
     const historyBefore = chat.messages.slice(0, aiMsgIndex - 1);
@@ -827,7 +1043,15 @@ function App() {
           </div>
         </header>
 
-        <section ref={chatWindowRef} className="flex-1 overflow-y-auto px-4 md:px-32 lg:px-64 py-8 space-y-10">
+        {/* AI Generation LED strip */}
+        {isLoading && (
+          <div className="ai-led-strip" />
+        )}
+        <section 
+          ref={chatWindowRef} 
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-4 md:px-8 lg:px-24 xl:px-48 py-8 space-y-10"
+        >
           {messages.length === 0 && !isLoading ? (
             <div className="h-full flex flex-col justify-center items-center text-center mt-20">
               <h2 className="text-5xl font-medium mb-6 gemini-gradient">Olá, Conselheiro</h2>
@@ -835,14 +1059,18 @@ function App() {
             </div>
           ) : (
             <>
-              {messages.map((msg, idx) => {
+              {visibleMessagesCount < messages.length && (
+                <div className="flex justify-center py-4 opacity-50 mb-4 transition-opacity">
+                  <Loader2 className="w-5 h-5 text-[var(--text-secondary)] animate-spin" />
+                </div>
+              )}
+              {messages.slice(-visibleMessagesCount).map((msg, idx) => {
                 const isEditing = editingMsgId === msg.id;
                 
                 // Logic for context indicator:
-                // If we are currently loading, only messages ABOVE the currently generating response are context.
-                // Otherwise, all messages are part of the next possible context.
+                const originalIdx = messages.findIndex(m => m.id === msg.id);
                 const generatingIdx = messages.findIndex(m => m.role === 'ai' && !m.text && isLoading);
-                const isContext = generatingIdx === -1 ? true : idx < generatingIdx;
+                const isContext = generatingIdx === -1 ? true : originalIdx < generatingIdx;
 
                 return (
                   <div key={msg.id} className={`group/msg relative flex flex-col w-full mb-8 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300`}>
@@ -854,25 +1082,195 @@ function App() {
                     {msg.role === 'ai' ? (
                       <div className="ai-msg w-full">
                         <div className="flex items-center gap-2 mb-4">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 via-purple-500 to-pink-500 shadow-md"></div>
-                          {msg.isGrounded && (
+                          <div className="w-8 h-8 flex items-center justify-center relative">
+                            {!msg.text && (
+                              <div className="gemini-spinner absolute inset-0" />
+                            )}
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M11.9961 24C12.3961 17.6 17.6039 12.4 24 12.0039C17.6039 11.6039 12.3961 6.4 11.9961 0C11.5961 6.4 6.39609 11.6039 0 12.0039C6.39609 12.4 11.5961 17.6 11.9961 24Z" fill="url(#geminiGrad)"/>
+                              <defs>
+                                <linearGradient id="geminiGrad" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse">
+                                  <stop stopColor="#4285F4"/><stop offset="0.5" stopColor="#9B72CB"/><stop offset="1" stopColor="#D96570"/>
+                                </linearGradient>
+                              </defs>
+                            </svg>
+                          </div>
+
+                          {/* Web Search Sources Icons */}
+                          {(msg.sources && msg.sources.length > 0 || msg.isSearching) && (
+                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500 ml-1">
+                              {msg.isSearching && (!msg.sources || msg.sources.length === 0) && (
+                                <div className="flex items-center gap-2 px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-500 animate-pulse">
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  <span className="tracking-widest">PESQUISANDO...</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex -space-x-1.5 overflow-hidden">
+                                {msg.sources?.slice(0, 4).map((src, i) => {
+                                  // SMART DOMAIN EXTRACTION
+                                  let domain = "";
+                                  const isProxy = src.uri.includes('vertexaisearch.cloud.google.com');
+                                  
+                                  try { 
+                                     if (isProxy && src.title) {
+                                       // Try to find domain in title (e.g. "G1 - O Portal de Notícias")
+                                       const match = src.title.match(/([a-z0-9-]+\.[a-z.]{2,})/i);
+                                       if (match) domain = match[1].toLowerCase();
+                                       else domain = src.title.split(/[\s-]/)[0].toLowerCase() + ".com"; // heuristic
+                                     } else {
+                                       const cleanUri = src.uri.replace(/^(https?:\/\/)?(www\.)?/, 'https://');
+                                       domain = new URL(cleanUri).hostname;
+                                     }
+                                  } catch(e) {}
+
+                                  return (
+                                    <a 
+                                      key={i} 
+                                      href={src.uri} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="relative inline-block w-5 h-5 rounded-full border border-[var(--border-light)] bg-white overflow-hidden hover:scale-110 hover:z-10 transition-transform animate-in zoom-in-50 fade-in duration-300 shadow-sm"
+                                      title={src.title}
+                                      style={{ animationDelay: `${i * 100}ms` }}
+                                    >
+                                      <img 
+                                        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`} 
+                                        alt="" 
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).src = `https://www.google.com/s2/favicons?domain=google.com&sz=64`;
+                                        }}
+                                      />
+                                    </a>
+                                  );
+                                })}
+                                {msg.sources && msg.sources.length > 4 && (
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); setExpandedSourcesMsgId(expandedSourcesMsgId === msg.id ? null : msg.id); }}
+                                    className="relative inline-block w-5 h-5 rounded-full border border-[var(--border-light)] bg-[var(--bg-chat-active)] flex items-center justify-center text-[8px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-user-bubble)] transition z-20"
+                                  >
+                                    +{msg.sources.length - 4}
+                                  </button>
+                                )}
+                              </div>
+                              
+                              {msg.sources && msg.sources.length > 0 && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setExpandedSourcesMsgId(expandedSourcesMsgId === msg.id ? null : msg.id); }}
+                                  className="text-[10px] font-bold text-[var(--text-secondary)] tracking-tight opacity-80 uppercase hover:text-[var(--text-primary)] transition flex items-center gap-1"
+                                >
+                                  {msg.sources.length} {msg.sources.length === 1 ? 'fonte' : 'fontes'}
+                                  <ChevronDown className={`w-2.5 h-2.5 transition-transform ${expandedSourcesMsgId === msg.id ? 'rotate-180' : ''}`} />
+                                </button>
+                              )}
+
+                              {/* All Sources Popover */}
+                              {expandedSourcesMsgId === msg.id && msg.sources && (
+                                <div 
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute top-10 left-10 bg-[var(--bg-sidebar)] shadow-2xl rounded-2xl p-3 min-w-[320px] max-w-[400px] z-[60] border border-[var(--border-light)] animate-in fade-in zoom-in-95 duration-200"
+                                >
+                                  <div className="flex justify-between items-center mb-2 px-1">
+                                    <h5 className="text-[10px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest">Todas as Referências</h5>
+                                    <button onClick={() => setExpandedSourcesMsgId(null)} className="text-[var(--text-placeholder)] hover:text-white"><X className="w-3.5 h-3.5" /></button>
+                                  </div>
+                                  <div className="max-h-[250px] overflow-y-auto space-y-1 custom-scrollbar px-1">
+                                    {msg.sources.map((src, idx) => {
+                                      let d = "";
+                                      const isPx = src.uri.includes('vertexaisearch.cloud.google.com');
+                                      try { 
+                                         if (isPx && src.title) {
+                                            const match = src.title.match(/([a-z0-9-]+\.[a-z.]{2,})/i);
+                                            d = match ? match[1].toLowerCase() : src.title.split(/[\s-]/)[0].toLowerCase() + ".com";
+                                         } else {
+                                            const u = src.uri.replace(/^(https?:\/\/)?(www\.)?/, 'https://');
+                                            d = new URL(u).hostname;
+                                         }
+                                      } catch(e) {}
+                                      return (
+                                        <a 
+                                          key={idx} 
+                                          href={src.uri} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group"
+                                        >
+                                          <img src={`https://www.google.com/s2/favicons?domain=${d}&sz=64`} className="w-4 h-4 rounded-sm shrink-0" alt="" />
+                                          <div className="flex flex-col min-w-0">
+                                            <span className="text-xs text-[var(--text-primary)] font-medium truncate group-hover:text-blue-400 transition-colors">{src.title || 'Página da Web'}</span>
+                                            <span className="text-[9px] text-[var(--text-placeholder)] truncate">{src.uri}</span>
+                                          </div>
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {(msg.isGrounded || (msg.sources && msg.sources.length > 0)) && (
                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-bold text-blue-400 animate-in fade-in slide-in-from-left-2 duration-500">
                               <Globe className="w-3 h-3" />
                               PESQUISADO NA WEB
                             </div>
                           )}
                         </div>
+
+                        {/* Collapsible Thinking/Reasoning Drawer */}
+                        {msg.thoughts && msg.thoughts.trim() && (
+                          <details className="thinking-drawer mb-3 group/think">
+                            <summary className="flex items-center gap-2 cursor-pointer text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition select-none py-1.5 px-3 rounded-lg hover:bg-[var(--bg-user-bubble)]/50 w-fit">
+                              <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+                              <span className="font-medium">Mostrar Raciocínio</span>
+                              <ChevronRight className="w-3 h-3 transition-transform group-open/think:rotate-90" />
+                            </summary>
+                            <div className="thought-content mt-2 pl-3 border-l-2 border-amber-500/30 text-[13px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
+                              {msg.thoughts}
+                            </div>
+                          </details>
+                        )}
                         
                         {msg.text.includes('❌ **Erro:**') ? (
                            <div className="flex items-center gap-2 text-red-400 bg-red-900/20 p-4 border border-red-500/30 rounded-lg text-sm">
                              <AlertCircle className="w-5 h-5 shrink-0" />
                              <div dangerouslySetInnerHTML={{ __html: safeMarkdown(msg.text.replace('❌', '').trim()) }} />
                            </div>
-                        ) : (
+                        ) : msg.text ? (
                           <div 
                             className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em]"
-                            dangerouslySetInnerHTML={{ __html: msg.text ? safeMarkdown(msg.text) : '<div class="aura-loader h-4 w-full rounded-full opacity-30 mt-2"></div>' }}
+                            dangerouslySetInnerHTML={{ __html: safeMarkdown(msg.text) }}
                           />
+                        ) : null}
+
+                        {msg.files && msg.files.length > 0 && (
+                          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {msg.files.map((file, i) => (
+                              <div key={i} className="relative group/img rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-light)] bg-black/20">
+                                <img 
+                                  src={`data:${file.mimeType};base64,${file.data}`} 
+                                  className="w-full h-auto object-contain block max-h-[500px]"
+                                  alt="Imagem Gerada"
+                                />
+                                <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex justify-between items-center">
+                                  <span className="text-[10px] text-white/70 font-medium">IMAGE GEN · {MODEL_LIMITS[imagenModel]?.name}</span>
+                                  <button 
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = `data:${file.mimeType};base64,${file.data}`;
+                                      link.download = file.name;
+                                      link.click();
+                                    }}
+                                    className="p-2 bg-white/20 hover:bg-white/40 rounded-full text-white transition-colors backdrop-blur-sm"
+                                    title="Baixar imagem"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         )}
 
                         <div className="flex items-center gap-4 mt-3 opacity-0 group-hover/msg:opacity-100 transition-opacity translate-y-1 group-hover/msg:translate-y-0 duration-300">
@@ -989,12 +1387,12 @@ function App() {
           )}
         </section>
 
-        <footer className="p-4 md:px-32 lg:px-64 pb-8 bg-gradient-to-t from-[var(--bg-main)] via-[var(--bg-main)] to-transparent">
+        <footer className="p-4 md:px-8 lg:px-24 xl:px-48 pb-8 bg-gradient-to-t from-[var(--bg-main)] via-[var(--bg-main)] to-transparent">
           <div className="max-w-5xl mx-auto">
             {pendingFiles.length > 0 && (
               <div className="flex gap-2 mb-2 px-2 flex-wrap">
                 {pendingFiles.map((f, i) => (
-                  <div key={i} className="relative w-16 h-16 rounded-xl bg-[var(--bg-chat-active)] overflow-hidden border border-[var(--border-main)] shadow-lg group">
+                  <div key={i} className="relative w-16 h-16 rounded-xl bg-[var(--bg-chat-active)] overflow-hidden border border-[var(--border-light)] shadow-lg group">
                     {f.mimeType.startsWith('image/') ? (
                       <img src={`data:${f.mimeType};base64,${f.data}`} className="object-cover w-full h-full" alt="pendente" />
                     ) : (
@@ -1011,11 +1409,21 @@ function App() {
               </div>
             )}
             <div className="input-wrapper p-3 shadow-2xl relative bg-[var(--bg-sidebar)] rounded-2xl border border-[var(--border-light)]">
+              {showScrollButton && (
+                <button 
+                  onClick={() => scrollToBottom(true)}
+                  className="absolute -top-14 left-1/2 -translate-x-1/2 bg-[var(--bg-sidebar)] hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-light)] shadow-xl rounded-full px-5 py-1.5 text-xs font-semibold flex items-center gap-2 transition-all z-50 scroll-to-bottom-btn animate-scroll-button whitespace-nowrap"
+                >
+                   <ChevronDown className="w-4 h-4" />
+                  Ir para o final
+                </button>
+              )}
               <textarea 
                 ref={textareaRef}
                 value={input}
                 onChange={handleInput}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 rows={1} 
                 placeholder="Pergunte ao Gemoro..." 
                 className="w-full bg-transparent border-none px-4 pt-2 pb-1 focus:outline-none resize-none text-[16px] text-[var(--text-primary)] placeholder-gray-500 overflow-hidden"
@@ -1041,6 +1449,75 @@ function App() {
                     <Globe className="w-5 h-5" />
                     {webSearchEnabled && <span className="absolute top-2 right-2 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(96,165,250,0.8)]"></span>}
                   </button>
+
+                  <button 
+                    onClick={() => setThinkingEnabled(!thinkingEnabled)} 
+                    className={`w-10 h-10 flex items-center justify-center rounded-full transition relative ${thinkingEnabled ? 'bg-amber-500/20 text-amber-400' : 'hover:bg-[var(--bg-user-bubble)]/50 text-[var(--text-placeholder)]'}`}
+                    title="Pensamento (a IA raciocina antes de responder)"
+                  >
+                    <Lightbulb className="w-5 h-5" />
+                    {thinkingEnabled && <span className="absolute top-2 right-2 w-2 h-2 bg-amber-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.8)]"></span>}
+                  </button>
+
+                  <div className="relative">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageGenEnabled(!imageGenEnabled);
+                        if (!imageGenEnabled) setShowImagenSettings(true);
+                      }} 
+                      className={`w-10 h-10 flex items-center justify-center rounded-full transition relative ${imageGenEnabled ? 'bg-purple-500/20 text-purple-400' : 'hover:bg-[var(--bg-user-bubble)]/50 text-[var(--text-placeholder)]'}`}
+                      title="Geração de Imagem (Imagen 4)"
+                    >
+                      <Image className="w-5 h-5" />
+                      {imageGenEnabled && <span className="absolute top-2 right-2 w-2 h-2 bg-purple-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.8)]"></span>}
+                    </button>
+
+                    {imageGenEnabled && showImagenSettings && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute bottom-full mb-3 left-0 bg-[var(--bg-sidebar)] shadow-2xl rounded-2xl p-4 min-w-[280px] z-50 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                      >
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)]">Imagen 4 Config</h4>
+                          <button onClick={() => setShowImagenSettings(false)} className="text-[var(--text-placeholder)] hover:text-white"><X className="w-4 h-4" /></button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-[var(--text-placeholder)] mb-2 block">Modelo</label>
+                            <div className="grid gap-2">
+                              {IMAGEN_OPTIONS.map(opt => (
+                                <button
+                                  key={opt.id}
+                                  onClick={() => setImagenModel(opt.id)}
+                                  className={`text-left p-2 rounded-xl border transition text-sm ${imagenModel === opt.id ? 'bg-purple-500/10 border-purple-500/50 text-purple-200' : 'bg-black/20 border-transparent hover:border-white/10'}`}
+                                >
+                                  <div className="font-medium text-xs">{opt.name}</div>
+                                  <div className="text-[10px] opacity-60 truncate">{opt.desc}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-[var(--text-placeholder)] mb-2 block">Proporção (Aspect Ratio)</label>
+                            <div className="flex gap-2">
+                              {(['1:1', '9:16', '16:9'] as const).map(ratio => (
+                                <button
+                                  key={ratio}
+                                  onClick={() => setAspectRatio(ratio)}
+                                  className={`flex-1 py-2 rounded-lg border text-[10px] font-bold transition ${aspectRatio === ratio ? 'bg-purple-500/20 border-purple-500 text-purple-300' : 'bg-black/20 border-transparent hover:border-white/10'}`}
+                                >
+                                  {ratio === '1:1' ? 'QUADRADO' : ratio === '9:16' ? 'RETRATO' : 'PAISAGEM'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="relative">
@@ -1123,22 +1600,34 @@ function App() {
                 const percentage = Math.min((usage.requests / limits.rpd) * 100, 100);
                 const isDanger = percentage > 90;
                 const isWarn = percentage > 75 && !isDanger;
+                const isImageModel = mId.includes('imagen');
                 
                 return (
-                  <div key={mId} className="bg-[var(--bg-user-bubble)] p-4 rounded-xl border border-[var(--border-light)]">
+                  <div key={mId} className={`p-4 rounded-xl border ${isImageModel ? 'bg-purple-900/10 border-purple-500/20' : 'bg-[var(--bg-user-bubble)] border-[var(--border-light)]'}`}>
                     <div className="flex justify-between items-center mb-3">
-                      <span className="font-medium text-[var(--text-primary)] text-sm">{limits.name} <span className="text-xs text-[var(--text-placeholder)] ml-1">({mId})</span></span>
-                      <span className="text-[10px] font-mono text-[var(--text-secondary)] bg-black/20 px-2 py-1 rounded flex items-center gap-1">
-                        <Bot className="w-3 h-3" /> Tokens: {usage.tokens.total.toLocaleString()}
+                      <span className="font-medium text-[var(--text-primary)] text-sm flex items-center gap-2">
+                        {isImageModel && <Image className="w-3.5 h-3.5 text-purple-400" />}
+                        {limits.name} 
+                        <span className="text-[10px] text-[var(--text-placeholder)] ml-1 opacity-60">({mId})</span>
                       </span>
+                      {!isImageModel && (
+                        <span className="text-[10px] font-mono text-[var(--text-secondary)] bg-black/20 px-2 py-1 rounded flex items-center gap-1">
+                          <Bot className="w-3.5 h-3.5" /> Tokens: {usage.tokens.total.toLocaleString()}
+                        </span>
+                      )}
+                      {isImageModel && (
+                        <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20">
+                          IMAGE GENERATION
+                        </span>
+                      )}
                     </div>
                     
                     <div className="flex justify-between text-xs mb-2">
-                      <span className="text-[var(--text-secondary)]">Requisições Usadas: <strong className={isDanger ? 'text-red-400' : 'text-[var(--text-primary)]'}>{usage.requests}</strong> / {limits.rpd}</span>
+                      <span className="text-[var(--text-secondary)]">Uso Diário: <strong className={isDanger ? 'text-red-400' : 'text-[var(--text-primary)]'}>{usage.requests}</strong> / {limits.rpd}</span>
                       <span className={isDanger ? 'text-red-400 font-bold' : isWarn ? 'text-yellow-400' : 'text-[var(--text-placeholder)]'}>{percentage.toFixed(1)}%</span>
                     </div>
-                    <div className="flex w-full h-2 bg-[var(--bg-chat-active)] rounded-full overflow-hidden">
-                      <div className={`transition-all duration-1000 ${isDanger ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : isWarn ? 'bg-yellow-500' : 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]'}`} style={{ width: `${percentage}%` }}></div>
+                    <div className="flex w-full h-2 bg-black/20 rounded-full overflow-hidden">
+                      <div className={`transition-all duration-1000 ${isImageModel ? 'bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]' : isDanger ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : isWarn ? 'bg-yellow-500' : 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]'}`} style={{ width: `${percentage}%` }}></div>
                     </div>
                   </div>
                 );

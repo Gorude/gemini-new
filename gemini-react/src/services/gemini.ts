@@ -1,10 +1,15 @@
 import { marked } from 'marked';
+import markedKatex from 'marked-katex-extension';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.min.css';
+import 'katex/dist/katex.min.css';
+
+const renderer = new marked.Renderer();
+
 
 // Configuração segura do Marked.js
 const markedOptions: any = {
-  renderer: new marked.Renderer(),
+  renderer: renderer,
   highlight: function (code: string, lang: string) {
     const language = hljs.getLanguage(lang) ? lang : 'plaintext';
     return hljs.highlight(code, { language }).value;
@@ -15,9 +20,21 @@ const markedOptions: any = {
 };
 marked.setOptions(markedOptions);
 
+// Adicionar suporte nativo à matemática
+marked.use(markedKatex({
+  throwOnError: false,
+  output: 'html',
+  nonStandard: true
+}));
+
+
 export function safeMarkdown(content: string): string {
   if (typeof content !== 'string') return "";
-  return marked.parse(content) as string;
+  let html = marked.parse(content) as string;
+  // Wrap simple tables to allow horizontal scrolling
+  html = html.replace(/<table/g, '<div class="table-wrapper"><table');
+  html = html.replace(/<\/table>/g, '</table></div>');
+  return html;
 }
 
 export type Message = {
@@ -28,6 +45,7 @@ export type Message = {
   isGrounded?: boolean;
   duration?: number;
   files?: { name: string; data: string; mimeType: string }[];
+  sources?: { title: string; uri: string }[];
 };
 
 export async function* streamGeminiContent(
@@ -37,15 +55,18 @@ export async function* streamGeminiContent(
   systemInstruction?: string,
   files: { mimeType: string; data: string }[] = [],
   webSearch: boolean = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  thinking: boolean = false
 ): AsyncGenerator<{ 
   text?: string; 
   thoughts?: string; 
   isGrounded?: boolean;
+  isSearching?: boolean;
+  sources?: { title: string; uri: string }[];
   usage?: { promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }
 }> {
-  const key = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!key) throw new Error("Chave de API não configurada no arquivo .env");
+  const key = import.meta.env.VITE_GEMINI_FREE_API_KEY;
+  if (!key) throw new Error("Chave de API FREE não configurada no arquivo .env");
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`;
   
@@ -62,7 +83,7 @@ export async function* streamGeminiContent(
   const payload: any = {
     contents: [...history, { role: "user", parts: currentParts }],
     generationConfig: { 
-      thinkingConfig: { includeThoughts: true, thinkingLevel: "HIGH" },
+      ...(thinking ? { thinkingConfig: { includeThoughts: true, thinkingLevel: "HIGH" } } : {}),
       maxOutputTokens: 8192,
       temperature: 0.7
     }
@@ -110,26 +131,50 @@ export async function* streamGeminiContent(
         if (line.startsWith("data: ")) {
           try {
             const json = JSON.parse(line.substring(6));
-            if (json.candidates && json.candidates[0].content) {
+            if (json.candidates && json.candidates[0]) {
               const candidate = json.candidates[0];
-              const parts = candidate.content.parts;
-              const isGrounded = !!candidate.groundingMetadata;
+              const parts = candidate.content?.parts || [];
+              const metadata = candidate.groundingMetadata;
+              const chunkGrounded = !!metadata;
               
               let chunkText = "";
               let chunkThoughts = "";
+              let chunkSources: { title: string; uri: string }[] = [];
+
+              if (metadata?.groundingChunks) {
+                chunkSources = metadata.groundingChunks.map((chunk: any) => ({
+                  title: chunk.web?.title || "",
+                  uri: chunk.web?.uri || ""
+                })).filter((s: any) => s.uri);
+              }
+
+              const chunkIsSearching = !!(metadata?.webSearchQueries && metadata.webSearchQueries.length > 0);
 
               parts.forEach((part: any) => {
-                // part.thought is a boolean flag; skip thought parts entirely
-                if (part.thought === true) return;
+                if (part.thought === true) {
+                  if (part.text) chunkThoughts += part.text;
+                  return;
+                }
                 if (part.text) chunkText += part.text;
               });
 
               yield { 
                 text: chunkText, 
                 thoughts: chunkThoughts, 
-                isGrounded, 
+                isGrounded: chunkGrounded, 
+                isSearching: chunkIsSearching,
+                sources: chunkSources,
                 usage: json.usageMetadata 
               };
+
+
+              // INSTRUMENTATION: Log the raw JSON for grounding debug
+              if (chunkSources.length > 0 || chunkGrounded) {
+                console.group("DEBUG: Grounding Metadata Received");
+                console.log("Sources:", chunkSources);
+                console.log("Raw JSON:", json);
+                console.groupEnd();
+              }
             }
           } catch (e) {
             console.warn("Erro ao processar chunk JSON:", e);
@@ -162,4 +207,42 @@ export async function generateGeminiContent(
   }
   
   return { text: fullText, thoughts: fullThoughts, isGrounded, usage };
+}
+
+export async function generateImagenContent(
+  prompt: string,
+  model: string,
+  aspectRatio: '1:1' | '9:16' | '16:9'
+): Promise<{ data: string; mimeType: string }> {
+  const key = import.meta.env.VITE_GEMINI_PAID_API_KEY;
+  if (!key) throw new Error("Chave de API PAID (Imagen) não configurada");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${key}`;
+  
+  const payload = {
+    instances: [{ prompt }],
+    parameters: {
+      sampleCount: 1,
+      aspectRatio,
+      outputMimeType: "image/png"
+    }
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Erro na geração de imagem: ${response.status}`);
+  }
+
+  const result = await response.json();
+  const base64 = result.predictions?.[0]?.bytesBase64Encoded;
+  
+  if (!base64) throw new Error("Nenhuma imagem foi gerada pela API.");
+
+  return { data: base64, mimeType: "image/png" };
 }
