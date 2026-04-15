@@ -6,6 +6,12 @@ import 'katex/dist/katex.min.css';
 
 const renderer = new marked.Renderer();
 
+// Override paragraph: suppress empty paragraphs that create whitespace
+renderer.paragraph = ({ tokens }) => {
+  const body = (renderer as any).__proto__.paragraph.call(renderer, { tokens });
+  const text = body.replace(/<p>(\s|<br>)*<\/p>/gi, '');
+  return text;
+};
 
 // Configuração segura do Marked.js
 const markedOptions: any = {
@@ -15,7 +21,7 @@ const markedOptions: any = {
     return hljs.highlight(code, { language }).value;
   },
   langPrefix: 'hljs language-',
-  breaks: true,
+  breaks: false,
   gfm: true
 };
 marked.setOptions(markedOptions);
@@ -30,10 +36,31 @@ marked.use(markedKatex({
 
 export function safeMarkdown(content: string): string {
   if (typeof content !== 'string') return "";
-  let html = marked.parse(content) as string;
-  // Wrap simple tables to allow horizontal scrolling
+  
+  // 1. Collapse all variations of multiple newlines (2+) into a single newline
+  // This forces "tight" mode for almost everything by default.
+  let tightenedContent = content.replace(/(\n\s*){2,}/g, '\n\n');
+  
+  let html = marked.parse(tightenedContent) as string;
+
+  // 2. Aggressive List Cleanup: Strip ANY <p> tags that are direct children of <li>
+  // We do this in a loop to catch nested or multiple paragraphs.
+  let prevHtml;
+  do {
+    prevHtml = html;
+    html = html.replace(/<li>\s*<p>([\s\S]*?)<\/p>\s*<\/li>/gi, '<li>$1</li>');
+  } while (html !== prevHtml);
+
+  // 3. Remove spurious empty/whitespace paragraphs that marked might still emit
+  html = html.replace(/<p>(\s|&nbsp;|<br\/?>)*<\/p>/gi, '');
+  
+  // 4. Collapse multiple <br> tags into one
+  html = html.replace(/(<br\/?>\s*){2,}/gi, '<br/>');
+
+  // 5. Tables ───────────────────────────────────────────────────────────────
   html = html.replace(/<table/g, '<div class="table-wrapper"><table');
   html = html.replace(/<\/table>/g, '</table></div>');
+
   return html;
 }
 
@@ -43,6 +70,7 @@ export type Message = {
   text: string;
   thoughts?: string;
   isGrounded?: boolean;
+  isSearching?: boolean;
   duration?: number;
   files?: { name: string; data: string; mimeType: string }[];
   sources?: { title: string; uri: string }[];

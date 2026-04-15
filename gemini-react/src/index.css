@@ -2,20 +2,21 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&display=swap');
 
-body[data-theme="escuro"] {
+:root[data-theme="escuro"] {
   --bg-main: #131314;
-  --bg-sidebar: #1e1f20;
-  --bg-chat-hover: #1a1b1c;
-  --bg-chat-active: #2b2c2d;
-  --bg-nav-active: #1D3153;
+  --bg-sidebar: #131314; 
+  --bg-chat-hover: rgba(255, 255, 255, 0.05);
+  --bg-chat-active: #1D3153;
+  --bg-nav-active: rgba(255, 255, 255, 0.1);
   --text-nav-active: #A8C7FA;
-  --bg-user-bubble: #2b2c2d;
+  --bg-user-bubble: #1e1f20;
   --bg-input: #1e1f20;
-  --border-main: #333333;
-  --border-light: rgba(55, 65, 81, 0.5); /* border-gray-800/50 fallback */
+  --bg-modal: #1e1f20;
+  --border-main: #2b2c2d;
+  --border-light: rgba(255, 255, 255, 0.08);
   --text-primary: #e3e3e3;
-  --text-secondary: #9ca3af; /* gray-400 */
-  --text-placeholder: #6b7280; /* gray-500 */
+  --text-secondary: #9ca3af;
+  --text-placeholder: #6b7280;
   --code-bg: #1e1e1e;
   --inline-code-bg: #2d2d2d;
   --code-border: #333;
@@ -24,7 +25,7 @@ body[data-theme="escuro"] {
   --scrollbar-thumb-hover: #5a5b5c;
 }
 
-body[data-theme="claro"] {
+:root[data-theme="claro"] {
   --bg-main: #f3f4f6;
   --bg-sidebar: #ffffff;
   --bg-chat-hover: #f9fafb;
@@ -33,6 +34,7 @@ body[data-theme="claro"] {
   --text-nav-active: #041E49;
   --bg-user-bubble: #e5e7eb;
   --bg-input: #ffffff;
+  --bg-modal: #ffffff;
   --border-main: #d1d5db;
   --border-light: rgba(209, 213, 219, 0.5);
   --text-primary: #111827;
@@ -46,7 +48,7 @@ body[data-theme="claro"] {
   --scrollbar-thumb-hover: #9ca3af;
 }
 
-body[data-theme="areia"] {
+:root[data-theme="areia"] {
   --bg-main: #f4f1ea;
   --bg-sidebar: #ebdcc9;
   --bg-chat-hover: #f1ebd8;
@@ -55,6 +57,7 @@ body[data-theme="areia"] {
   --text-nav-active: #4F3824;
   --bg-user-bubble: #ebdcc9;
   --bg-input: #fdfbf7;
+  --bg-modal: #ebdcc9;
   --border-main: #d6bfa3;
   --border-light: rgba(214, 191, 163, 0.5);
   --text-primary: #4a3f35;
@@ -68,7 +71,7 @@ body[data-theme="areia"] {
   --scrollbar-thumb-hover: #c4ab89;
 }
 
-body[data-theme="galaxia"] {
+:root[data-theme="galaxia"] {
   --bg-main: #0B0A1A;
   --bg-sidebar: #12102A;
   --bg-chat-hover: #1A163B;
@@ -77,6 +80,7 @@ body[data-theme="galaxia"] {
   --text-nav-active: #CABDFF;
   --bg-user-bubble: #1F184B;
   --bg-input: #12102A;
+  --bg-modal: #12102A;
   --border-main: #3D2D78;
   --border-light: rgba(61, 45, 120, 0.5);
   --text-primary: #E9E1FF;
@@ -98,18 +102,27 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
 .user-msg { background-color: var(--bg-user-bubble); border-radius: 24px; padding: 12px 24px; margin-left: auto; max-width: 85%; transition: background-color 0.3s ease; }
 
 /* Estilização do Markdown */
-.response-body { font-size: 16px; line-height: 1.55; }
-.response-body h1, .response-body h2, .response-body h3 { font-weight: bold; margin: 10px 0 6px 0; color: var(--text-primary); }
-.response-body p { margin: 0 0 2px 0; }
-.response-body p:empty { display: none; margin: 0; padding: 0; line-height: 0; }
-.response-body br { display: block; content: ""; margin: 0; line-height: 0.5em; }
-.response-body ul, .response-body ol { margin-left: 25px; margin-bottom: 0px; list-style-position: outside; }
-.response-body ul { list-style-type: disc; }
-.response-body ol { list-style-type: decimal; }
-.response-body li { margin-bottom: 3px; }
-.response-body code { background-color: var(--inline-code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; color: var(--text-primary); transition: background-color 0.3s ease; }
-.response-body pre { background-color: var(--code-bg); padding: 16px; border-radius: 12px; margin: 15px 0; overflow-x: auto; border: 1px solid var(--code-border); transition: background-color 0.3s ease, border-color 0.3s ease; }
-.response-body pre code { background-color: transparent; padding: 0; }
+.response-body { font-size: 15.5px !important; line-height: 1.6 !important; color: var(--text-primary); white-space: normal !important; }
+.response-body h1 { font-size: 17px !important; font-weight: 700 !important; margin: 24px 0 12px 0 !important; color: var(--text-primary); border-bottom: 1px solid var(--border-light); padding-bottom: 4px; }
+.response-body h2 { font-size: 16px !important; font-weight: 700 !important; margin: 20px 0 10px 0 !important; color: var(--text-primary); }
+.response-body h3 { font-size: 15.5px !important; font-weight: 700 !important; margin: 16px 0 8px 0 !important; color: var(--text-primary); }
+.response-body strong { font-weight: 700 !important; }
+.response-body p { margin: 0 0 12px 0 !important; }
+.response-body p:last-child { margin-bottom: 0 !important; }
+.response-body p:empty { display: none !important; }
+.response-body br { display: block; content: ""; margin-bottom: 8px; }
+/* Critical: paragraphs inside list items must have zero margin */
+.response-body li > p { margin: 0 !important; padding: 0 !important; display: inline; }
+.response-body li > p + p { display: block; margin-top: 6px !important; }
+.response-body ul, .response-body ol { margin-left: 0 !important; margin-bottom: 12px !important; margin-top: 4px !important; padding-left: 1.5rem !important; list-style-position: outside; }
+.response-body ul { list-style-type: disc !important; }
+.response-body ol { list-style-type: decimal !important; }
+.response-body li { margin-bottom: 6px !important; padding-left: 0.25rem; }
+.response-body li:last-child { margin-bottom: 0 !important; }
+.response-body li > ul, .response-body li > ol { margin-top: 6px !important; margin-bottom: 0 !important; }
+.response-body code { background-color: var(--inline-code-bg); padding: 1px 5px !important; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; color: var(--text-primary); transition: background-color 0.3s ease; }
+.response-body pre { background-color: var(--code-bg); padding: 16px !important; border-radius: 12px; margin: 12px 0 !important; overflow-x: auto; border: 1px solid var(--code-border); transition: background-color 0.3s ease, border-color 0.3s ease; }
+.response-body pre code { background-color: transparent !important; padding: 0 !important; }
 
 .table-wrapper {
   display: block;
