@@ -133,12 +133,12 @@ export async function* streamGeminiContent(
     if (supportsThinkingConfig) {
       payload.generationConfig.thinkingConfig = { 
         includeThoughts: true, 
-        thinkingLevel: "MEDIUM" 
+        thinkingLevel: "HIGH" 
       };
     } else {
       // Fallback: Instrução via prompt para modelos que não aceitam thinkingConfig
-      const searchInstruction = webSearch ? " Você DEVE planejar e executar o uso da ferramenta google_search para basear toda a sua resposta em evidências reais." : "";
-      currentParts.unshift({ text: "Pense profundamente passo a passo antes de responder. Mostre seu raciocínio se possível." + searchInstruction });
+      const searchInstruction = webSearch ? "\n\nPESQUISA OBRIGATÓRIA: Planeje e use 'google_search' para basear sua resposta em fatos REAIS." : "";
+      currentParts.unshift({ text: "Missão Final: Fornecer uma resposta útil e direta ao usuário.\n\n1. Raciocínio (Privado): SEMPRE use <thinking>...</thinking> para seu processo interno.\n2. Conclusão (Público): Após fechar o </thinking>, você DEVE obrigatoriamente escrever a resposta final detalhada que o usuário verá. NUNCA termine sua mensagem apenas com o raciocínio." + searchInstruction });
     }
   }
 
@@ -331,7 +331,7 @@ export async function performFactCheck(text: string): Promise<FactCheckResult[]>
      [{ "segment": "Trecho exato do texto original", "isVerified": boolean, "sourceUrl": "Link oficial se for verificado", "explanation": "Breve motivo da falha se não verificado" }]
 
   REGRAS:
-  - O "segment" DEVE ser uma cópia exata de um trecho do texto original para que possamos localizá-lo.
+  - O "segment" DEVE ser uma cópia IDÊNTICA (mesma pontuação, aspas, espaços e maiúsculas/minúsculas) de um trecho do texto original.
   - Se um fato for VERDADEIRO, isVerified é true e sourceUrl é OBRIGATÓRIO.
   - Se um fato for FALSO ou não houver evidências, isVerified é false.
   - Responda APENAS o JSON.`;

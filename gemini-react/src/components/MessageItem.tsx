@@ -38,6 +38,7 @@ interface MessageItemProps {
   onCopy: (text: string, id: string) => void;
   onToggleSources: (id: string | null) => void;
   onFactCheck: (id: string) => void;
+  onSelectionChange?: (text: string, pos: { x: number, y: number }, messageId: string) => void;
 }
 
 const MessageItem: React.FC<MessageItemProps> = React.memo(({
@@ -57,8 +58,25 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   onDelete,
   onCopy,
   onToggleSources,
-  onFactCheck
+  onFactCheck,
+  onSelectionChange
 }) => {
+  const handleMouseUp = () => {
+    if (!onSelectionChange) return;
+
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim().length > 0) {
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      
+      // Enviar coordenadas e texto selecionado
+      onSelectionChange(
+        selection.toString().trim(),
+        { x: rect.left + window.scrollX, y: rect.top + window.scrollY - 100 }, // Posicionar acima da seleção
+        msg.id
+      );
+    }
+  };
   const isEditing = editingMsgId === msg.id;
 
   return (
@@ -89,43 +107,53 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             {(msg.sources && msg.sources.length > 0 || msg.isSearching) && (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500 ml-1">
                 {msg.isSearching && (!msg.sources || msg.sources.length === 0) && (
-                  <div className="flex items-center gap-2 px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-500 animate-pulse">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span className="tracking-widest">PESQUISANDO...</span>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-500 animate-pulse">
+                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce"></div>
+                    {msg.thoughts && !msg.text ? "RACIOCINANDO..." : "PESQUISANDO..."}
                   </div>
                 )}
                 
                 <div className="flex -space-x-1.5 overflow-hidden">
-                  {msg.sources?.slice(0, 4).map((src, i) => {
+                  {msg.sources?.slice(0, 3).map((src: any, i: number) => {
                     let domain = "";
-                    const isProxy = src.uri.includes('vertexaisearch.cloud.google.com');
-                    try { 
-                       if (isProxy && src.title) {
-                         const match = src.title.match(/([a-z0-9-]+\.[a-z.]{2,})/i);
-                         if (match) domain = match[1].toLowerCase();
-                         else domain = src.title.split(/[\s-]/)[0].toLowerCase() + ".com";
-                       } else {
-                        try {
-                          let cleanUri = src.uri;
-                          if (!cleanUri.includes('://')) {
-                            cleanUri = 'https://' + cleanUri.replace(/^\/+/, '');
-                          }
-                          domain = new URL(cleanUri).hostname;
-                        } catch (e) {
-                          domain = "google.com";
-                        }
+                    const isProxy = src.uri?.includes('vertexaisearch.cloud.google.com');
+                    try {
+                      if (isProxy && src.title) {
+                        const match = src.title.match(/([a-z0-9-]+\.[a-z.]{2,})/i);
+                        domain = match ? match[1].toLowerCase() : src.title.split(/[\s-]/)[0].toLowerCase() + ".com";
+                      } else if (!src.uri) {
+                        const match = src.title.match(/\[(.*?)\]/);
+                        if (match) domain = match[1].toLowerCase();
+                        else domain = src.title.split(/[\s-]/)[0].toLowerCase() + ".com";
+                      } else {
+                       try {
+                         let cleanUri = src.uri;
+                         if (!cleanUri.includes('://')) {
+                           cleanUri = 'https://' + cleanUri.replace(/^\/+/, '');
+                         }
+                         domain = new URL(cleanUri).hostname;
+                       } catch (e) {
+                         domain = "google.com";
                        }
+                      }
                     } catch(e) {}
-                    return (
-                      <a 
-                        key={i} href={src.uri} target="_blank" rel="noopener noreferrer"
-                        className="relative inline-block w-5 h-5 rounded-full border border-[var(--border-light)] bg-white overflow-hidden hover:scale-110 hover:z-10 transition-transform animate-in zoom-in-50 fade-in duration-300 shadow-sm"
-                        title={src.title} style={{ animationDelay: `${i * 100}ms` }}
-                      >
-                        <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = `https://www.google.com/s2/favicons?domain=google.com&sz=64`; }} />
-                      </a>
-                    );
-                  })}
+                   return (
+                     <a 
+                       key={i} href={src.uri} target="_blank" rel="noopener noreferrer"
+                       className="relative inline-block w-5 h-5 rounded-full border border-[var(--border-light)] bg-white overflow-hidden hover:scale-110 hover:z-10 transition-transform animate-in zoom-in-50 fade-in duration-300 shadow-sm"
+                       title={src.title} style={{ animationDelay: `${i * 100}ms` }}
+                     >
+                       <img 
+                         src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`} 
+                         alt="" 
+                         className="w-full h-full object-cover" 
+                         onError={(e) => { 
+                           (e.target as HTMLImageElement).src = `https://www.google.com/s2/favicons?domain=google.com&sz=64`; 
+                         }} 
+                       />
+                     </a>
+                   );
+                 })}
                   {msg.sources && msg.sources.length > 4 && (
                     <button onClick={(e) => { e.stopPropagation(); onToggleSources(expandedSourcesMsgId === msg.id ? null : msg.id); }} className="relative inline-block w-5 h-5 rounded-full border border-[var(--border-light)] bg-[var(--bg-chat-active)] flex items-center justify-center text-[8px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-user-bubble)] transition z-20">
                       +{msg.sources.length - 4}
@@ -181,6 +209,13 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 PESQUISADO NA WEB
               </div>
             )}
+
+            {msg.isVerifying && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-500 animate-pulse">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                VERIFICANDO INFORMAÇÕES...
+              </div>
+            )}
           </div>
 
           {msg.thoughts && msg.thoughts.trim() && (
@@ -203,25 +238,44 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
              </div>
           ) : msg.text ? (
             <div 
+              onMouseUp={handleMouseUp}
               className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em]"
               dangerouslySetInnerHTML={{ 
                 __html: msg.factCheckResults && msg.factCheckResults.length > 0 
                   ? (() => {
-                      let processed = msg.text;
-                      // Ordenar por tamanho decrescente para evitar substituir partes menores de uma string maior
+                      let textWithMarkers = msg.text;
+                      const markers: Record<string, string> = {};
+                      
                       const sortedResults = [...msg.factCheckResults].sort((a, b) => b.segment.length - a.segment.length);
                       
-                      sortedResults.forEach(res => {
+                      sortedResults.forEach((res, i) => {
+                        const markerId = `FACTCHECKMARKER${i}`;
+                        // Escape regex characters
                         const escapedSegment = res.segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const regex = new RegExp(escapedSegment, 'g');
-                        const className = res.isVerified ? 'fact-verified' : 'fact-unverified';
-                        const sourceLink = res.isVerified && res.sourceUrl 
-                          ? `<a href="${res.sourceUrl}" target="_blank" class="fact-link" title="Ver fonte original">🔗</a>` 
-                          : '';
+                        // Usar regex com suporte a múltiplos espaços para maior flexibilidade
+                        const flexibleRegex = new RegExp(escapedSegment.split('\\ ').join('\\s+'), 'g');
                         
-                        processed = processed.replace(regex, `<span class="${className}" title="${res.explanation || ''}">${res.segment}${sourceLink}</span>`);
+                        if (flexibleRegex.test(textWithMarkers)) {
+                          const className = res.isVerified ? 'fact-verified' : 'fact-unverified';
+                          const sourceLink = res.isVerified && res.sourceUrl 
+                            ? `<a href="${res.sourceUrl}" target="_blank" class="fact-link" title="Ver fonte original">🔗</a>` 
+                            : '';
+                          
+                          markers[markerId] = `<span class="${className}" title="${res.explanation || ''}">${res.segment}${sourceLink}</span>`;
+                          textWithMarkers = textWithMarkers.replace(flexibleRegex, markerId);
+                        }
                       });
-                      return safeMarkdown(processed);
+
+                      // Converter Markdown
+                      let finalHtml = safeMarkdown(textWithMarkers);
+                      
+                      // Injetar os destaques de volta no HTML final
+                      Object.entries(markers).forEach(([id, htmlCode]) => {
+                        // Usar replaceAll ou split/join para substituir todas as ocorrências do marcador
+                        finalHtml = finalHtml.split(id).join(htmlCode);
+                      });
+                      
+                      return finalHtml;
                     })()
                   : safeMarkdown(msg.text) 
               }}

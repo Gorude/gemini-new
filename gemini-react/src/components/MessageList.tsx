@@ -27,6 +27,7 @@ interface MessageListProps {
   onCopy: (text: string, id: string) => void;
   onToggleSources: (id: string | null) => void;
   onFactCheck: (id: string) => void;
+  onSelectionChange?: (text: string, pos: { x: number, y: number }, messageId: string) => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
@@ -51,7 +52,8 @@ const MessageList: React.FC<MessageListProps> = ({
   onCopy,
   onToggleSources,
   activeChatId,
-  onFactCheck
+  onFactCheck,
+  onSelectionChange
 }) => {
   const visibleMessages = messages.slice(-visibleMessagesCount);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -142,6 +144,7 @@ const MessageList: React.FC<MessageListProps> = ({
                 onCopy={onCopy}
                 onToggleSources={onToggleSources}
                 onFactCheck={onFactCheck}
+                onSelectionChange={onSelectionChange}
               />
             );
           })}

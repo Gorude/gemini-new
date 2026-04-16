@@ -52,6 +52,7 @@ import LiveSetupModal from './components/LiveSetupModal';
 import PersonalitiesModal from './components/PersonalitiesModal';
 import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
+import SelectionPopup from './components/SelectionPopup';
 
 import { 
   MODEL_LIMITS
@@ -134,12 +135,15 @@ function App() {
   const nextAudioTimeRef = useRef<number>(0);
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const [liveAnalyser, setLiveAnalyser] = useState<AnalyserNode | null>(null);
+  const [selectionData, setSelectionData] = useState<{ text: string, pos: { x: number, y: number }, messageId: string } | null>(null);
+  const [isCheckingSegment, setIsCheckingSegment] = useState(false);
 
   const previousScrollHeightRef = useRef<number>(0);
   const isLazyLoadingRef = useRef<boolean>(false);
   const chatWindowRef = useRef<HTMLElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentAiMsgIdRef = useRef<string | null>(null);
+  const timerIntervalRef = useRef<any>(null);
 
   const handleAutoCategorize = useCallback(async () => {
     if (memoryFacts.length === 0) return;
@@ -407,6 +411,16 @@ function App() {
       const currentAiMsgId = replaceId || (Date.now() + 1).toString() + '-ai';
       currentAiMsgIdRef.current = currentAiMsgId;
 
+      // Iniciar Timer Real-time
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = setInterval(() => {
+        const elapsed = (performance.now() - startTime) / 1000;
+        setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
+          ...c,
+          messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { ...m, duration: elapsed } : m)
+        } : c));
+      }, 100);
+
       setChats(prev => prev.map(c => {
         if (c.id === targetChatId) {
           const freshMsg: Message = { id: currentAiMsgId, role: 'ai', text: '', thoughts: '', duration: 0, isSearching: webSearchEnabled };
@@ -440,10 +454,40 @@ function App() {
             }
           });
         }
+        
+        // Limpeza em tempo real para o streaming
+        let streamingText = fullText;
+        let streamingThoughts = fullThoughts;
+        
+        // 1. Extrair blocos completos de <thinking>
+        const completeThinkingMatch = /<thinking>([\s\S]*?)<\/thinking>/g;
+        let m;
+        while ((m = completeThinkingMatch.exec(fullText)) !== null) {
+          if (thinkingEnabled && !streamingThoughts.includes(m[1].trim())) {
+            streamingThoughts += (streamingThoughts ? "\n" : "") + m[1].trim();
+          }
+          streamingText = streamingText.replace(m[0], '');
+        }
+        
+        // 2. Ocultar blocos incompletos ou texto que parece ser raciocínio (fallback)
+        if (streamingText.includes('<thinking>')) {
+          streamingText = streamingText.split('<thinking>')[0];
+        }
+        
         const currentDuration = (performance.now() - startTime) / 1000;
+        const currentCleanText = parseMemoryTags(streamingText).trim();
+
         setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
           ...c,
-          messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { ...m, text: fullText, thoughts: fullThoughts, isGrounded, isSearching, sources: [...allSources], duration: currentDuration } : m)
+          messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { 
+            ...m, 
+            text: currentCleanText, 
+            thoughts: streamingThoughts.trim(), 
+            isGrounded, 
+            isSearching, 
+            sources: [...allSources], 
+            duration: currentDuration 
+          } : m)
         } : c));
       }
 
@@ -468,25 +512,56 @@ function App() {
         });
       }
 
-      // Limpar tags de pensamento que o modelo pode ter injetado no texto (fallback manual)
-      let cleanedFullText = fullText;
+      // 1. Limpeza e extração final
+      let finalCleanedText = fullText;
+      let finalThoughts = fullThoughts;
       const thinkingRegex = /<thinking>([\s\S]*?)<\/thinking>/g;
-      let match;
-      while ((match = thinkingRegex.exec(fullText)) !== null) {
-        if (thinkingEnabled) fullThoughts += "\n" + match[1];
-        cleanedFullText = cleanedFullText.replace(match[0], '');
+      let mMatch;
+      while ((mMatch = thinkingRegex.exec(fullText)) !== null) {
+        if (thinkingEnabled && !finalThoughts.includes(mMatch[1])) {
+          finalThoughts += (finalThoughts ? "\n" : "") + mMatch[1];
+        }
+        finalCleanedText = finalCleanedText.replace(mMatch[0], '');
       }
+      finalCleanedText = finalCleanedText.replace(/<\/thinking>/g, '').replace(/<thinking>/g, '').trim();
 
-      const finalCleanText = parseMemoryTags(cleanedFullText);
+      let finalCleanText = parseMemoryTags(finalCleanedText).trim();
+
+      // 2. LÓGICA DE AUTO-RECUPERAÇÃO (Hidden Turn)
+      if (!finalCleanText && finalThoughts && finalThoughts.length > 50) {
+        // Mostrar estado temporário amigável
+        setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
+          ...c,
+          messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { ...m, text: "_Finalizando resposta baseada no raciocínio..._", thoughts: finalThoughts.trim() } : m)
+        } : c));
+
+        try {
+          const recoveryRes = await generateGeminiContent(
+            `O modelo gerou apenas o raciocínio interno. Com base no raciocínio abaixo, escreva apenas a RESPOSTA FINAL amigável e direta para o usuário (em Português), ignorando a parte técnica do planejamento:\n\n${finalThoughts}`,
+            model,
+            [],
+            "Você é o Gemoro. Resuma o raciocínio em uma resposta final útil."
+          );
+          if (recoveryRes.text) {
+            finalCleanText = parseMemoryTags(recoveryRes.text).trim();
+          }
+        } catch (e) {
+          console.warn("Falha na auto-recuperação:", e);
+          finalCleanText = finalThoughts; 
+        }
+      } else if (!finalCleanText && finalThoughts) {
+        finalCleanText = finalThoughts;
+      }
 
       setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { 
         ...c, 
         messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { 
           ...m, 
           text: finalCleanText, 
-          thoughts: fullThoughts.trim(),
+          thoughts: finalThoughts.trim(),
           isSearching: false,
           isGrounded,
+          isVerifying: false,
           sources: [...allSources]
         } : m) 
       } : c));
@@ -514,6 +589,10 @@ function App() {
       const errorMsg: Message = { id: Date.now().toString(), role: 'ai', text: `**[Erro]:** ${error.message}` };
       setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, messages: [...c.messages, errorMsg] } : c));
     } finally {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
       setIsLoading(false);
       abortControllerRef.current = null;
       currentAiMsgIdRef.current = null;
@@ -543,6 +622,59 @@ function App() {
   }, [activeChatId]);
 
 
+
+  const handleFactCheckSegment = useCallback(async (messageId: string, segmentText: string) => {
+    // Ativar loading na mensagem específica
+    setChats(prev => prev.map(chat => ({
+      ...chat,
+      messages: chat.messages.map(msg => msg.id === messageId ? { ...msg, isVerifying: true } : msg)
+    })));
+
+    try {
+      const results = await performFactCheck(segmentText);
+      setChats(prev => prev.map(chat => {
+        if (chat.id === activeChatId) {
+          return {
+            ...chat,
+            messages: chat.messages.map(msg => {
+              if (msg.id === messageId) {
+                // Filtrar resultados antigos que coincidem com os novos segmentos para evitar sobreposição
+                const existingResults = msg.factCheckResults || [];
+                const filteredOld = existingResults.filter(old => 
+                  !results.some(newRes => newRes.segment === old.segment)
+                );
+                const newResults = [...filteredOld, ...results];
+                return { ...msg, factCheckResults: newResults, isVerifying: false };
+              }
+              return msg;
+            })
+          };
+        }
+        return chat;
+      }));
+    } catch (e) {
+      console.error("Erro na checagem parcial:", e);
+      setChats(prev => prev.map(chat => ({
+        ...chat,
+        messages: chat.messages.map(msg => msg.id === messageId ? { ...msg, isVerifying: false } : msg)
+      })));
+    }
+  }, [activeChatId]);
+
+  const handleAskAboutSegment = useCallback((segmentText: string, questionText: string) => {
+    const contextualPrompt = `Contexto selecionado: "${segmentText}"\n\nPergunta do usuário: ${questionText}`;
+    
+    // Obter histórico para manter o contexto do chat
+    const activeChat = chats.find(c => c.id === activeChatId);
+    if (!activeChat) return;
+
+    const apiHistory = activeChat.messages.map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.text }]
+    }));
+
+    executeAIRequest(activeChatId, contextualPrompt, [], apiHistory, false);
+  }, [activeChatId, chats, executeAIRequest]);
 
   const parseMemoryTags = useCallback((str: string) => {
     let newMemories = [...memoryFacts];
@@ -1196,9 +1328,22 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: any) => m.id !== id)} : c))}
                     onCopy={(text, id) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }}
                     onToggleSources={setExpandedSourcesMsgId}
+                    onSelectionChange={(text, pos, msgId) => setSelectionData({ text, pos, messageId: msgId })}
                   />
                 )}
               </div>
+
+              {selectionData && (
+                <SelectionPopup 
+                  text={selectionData.text}
+                  position={selectionData.pos}
+                  theme={theme}
+                  isChecking={isCheckingSegment}
+                  onClose={() => setSelectionData(null)}
+                  onFactCheck={(txt) => handleFactCheckSegment(selectionData.messageId, txt)}
+                  onAsk={handleAskAboutSegment}
+                />
+              )}
 
               <ChatInput 
                 isLoading={isLoading}
