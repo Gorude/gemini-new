@@ -13,7 +13,9 @@ import {
   AlertCircle, 
   Lightbulb, 
   ChevronRight,
-  Edit2
+  Edit2,
+  ShieldCheck,
+  ExternalLink
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
@@ -35,6 +37,7 @@ interface MessageItemProps {
   onDelete: (id: string) => void;
   onCopy: (text: string, id: string) => void;
   onToggleSources: (id: string | null) => void;
+  onFactCheck: (id: string) => void;
 }
 
 const MessageItem: React.FC<MessageItemProps> = React.memo(({
@@ -53,7 +56,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   onRegenerate,
   onDelete,
   onCopy,
-  onToggleSources
+  onToggleSources,
+  onFactCheck
 }) => {
   const isEditing = editingMsgId === msg.id;
 
@@ -101,8 +105,15 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                          if (match) domain = match[1].toLowerCase();
                          else domain = src.title.split(/[\s-]/)[0].toLowerCase() + ".com";
                        } else {
-                         const cleanUri = src.uri.replace(/^(https?:\/\/)?(www\.)?/, 'https://');
-                         domain = new URL(cleanUri).hostname;
+                        try {
+                          let cleanUri = src.uri;
+                          if (!cleanUri.includes('://')) {
+                            cleanUri = 'https://' + cleanUri.replace(/^\/+/, '');
+                          }
+                          domain = new URL(cleanUri).hostname;
+                        } catch (e) {
+                          domain = "google.com";
+                        }
                        }
                     } catch(e) {}
                     return (
@@ -193,7 +204,27 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           ) : msg.text ? (
             <div 
               className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em]"
-              dangerouslySetInnerHTML={{ __html: safeMarkdown(msg.text) }}
+              dangerouslySetInnerHTML={{ 
+                __html: msg.factCheckResults && msg.factCheckResults.length > 0 
+                  ? (() => {
+                      let processed = msg.text;
+                      // Ordenar por tamanho decrescente para evitar substituir partes menores de uma string maior
+                      const sortedResults = [...msg.factCheckResults].sort((a, b) => b.segment.length - a.segment.length);
+                      
+                      sortedResults.forEach(res => {
+                        const escapedSegment = res.segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(escapedSegment, 'g');
+                        const className = res.isVerified ? 'fact-verified' : 'fact-unverified';
+                        const sourceLink = res.isVerified && res.sourceUrl 
+                          ? `<a href="${res.sourceUrl}" target="_blank" class="fact-link" title="Ver fonte original">🔗</a>` 
+                          : '';
+                        
+                        processed = processed.replace(regex, `<span class="${className}" title="${res.explanation || ''}">${res.segment}${sourceLink}</span>`);
+                      });
+                      return safeMarkdown(processed);
+                    })()
+                  : safeMarkdown(msg.text) 
+              }}
             />
           ) : null}
 
@@ -231,6 +262,17 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
              <button onClick={() => onCopy(`\`\`\`markdown\n${msg.text}\n\`\`\``, msg.id + '-md')} className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition">
                {copiedId === msg.id + '-md' ? <Check className="w-4 h-4 text-green-500" /> : <FileText className="w-4 h-4" />}
              </button>
+             <button 
+                onClick={() => onFactCheck(msg.id)} 
+                disabled={isLoading || msg.isFactChecking} 
+                className={`text-[var(--text-placeholder)] hover:text-blue-400 transition flex items-center gap-1.5 ${msg.isFactChecking ? 'text-blue-500 animate-pulse' : ''}`}
+                title="Checar fatos na web"
+              >
+                {msg.isFactChecking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                {msg.factCheckResults && msg.factCheckResults.length > 0 && (
+                  <span className="text-[10px] font-bold">FEITO</span>
+                )}
+              </button>
              <button onClick={() => onDelete(msg.id)} disabled={isLoading} className="text-[var(--text-placeholder)] hover:text-red-400 transition" >
                <Trash2 className="w-3.5 h-3.5" />
              </button>

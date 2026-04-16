@@ -14,7 +14,8 @@
   --bg-modal: #1e1f20;
   --border-main: #2b2c2d;
   --border-light: rgba(255, 255, 255, 0.08);
-  --text-primary: #e3e3e3;
+  --text-primary: #b5b5b5;
+  --text-bold: #ffffff;
   --text-secondary: #9ca3af;
   --text-placeholder: #6b7280;
   --code-bg: #1e1e1e;
@@ -38,6 +39,7 @@
   --border-main: #d1d5db;
   --border-light: rgba(209, 213, 219, 0.5);
   --text-primary: #111827;
+  --text-bold: #000000;
   --text-secondary: #4b5563;
   --text-placeholder: #9ca3af;
   --code-bg: #f3f4f6;
@@ -61,6 +63,7 @@
   --border-main: #d6bfa3;
   --border-light: rgba(214, 191, 163, 0.5);
   --text-primary: #4a3f35;
+  --text-bold: #000000;
   --text-secondary: #8c7b68;
   --text-placeholder: #a69888;
   --code-bg: #ebdcc9;
@@ -84,6 +87,7 @@
   --border-main: #3D2D78;
   --border-light: rgba(61, 45, 120, 0.5);
   --text-primary: #E9E1FF;
+  --text-bold: #ffffff;
   --text-secondary: #A99BDE;
   --text-placeholder: #7B6BA6;
   --code-bg: #12102A;
@@ -124,17 +128,22 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
   }
 }
 
+.chat-container-responsive {
+  overflow-anchor: auto !important;
+}
+
 .main-content { background-color: var(--bg-main); flex-grow: 1; position: relative; transition: background-color 0.3s ease; width: 100%; }
 .input-wrapper { background-color: var(--bg-input); border-radius: 32px; border: 1px solid transparent; transition: background-color 0.3s ease, border-color 0.3s ease; }
 .input-wrapper:focus-within { background-color: var(--bg-user-bubble); border-color: var(--border-main); }
-.user-msg { background-color: var(--bg-user-bubble); border-radius: 24px; padding: 12px 24px; margin-left: auto; max-width: 85%; transition: background-color 0.3s ease; }
+.user-msg { background-color: var(--bg-user-bubble); border-radius: 24px; padding: 12px 24px; margin-left: auto; max-width: 85%; transition: background-color 0.3s ease; color: var(--text-primary); }
+.user-msg strong, .user-msg b { color: var(--text-bold) !important; font-weight: 700 !important; }
 
 /* Estilização do Markdown */
 .response-body { font-size: 15.5px !important; line-height: 1.6 !important; color: var(--text-primary); white-space: normal !important; }
 .response-body h1 { font-size: 17px !important; font-weight: 700 !important; margin: 24px 0 12px 0 !important; color: var(--text-primary); border-bottom: 1px solid var(--border-light); padding-bottom: 4px; }
 .response-body h2 { font-size: 16px !important; font-weight: 700 !important; margin: 20px 0 10px 0 !important; color: var(--text-primary); }
 .response-body h3 { font-size: 15.5px !important; font-weight: 700 !important; margin: 16px 0 8px 0 !important; color: var(--text-primary); }
-.response-body strong { font-weight: 700 !important; }
+.response-body strong, .response-body b { font-weight: 700 !important; color: var(--text-bold) !important; }
 .response-body p { margin: 0 0 12px 0 !important; }
 .response-body p:last-child { margin-bottom: 0 !important; }
 .response-body p:empty { display: none !important; }
@@ -315,4 +324,49 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
 
 .animate-loading-bar {
   animation: loading-bar 2s infinite ease-in-out;
+}
+
+/* Fact Checking Highlighters */
+.fact-verified {
+  background-color: rgba(34, 197, 94, 0.15);
+  border-bottom: 2px solid rgba(34, 197, 94, 0.4);
+  padding: 0 2px;
+  border-radius: 2px;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.fact-verified:hover {
+  background-color: rgba(34, 197, 94, 0.25);
+}
+
+.fact-unverified {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-bottom: 2px solid rgba(239, 68, 68, 0.4);
+  padding: 0 2px;
+  border-radius: 2px;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.fact-unverified:hover {
+  background-color: rgba(239, 68, 68, 0.25);
+}
+
+.fact-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  font-size: 10px;
+  text-decoration: none !important;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  vertical-align: middle;
+}
+
+.fact-link:hover {
+  opacity: 1;
 }

@@ -15,7 +15,9 @@ import {
   Activity,
   Zap,
   BarChart2,
-  User
+  User,
+  Files,
+  Palette
 } from 'lucide-react';
 import ChatRuler from './components/ChatRuler';
 import MessageList from './components/MessageList';
@@ -24,6 +26,7 @@ import ChatInput from './components/ChatInput';
 import { 
   generateGeminiContent, 
   streamGeminiContent, 
+  performFactCheck,
   type Message 
 } from './services/gemini';
 
@@ -47,6 +50,7 @@ import DnaModal from './components/DnaModal';
 import LiveView from './components/LiveView';
 import LiveSetupModal from './components/LiveSetupModal';
 import PersonalitiesModal from './components/PersonalitiesModal';
+import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
 
 import { 
@@ -104,15 +108,15 @@ function App() {
     const saved = localStorage.getItem('gemoro_chat_margin');
     return saved ? parseInt(saved, 10) : 15;
   });
-  const [personalities, setPersonalities] = useState<Personality[]>(() => {
-    const saved = localStorage.getItem('gemoro_personalities');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [selectedPersonalityId, setSelectedPersonalityId] = useState(() => {
     return localStorage.getItem('gemoro_selected_personality_id') || 'default';
   });
   const [showPersonalitiesModal, setShowPersonalitiesModal] = useState(false);
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
+  const [showThemeSubMenu, setShowThemeSubMenu] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'chat' | 'files'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // LIVE MODE STATE
@@ -203,9 +207,10 @@ function App() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [historyRes, memoryRes] = await Promise.all([
+        const [historyRes, memoryRes, personalitiesRes] = await Promise.all([
           fetch('/api/history'),
-          fetch('/api/memory')
+          fetch('/api/memory'),
+          fetch('/api/personalities')
         ]);
         if (historyRes.ok) {
           const history = await historyRes.json();
@@ -255,8 +260,33 @@ function App() {
             }
           }
         }
+
+        if (personalitiesRes.ok) {
+          const persData = await personalitiesRes.json();
+          if (Array.isArray(persData) && persData.length > 0) {
+            setPersonalities(persData);
+          } else {
+            // Migration from localStorage
+            const saved = localStorage.getItem('gemoro_personalities');
+            if (saved) {
+              try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setPersonalities(parsed);
+                  fetch('/api/personalities', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: saved 
+                  });
+                }
+              } catch (e) {}
+            }
+          }
+        }
       } catch (e) {
         console.error("Erro ao carregar dados iniciais:", e);
+      } finally {
+        setIsInitialLoading(false);
       }
     };
     loadData();
@@ -269,7 +299,13 @@ function App() {
 
   // Auto-Save Personalities
   useEffect(() => {
-    localStorage.setItem('gemoro_personalities', JSON.stringify(personalities));
+    if (personalities.length > 0) {
+      fetch('/api/personalities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(personalities)
+      });
+    }
     localStorage.setItem('gemoro_selected_personality_id', selectedPersonalityId);
   }, [personalities, selectedPersonalityId]);
 
@@ -357,20 +393,19 @@ function App() {
 
     const selectedPersonality = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
 
-    const systemInstruction = "Você é o Gemoro, uma inteligência artificial avançada. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
+    const systemInstruction = "Você é o Gemoro, uma inteligência artificial avançada, empática e extremante RÁPIDA. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
       (selectedPersonality.prompt ? `INSTRUÇÃO DE PERSONALIDADE ATIVA: "${selectedPersonality.prompt}"\n\n` : "") +
       (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f: MemoryFact) => `[ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n") + "\n\n" : "") +
-      "Regras de Memória:\n" +
-      "1. Se descobrir um fato NOVO, adicione <MEMORY category='Categoria lógica'>texto do fato</MEMORY> na resposta.\n" +
-      "2. Se possível, relacione com fatos existentes: <MEMORY category='...' connections='id1,id2'>texto</MEMORY>.\n" +
+      "Regras de Pesquisa e Memória:\n" +
+      "1. Se a ferramenta de pesquisa estiver ativada (WEB SEARCH ON), você DEVE obrigatoriamente realizar a ferramenta google_search para fazer uma pesquisa na web ANTES de responder, mesmo para assuntos que você considere de conhecimento geral. O usuário deseja ver as fontes e evidências (ícones de sites) em todas as respostas.\n" +
+      "2. Se descobrir um fato NOVO importante, adicione <MEMORY category='...'>texto</MEMORY>.\n" +
       "3. Para atualizar: <UPDATE_MEMORY id='ID'>novo texto</UPDATE_MEMORY>.\n" +
-      "4. Para excluir: <DELETE_MEMORY id='ID'></DELETE_MEMORY>.";
+      "4. Seja conciso e direto ao ponto quando possível.";
 
     try {
       const startTime = performance.now();
       const currentAiMsgId = replaceId || (Date.now() + 1).toString() + '-ai';
       currentAiMsgIdRef.current = currentAiMsgId;
-      setTimeout(() => scrollToBottom(true), 50);
 
       setChats(prev => prev.map(c => {
         if (c.id === targetChatId) {
@@ -387,13 +422,13 @@ function App() {
       let fullText = "";
       let fullThoughts = "";
       let allSources: { title: string; uri: string }[] = [];
-      let isSearching = false;
+      let isSearching = webSearchEnabled;
       let isGrounded = false;
       let finalUsage = null;
 
       for await (const chunk of stream) {
         if (chunk.text) fullText += chunk.text;
-        if (chunk.thoughts) fullThoughts += chunk.thoughts;
+        if (chunk.thoughts && thinkingEnabled) fullThoughts += chunk.thoughts;
         if (chunk.isGrounded) isGrounded = true;
         if (chunk.isSearching) isSearching = true;
         if (allSources.length > 0) isSearching = false;
@@ -433,9 +468,28 @@ function App() {
         });
       }
 
-      const finalCleanText = parseMemoryTags(fullText);
+      // Limpar tags de pensamento que o modelo pode ter injetado no texto (fallback manual)
+      let cleanedFullText = fullText;
+      const thinkingRegex = /<thinking>([\s\S]*?)<\/thinking>/g;
+      let match;
+      while ((match = thinkingRegex.exec(fullText)) !== null) {
+        if (thinkingEnabled) fullThoughts += "\n" + match[1];
+        cleanedFullText = cleanedFullText.replace(match[0], '');
+      }
 
-      setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { ...c, messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { ...m, text: finalCleanText } : m) } : c));
+      const finalCleanText = parseMemoryTags(cleanedFullText);
+
+      setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { 
+        ...c, 
+        messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { 
+          ...m, 
+          text: finalCleanText, 
+          thoughts: fullThoughts.trim(),
+          isSearching: false,
+          isGrounded,
+          sources: [...allSources]
+        } : m) 
+      } : c));
 
       if (isFirstMessage) {
         generateGeminiContent(
@@ -712,18 +766,55 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
   }, [messages.length, visibleMessagesCount]);
 
-  useLayoutEffect(() => {
-    if (isLazyLoadingRef.current && chatWindowRef.current) {
-      const newScrollHeight = chatWindowRef.current.scrollHeight;
-      chatWindowRef.current.scrollTop += (newScrollHeight - previousScrollHeightRef.current);
-      isLazyLoadingRef.current = false;
+  const handleFactCheck = useCallback(async (msgId: string) => {
+    if (!activeChat) return;
+    
+    // Set loading state for this message
+    setChats(prev => prev.map(chat => {
+      if (chat.id === activeChatId) {
+        return {
+          ...chat,
+          messages: chat.messages.map(m => 
+            m.id === msgId ? { ...m, isFactChecking: true } : m
+          )
+        };
+      }
+      return chat;
+    }));
+
+    const msg = activeChat.messages.find(m => m.id === msgId);
+    if (!msg) return;
+
+    try {
+      const results = await performFactCheck(msg.text);
+      
+      setChats(prev => prev.map(chat => {
+        if (chat.id === activeChatId) {
+          return {
+            ...chat,
+            messages: chat.messages.map(m => 
+              m.id === msgId ? { ...m, factCheckResults: results, isFactChecking: false } : m
+            )
+          };
+        }
+        return chat;
+      }));
+    } catch (e) {
+      console.error("Fact check failed:", e);
+      setChats(prev => prev.map(chat => {
+        if (chat.id === activeChatId) {
+          return {
+            ...chat,
+            messages: chat.messages.map(m => 
+              m.id === msgId ? { ...m, isFactChecking: false } : m
+            )
+          };
+        }
+        return chat;
+      }));
     }
-  }, [visibleMessagesCount]);
+  }, [activeChat, activeChatId]);
 
-  useEffect(() => { setVisibleMessagesCount(15); setTimeout(() => scrollToBottom(true, true), 10); }, [activeChatId, scrollToBottom]);
-  useEffect(() => { scrollToBottom(); }, [messages, isLoading, scrollToBottom]);
-
-  const handleTogglePin = (e: any, id: string) => { e.stopPropagation(); setChats(p => p.map(c => c.id === id ? {...c, pinned: !c.pinned} : c)); };
   const handleDeleteChat = (e: any, id: string) => { 
     e.stopPropagation(); setChats(p => p.filter(c => c.id !== id));
     if (activeChatId === id) setActiveChatId('');
@@ -798,7 +889,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
         <div className="px-4 mb-8">
           <button 
-            onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); }} 
+            onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); setActiveTab('chat'); }} 
             className="flex items-center gap-3 px-4 py-3 w-full rounded-full hover:bg-white/5 transition text-[var(--text-primary)] font-medium"
           >
             <SquarePen className="w-5 h-5 opacity-70" />
@@ -813,8 +904,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             {chats.filter(c => !c.archived).map(chat => (
               <div key={chat.id} className="relative group">
                 <div 
-                  onClick={() => { setActiveChatId(chat.id); setIsSidebarOpen(false); }} 
-                  className={`group/item flex items-center gap-3 py-2.5 px-4 mx-1 rounded-full cursor-pointer transition relative ${activeChatId === chat.id ? 'bg-[#1D3153] text-[#A8C7FA]' : 'hover:bg-white/5 text-[var(--text-primary)]'}`}
+                  onClick={() => { setActiveChatId(chat.id); setIsSidebarOpen(false); setActiveTab('chat'); }} 
+                  className={`group/item flex items-center gap-3 py-2.5 px-4 mx-1 rounded-full cursor-pointer transition relative ${activeChatId === chat.id ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)]' : 'hover:bg-white/5 text-[var(--text-primary)]'}`}
                 >
                   {editingChatId === chat.id ? (
                     <input autoFocus className="bg-transparent border-none outline-none text-white w-full text-[14px]" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onBlur={() => handleRenameChat(chat.id)} onKeyDown={(e) => e.key === 'Enter' && handleRenameChat(chat.id)} />
@@ -858,30 +949,69 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
         </div>
 
-        <div className="mt-auto p-4 border-t border-[var(--border-light)]">
-          <button onClick={() => setShowSettingsMenu(!showSettingsMenu)} className="flex items-center gap-3 px-4 py-3 w-full rounded-full hover:bg-[var(--bg-chat-hover)] transition text-[var(--text-primary)] font-medium">
-            <Settings className="w-5 h-5 opacity-70" /> 
+        <div className="mt-auto p-4 border-t border-[var(--border-light)] relative">
+          <button 
+            onClick={() => setShowSettingsMenu(!showSettingsMenu)} 
+            className={`flex items-center gap-3 px-4 py-3 w-full rounded-full transition font-medium ${showSettingsMenu ? 'bg-[var(--bg-chat-hover)] text-white' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]'}`}
+          >
+            <Settings className={`w-5 h-5 transition-transform duration-300 ${showSettingsMenu ? 'rotate-90 text-blue-400' : 'opacity-70'}`} /> 
             <span className="text-[14px]">Configurações e ajuda</span>
           </button>
+          
           {showSettingsMenu && (
-            <div className="absolute bottom-20 left-4 bg-[var(--bg-modal)] border border-[var(--border-light)] rounded-2xl p-3 w-64 shadow-2xl z-[80]">
-              <div className="text-[10px] uppercase font-bold text-[var(--text-placeholder)] mb-2 px-2 tracking-widest">Tema</div>
-              {['claro', 'escuro', 'areia', 'galaxia'].map(t => (
-                <button key={t} onClick={() => setTheme(t)} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition ${theme === t ? 'bg-indigo-600 text-white' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-white'}`}>{t.toUpperCase()}</button>
-              ))}
-              <div className="h-px bg-[var(--border-light)] my-2"></div>
+            <div className="absolute bottom-20 left-4 bg-[var(--bg-modal)] border border-[var(--border-light)] rounded-2xl p-2 w-64 shadow-2xl z-[80] animate-in fade-in slide-in-from-bottom-4 duration-200">
+              <div className="relative">
+                {showThemeSubMenu && (
+                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[var(--bg-modal)] border border-[var(--border-light)] rounded-2xl p-2 shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-200">
+                    <div className="text-[9px] uppercase font-bold text-[var(--text-placeholder)] mb-2 px-2 tracking-[0.2em] opacity-70">Escolha o Tema</div>
+                    <div className="grid grid-cols-1 gap-1">
+                      {['claro', 'escuro', 'areia', 'galaxia'].map(t => (
+                        <button 
+                          key={t} 
+                          onClick={() => { setTheme(t); setShowThemeSubMenu(false); setShowSettingsMenu(false); }} 
+                          className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${theme === t ? 'bg-[#4f46e5] text-white' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        >
+                          {t.toUpperCase()}
+                          {theme === t && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <button 
+                  onClick={() => setShowThemeSubMenu(!showThemeSubMenu)}
+                  className={`w-full text-left px-4 py-3 rounded-xl text-[14px] font-medium transition-all flex items-center gap-3 group ${showThemeSubMenu ? 'bg-[var(--bg-chat-hover)] text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)]'}`}
+                >
+                  <div className={`p-1.5 rounded-lg transition-colors ${showThemeSubMenu ? 'bg-indigo-600/20' : 'bg-[var(--border-light)] group-hover:bg-[var(--border-main)]'}`}>
+                    <Palette className={`w-4 h-4 ${showThemeSubMenu ? 'text-indigo-400' : 'text-amber-400'}`} />
+                  </div>
+                  Alterar Tema
+                </button>
+              </div>
+
+              <div className="h-px bg-[var(--border-light)] my-2 mx-2"></div>
+              
               <button 
                 onClick={() => { setShowPersonalitiesModal(true); setShowSettingsMenu(false); }}
-                className="w-full text-left px-4 py-2 rounded-lg text-sm hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-white transition flex items-center gap-2"
+                className="w-full text-left px-4 py-3 rounded-xl text-[14px] font-medium hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center gap-3 group"
               >
-                <User className="w-4 h-4" /> Personalidades
+                <div className="p-1.5 rounded-lg bg-[var(--border-light)] group-hover:bg-[var(--border-main)] transition-colors">
+                  <User className="w-4 h-4 text-blue-400" />
+                </div>
+                Personalidades
               </button>
-              <div className="h-px bg-[var(--border-light)] my-2"></div>
+
+              <div className="h-px bg-[var(--border-light)] my-2 mx-2"></div>
+              
               <button 
                 onClick={() => { setShowDnaModal(true); setShowSettingsMenu(false); }}
-                className="w-full text-left px-4 py-2 rounded-lg text-sm hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-white transition flex items-center gap-2"
+                className="w-full text-left px-4 py-3 rounded-xl text-[14px] font-medium hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center gap-3 group"
               >
-                <Bot className="w-4 h-4" /> DNA de Memória
+                <div className="p-1.5 rounded-lg bg-[var(--border-light)] group-hover:bg-[var(--border-main)] transition-colors">
+                  <Bot className="w-4 h-4 text-emerald-400" />
+                </div>
+                DNA de Memória
               </button>
             </div>
           )}
@@ -944,7 +1074,18 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             </div>
           </div>
 
-          <div className="flex-1 flex justify-end">
+          <div className="flex-1 flex justify-end items-center gap-2">
+            {activeChatId && (
+              <button 
+                onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition text-xs font-semibold border ${activeTab === 'files' ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-user-bubble)] border-[var(--border-light)]'}`}
+                title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
+              >
+                <Files className={`w-3.5 h-3.5 ${activeTab === 'files' ? 'text-white' : 'text-blue-400'}`} />
+                <span className="hidden sm:inline">{activeTab === 'chat' ? 'Arquivos' : 'Chat'}</span>
+              </button>
+            )}
+
             <button 
               onClick={() => setShowAnalytics(!showAnalytics)} 
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-user-bubble)] transition text-xs font-semibold border border-[var(--border-light)]"
@@ -1007,76 +1148,87 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         )}
 
         <div className="flex-1 overflow-hidden flex flex-col relative">
-          {isLiveActive ? (
-            <LiveView 
-              status={liveStatus}
-              transcript={liveTranscript}
-              currentVoice={liveVoice}
-              analyser={liveAnalyser}
-              visionType={liveVisionType}
-              videoStream={liveVideoStream}
-              onToggleCamera={handleToggleCamera}
-              onToggleScreen={handleToggleScreen}
-              onInterrupt={handleInterruptLive}
-              onVoiceChange={(v: string) => {
-                setLiveVoice(v);
-                localStorage.setItem('gemoro_live_voice', v);
-                handleLiveStop();
-                setTimeout(handleLiveStart, 500);
-              }}
-              onClose={handleLiveStop}
-            />
+          {activeTab === 'files' && activeChatId ? (
+            <ChatFileHub messages={messages} onClose={() => setActiveTab('chat')} />
           ) : (
-            <MessageList 
-              messages={messages}
-              margin={chatMargin}
-              visibleMessagesCount={visibleMessagesCount}
-              onScroll={handleScroll}
-              chatWindowRef={chatWindowRef}
-              isLoading={isLoading}
-              editingMsgId={editingMsgId}
-              editingMsgText={editingMsgText}
-              copiedId={copiedId}
-              expandedSourcesMsgId={expandedSourcesMsgId}
-              imagenModel={imagenModel}
-              onEditPrompt={(id, text) => { setEditingMsgId(id); setEditingMsgText(text); }}
-              onSaveEdit={handleSaveEdit}
-              onSetEditingMsgText={setEditingMsgText}
-              onCancelEdit={() => setEditingMsgId(null)}
-              onRegenerate={handleRegenerate}
-              onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: any) => m.id !== id)} : c))}
-              onCopy={(text, id) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }}
-              onToggleSources={setExpandedSourcesMsgId}
-            />
+            <>
+              <div className="flex-1 overflow-hidden flex flex-col relative">
+                {isLiveActive ? (
+                  <LiveView 
+                    status={liveStatus}
+                    transcript={liveTranscript}
+                    currentVoice={liveVoice}
+                    analyser={liveAnalyser}
+                    visionType={liveVisionType}
+                    videoStream={liveVideoStream}
+                    onToggleCamera={handleToggleCamera}
+                    onToggleScreen={handleToggleScreen}
+                    onInterrupt={handleInterruptLive}
+                    onVoiceChange={(v: string) => {
+                      setLiveVoice(v);
+                      localStorage.setItem('gemoro_live_voice', v);
+                      handleLiveStop();
+                      setTimeout(handleLiveStart, 500);
+                    }}
+                    onClose={handleLiveStop}
+                  />
+                ) : (
+                  <MessageList 
+                    messages={messages}
+                    margin={chatMargin}
+                    visibleMessagesCount={visibleMessagesCount}
+                    isInitialLoading={isInitialLoading}
+                    activeChatId={activeChatId}
+                    onScroll={handleScroll}
+                    chatWindowRef={chatWindowRef}
+                    isLoading={isLoading}
+                    onFactCheck={handleFactCheck}
+                    editingMsgId={editingMsgId}
+                    editingMsgText={editingMsgText}
+                    copiedId={copiedId}
+                    expandedSourcesMsgId={expandedSourcesMsgId}
+                    imagenModel={imagenModel}
+                    onEditPrompt={(id, text) => { setEditingMsgId(id); setEditingMsgText(text); }}
+                    onSaveEdit={handleSaveEdit}
+                    onSetEditingMsgText={setEditingMsgText}
+                    onCancelEdit={() => setEditingMsgId(null)}
+                    onRegenerate={handleRegenerate}
+                    onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: any) => m.id !== id)} : c))}
+                    onCopy={(text, id) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }}
+                    onToggleSources={setExpandedSourcesMsgId}
+                  />
+                )}
+              </div>
+
+              <ChatInput 
+                isLoading={isLoading}
+                isLiveSpeaking={isLiveSpeaking}
+                isLiveActive={isLiveActive}
+                webSearchEnabled={webSearchEnabled}
+                thinkingEnabled={thinkingEnabled}
+                imageGenEnabled={imageGenEnabled}
+                model={model}
+                imagenModel={imagenModel}
+                aspectRatio={aspectRatio}
+                canSearch={model.includes('gemma') || model.includes('gemini-2')}
+                showScrollButton={showScrollButton}
+                margin={chatMargin}
+                personalityName={personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
+                onSend={handleSend}
+                onStartLive={handleLiveStart}
+                onInterrupt={handleInterruptLive}
+                onToggleWebSearch={() => setWebSearchEnabled(!webSearchEnabled)}
+                onToggleThinking={() => setThinkingEnabled(!thinkingEnabled)}
+                onToggleImageGen={() => setImageGenEnabled(!imageGenEnabled)}
+                onSetModel={setModel}
+                onSetImagenModel={setImagenModel}
+                onSetAspectRatio={setAspectRatio}
+                onScrollToBottom={() => scrollToBottom(true, true)}
+                onStop={handleStopGeneration}
+              />
+            </>
           )}
         </div>
-
-        <ChatInput 
-          isLoading={isLoading}
-          isLiveSpeaking={isLiveSpeaking}
-          isLiveActive={isLiveActive}
-          webSearchEnabled={webSearchEnabled}
-          thinkingEnabled={thinkingEnabled}
-          imageGenEnabled={imageGenEnabled}
-          model={model}
-          imagenModel={imagenModel}
-          aspectRatio={aspectRatio}
-          canSearch={model.includes('gemma') || model.includes('gemini-2')}
-          showScrollButton={showScrollButton}
-          margin={chatMargin}
-          personalityName={personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
-          onSend={handleSend}
-          onStartLive={handleLiveStart}
-          onInterrupt={handleInterruptLive}
-          onToggleWebSearch={() => setWebSearchEnabled(!webSearchEnabled)}
-          onToggleThinking={() => setThinkingEnabled(!thinkingEnabled)}
-          onToggleImageGen={() => setImageGenEnabled(!imageGenEnabled)}
-          onSetModel={setModel}
-          onSetImagenModel={setImagenModel}
-          onSetAspectRatio={setAspectRatio}
-          onScrollToBottom={() => scrollToBottom(true, true)}
-          onStop={handleStopGeneration}
-        />
 
         {showPersonalitiesModal && (
           <PersonalitiesModal 
@@ -1098,7 +1250,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         )}
       </main>
 
-      {showDnaModal && (
+        {showDnaModal && (
         <DnaModal 
           memoryFacts={memoryFacts}
           isCategorizing={isCategorizing}

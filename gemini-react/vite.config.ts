@@ -6,6 +6,7 @@ import path from 'path'
 
 const chatFile = path.resolve(__dirname, 'chat-history.json')
 const memoryFile = path.resolve(__dirname, 'user-memory.json')
+const personalitiesFile = path.resolve(__dirname, 'personalities.json')
 const uploadsDir = path.resolve(__dirname, 'public/uploads')
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 
@@ -42,6 +43,20 @@ function chatHistoryApi() {
             fs.writeFileSync(memoryFile, body, 'utf-8')
             res.end(JSON.stringify({ success: true }))
           })
+        } else if (req.url === '/api/personalities' && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json')
+          if (fs.existsSync(personalitiesFile)) {
+            res.end(fs.readFileSync(personalitiesFile, 'utf-8'))
+          } else {
+            res.end(JSON.stringify([]))
+          }
+        } else if (req.url === '/api/personalities' && req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: string) => body += chunk)
+          req.on('end', () => {
+            fs.writeFileSync(personalitiesFile, body, 'utf-8')
+            res.end(JSON.stringify({ success: true }))
+          })
         } else if (req.url === '/api/upload' && req.method === 'POST') {
           let body = ''
           req.on('data', (chunk: string) => body += chunk)
@@ -72,7 +87,7 @@ export default defineConfig({
   ],
   server: {
     watch: {
-      ignored: ['**/chat-history.json', '**/user-memory.json']
+      ignored: ['**/chat-history.json', '**/user-memory.json', '**/personalities.json']
     }
   }
 })

@@ -64,17 +64,27 @@ export function safeMarkdown(content: string): string {
   return html;
 }
 
-export type Message = {
+export interface FactCheckResult {
+  segment: string;
+  isVerified: boolean;
+  sourceUrl?: string;
+  explanation?: string;
+}
+
+export interface Message {
   id: string;
   role: 'user' | 'ai';
   text: string;
-  thoughts?: string;
+  files?: Array<{ name: string; mimeType: string; data: string }>;
   isGrounded?: boolean;
+  sources?: Array<{ title: string; uri: string }>;
   isSearching?: boolean;
+  thoughts?: string;
   duration?: number;
-  files?: { name: string; data: string; mimeType: string }[];
-  sources?: { title: string; uri: string }[];
-};
+  factCheckResults?: FactCheckResult[];
+  isFactChecking?: boolean;
+}
+
 
 export async function* streamGeminiContent(
   text: string, 
@@ -111,11 +121,26 @@ export async function* streamGeminiContent(
   const payload: any = {
     contents: [...history, { role: "user", parts: currentParts }],
     generationConfig: { 
-      ...(thinking ? { thinkingConfig: { includeThoughts: true, thinkingLevel: "HIGH" } } : {}),
       maxOutputTokens: 8192,
       temperature: 0.7
     }
   };
+
+  if (thinking) {
+    // Apenas modelos específicos suportam o parâmetro thinkingConfig nativo (como Gemini Thinking)
+    const supportsThinkingConfig = model.includes('thinking') || model.includes('gemini-2.0');
+    
+    if (supportsThinkingConfig) {
+      payload.generationConfig.thinkingConfig = { 
+        includeThoughts: true, 
+        thinkingLevel: "MEDIUM" 
+      };
+    } else {
+      // Fallback: Instrução via prompt para modelos que não aceitam thinkingConfig
+      const searchInstruction = webSearch ? " Você DEVE planejar e executar o uso da ferramenta google_search para basear toda a sua resposta em evidências reais." : "";
+      currentParts.unshift({ text: "Pense profundamente passo a passo antes de responder. Mostre seu raciocínio se possível." + searchInstruction });
+    }
+  }
 
   if (webSearch) {
     payload.tools = [{ google_search: {} }];
@@ -170,20 +195,31 @@ export async function* streamGeminiContent(
               let chunkSources: { title: string; uri: string }[] = [];
 
               if (metadata?.groundingChunks) {
-                chunkSources = metadata.groundingChunks.map((chunk: any) => ({
-                  title: chunk.web?.title || "",
-                  uri: chunk.web?.uri || ""
-                })).filter((s: any) => s.uri);
+                chunkSources = metadata.groundingChunks.map((chunk: any) => {
+                  const s = chunk.web || chunk.webSource || chunk.source || chunk;
+                  return {
+                    title: s.title || chunk.title || "",
+                    uri: s.uri || chunk.uri || ""
+                  };
+                }).filter((s: any) => s.uri);
               }
 
               const chunkIsSearching = !!(metadata?.webSearchQueries && metadata.webSearchQueries.length > 0);
 
               parts.forEach((part: any) => {
-                if (part.thought === true) {
-                  if (part.text) chunkThoughts += part.text;
-                  return;
+                // Se o componente de pensamento (thought) está presente
+                if (part.thought === true || part.thought === 'true') {
+                  if (thinking && part.text) {
+                    chunkThoughts += part.text;
+                  }
+                  // Se o pensamento está OFF, descartamos esta parte para honrar o desejo do usuário
+                  return; 
                 }
-                if (part.text) chunkText += part.text;
+                
+                // Se a parte contém texto normal
+                if (part.text) {
+                  chunkText += part.text;
+                }
               });
 
               yield { 
@@ -194,6 +230,11 @@ export async function* streamGeminiContent(
                 sources: chunkSources,
                 usage: json.usageMetadata 
               };
+
+              // DIAGNÓSTICO: Log do finishReason e estrutura se o texto estiver vazio mas o pensamento não
+              if (chunkThoughts && !chunkText && candidate.finishReason && candidate.finishReason !== 'STOP') {
+                console.warn(`[DEBUG] Resposta terminou sem texto. Motivo: ${candidate.finishReason}`);
+              }
 
 
               // INSTRUMENTATION: Log the raw JSON for grounding debug
@@ -222,9 +263,10 @@ export async function generateGeminiContent(
   history: any[],
   systemInstruction?: string,
   files: any[] = [],
-  webSearch: boolean = false
+  webSearch: boolean = false,
+  thinking: boolean = false
 ) {
-  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch);
+  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, undefined, thinking);
   let fullText = "", fullThoughts = "", isGrounded = false, usage: any = null;
   
   for await (const chunk of gen) {
@@ -273,4 +315,36 @@ export async function generateImagenContent(
   if (!base64) throw new Error("Nenhuma imagem foi gerada pela API.");
 
   return { data: base64, mimeType: "image/png" };
+}
+
+export async function performFactCheck(text: string): Promise<FactCheckResult[]> {
+  const model = "gemma-4-31b-it";
+  const prompt = `Analise o texto a seguir e REALIZE UMA PESQUISA NA WEB para verificar cada afirmação de fato contida nela.
+  
+  TEXTO PARA CHECAGEM:
+  "${text}"
+  
+  MISSÃO:
+  1. Decompunha o texto em segmentos que contêm afirmações factuais (datas, nomes, leis, eventos, descobertas, etc).
+  2. Use a pesquisa na web para VERIFICAR se cada afirmação é verdadeira ou falsa baseada em fontes confiáveis.
+  3. Retorne APENAS UM JSON CRU contendo um array de objetos no formato:
+     [{ "segment": "Trecho exato do texto original", "isVerified": boolean, "sourceUrl": "Link oficial se for verificado", "explanation": "Breve motivo da falha se não verificado" }]
+
+  REGRAS:
+  - O "segment" DEVE ser uma cópia exata de um trecho do texto original para que possamos localizá-lo.
+  - Se um fato for VERDADEIRO, isVerified é true e sourceUrl é OBRIGATÓRIO.
+  - Se um fato for FALSO ou não houver evidências, isVerified é false.
+  - Responda APENAS o JSON.`;
+
+  try {
+    const res = await generateGeminiContent(prompt, model, [], "Você é um checador de fatos rigoroso da Reuters.", [], true);
+    const jsonMatch = res.text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return [];
+  } catch (e) {
+    console.warn("Erro ao realizar fact check:", e);
+    return [];
+  }
 }
