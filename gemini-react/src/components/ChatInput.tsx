@@ -8,9 +8,6 @@ import {
   Send, 
   X, 
   FileText,
-  Copy,
-  Check,
-  Loader2,
   Headphones,
   Square
 } from 'lucide-react';
@@ -134,7 +131,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <footer 
-      className="p-4 bg-[var(--bg-main)] relative"
+      className="p-4 bg-[var(--bg-main)] relative chat-container-responsive"
       style={{ 
         paddingLeft: `calc(${margin}% + 1rem)`, 
         paddingRight: `calc(${margin}% + 1rem)` 

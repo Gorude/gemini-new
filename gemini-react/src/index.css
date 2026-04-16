@@ -95,8 +95,36 @@
 }
 
 body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main); color: var(--text-primary); transition: background-color 0.3s ease, color 0.3s ease; }
-.sidebar { width: 280px; background-color: var(--bg-sidebar); flex-shrink: 0; transition: background-color 0.3s ease; }
-.main-content { background-color: var(--bg-main); flex-grow: 1; position: relative; transition: background-color 0.3s ease; }
+.sidebar { 
+  width: 280px; 
+  background-color: var(--bg-sidebar); 
+  flex-shrink: 0; 
+  transition: transform 0.3s ease, background-color 0.3s ease; 
+  z-index: 100;
+}
+
+/* Mobile Sidebar Drawer */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    height: 100vh;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    box-shadow: 20px 0 50px rgba(0,0,0,0.5);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  /* Force 0 margins on mobile for Chat */
+  .chat-container-responsive {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
+.main-content { background-color: var(--bg-main); flex-grow: 1; position: relative; transition: background-color 0.3s ease; width: 100%; }
 .input-wrapper { background-color: var(--bg-input); border-radius: 32px; border: 1px solid transparent; transition: background-color 0.3s ease, border-color 0.3s ease; }
 .input-wrapper:focus-within { background-color: var(--bg-user-bubble); border-color: var(--border-main); }
 .user-msg { background-color: var(--bg-user-bubble); border-radius: 24px; padding: 12px 24px; margin-left: auto; max-width: 85%; transition: background-color 0.3s ease; }
@@ -277,4 +305,14 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
   animation: gemini-spin 1.2s linear infinite;
+}
+
+@keyframes loading-bar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-loading-bar {
+  animation: loading-bar 2s infinite ease-in-out;
 }

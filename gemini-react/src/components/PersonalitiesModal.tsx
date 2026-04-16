@@ -47,8 +47,8 @@ const PersonalitiesModal: React.FC<PersonalitiesModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[110] p-4 backdrop-blur-sm">
-      <div className="bg-[var(--bg-sidebar)] w-full max-w-2xl rounded-3xl border border-[var(--border-light)] overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[110] p-0 md:p-4 backdrop-blur-sm">
+      <div className="bg-[var(--bg-sidebar)] w-full max-w-2xl h-screen md:h-auto md:max-h-[85vh] rounded-none md:rounded-3xl border-none md:border border-[var(--border-light)] overflow-hidden shadow-2xl flex flex-col">
         
         {/* Header */}
         <div className="p-6 border-b border-[var(--border-light)] flex justify-between items-center bg-blue-600/5">

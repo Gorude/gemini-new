@@ -36,3 +36,11 @@ export interface Personality {
   name: string;
   prompt: string;
 }
+
+export interface MemoryFact {
+  id: string;
+  text: string;
+  category: string;
+  connections: string[];
+  timestamp: number;
+}

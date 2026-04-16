@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Volume2, Settings, Loader2, Camera, Monitor, Square } from 'lucide-react';
+import { X, Volume2, Settings, Camera, Monitor } from 'lucide-react';
 
 interface LiveViewProps {
   status: 'connecting' | 'connected' | 'error' | 'disconnected';
@@ -11,6 +11,7 @@ interface LiveViewProps {
   onVoiceChange: (voice: string) => void;
   onToggleCamera: () => void;
   onToggleScreen: () => void;
+  onInterrupt: () => void;
   onClose: () => void;
 }
 
@@ -178,9 +179,18 @@ const LiveView: React.FC<LiveViewProps> = ({
       {/* Central Visualizer */}
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-4xl relative z-10">
         {status === 'connecting' ? (
-          <div className="flex flex-col items-center gap-6">
-            <div className="w-24 h-24 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin"></div>
-            <p className="text-lg font-medium text-[var(--text-secondary)] animate-pulse">Sincronizando com Gemini Multimodal...</p>
+          <div className="flex flex-col items-center gap-8 w-full max-w-sm">
+            <div className="w-24 h-24 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 animate-pulse relative">
+                <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin"></div>
+                <Volume2 className="w-8 h-8" />
+            </div>
+            <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 relative">
+                <div className="absolute inset-y-0 bg-gradient-to-r from-blue-600 to-indigo-600 animate-loading-bar shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+            </div>
+            <div className="flex flex-col items-center gap-2">
+                <p className="text-xl font-bold text-white tracking-tight">Sincronizando com DNA</p>
+                <p className="text-sm text-white/40 animate-pulse">Estabelecendo conexão neural segura...</p>
+            </div>
           </div>
         ) : (
           <div className="w-full flex flex-col items-center justify-between h-full py-12">

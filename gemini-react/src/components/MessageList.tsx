@@ -12,7 +12,7 @@ interface MessageListProps {
   copiedId: string | null;
   expandedSourcesMsgId: string | null;
   imagenModel: string;
-  chatWindowRef: React.RefObject<HTMLElement>;
+  chatWindowRef: React.RefObject<HTMLElement | null>;
   margin: number;
   onScroll: () => void;
   // Handlers for MessageItem
@@ -53,7 +53,7 @@ const MessageList: React.FC<MessageListProps> = ({
     <section 
       ref={chatWindowRef} 
       onScroll={onScroll}
-      className="flex-1 overflow-y-auto py-6 space-y-6 custom-scrollbar"
+      className="flex-1 overflow-y-auto py-6 space-y-6 custom-scrollbar chat-container-responsive"
       style={{ 
         paddingLeft: `calc(${margin}% + 1rem)`, 
         paddingRight: `calc(${margin}% + 1rem)` 

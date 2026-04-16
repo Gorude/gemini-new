@@ -1,32 +1,25 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { 
-  Plus,
   Pin, 
-  PinOff, 
   Edit2, 
   Archive, 
-  ArchiveRestore, 
   Trash2, 
   ChevronDown, 
-  ChevronRight,
   X, 
   Bot, 
   Settings, 
-  Globe,
-  Loader2,
   Menu,
   Search,
   SquarePen,
   MoreVertical,
-  Circle,
-  History,
-  Check,
   Activity,
   Zap,
   BarChart2,
   User
 } from 'lucide-react';
 import ChatRuler from './components/ChatRuler';
+import MessageList from './components/MessageList';
+import ChatInput from './components/ChatInput';
 
 import { 
   generateGeminiContent, 
@@ -36,10 +29,13 @@ import {
 
 import { 
   type ChatSession, 
-  type DailyUsage, 
+  type DailyUsage,
   type PendingFile,
-  type Personality
+  type Personality,
+  type MemoryFact
 } from './types';
+
+import { v4 as uuidv4 } from 'uuid';
 
 const DEFAULT_PERSONALITY: Personality = {
   id: 'default',
@@ -47,16 +43,14 @@ const DEFAULT_PERSONALITY: Personality = {
   prompt: ''
 };
 
-import MessageList from './components/MessageList';
-import ChatInput from './components/ChatInput';
-import PersonalitiesModal from './components/PersonalitiesModal';
+import DnaModal from './components/DnaModal';
 import LiveView from './components/LiveView';
+import LiveSetupModal from './components/LiveSetupModal';
+import PersonalitiesModal from './components/PersonalitiesModal';
 import { GeminiLiveSession } from './services/geminiLive';
 
 import { 
-  MODEL_LIMITS,
-  MODEL_OPTIONS,
-  IMAGEN_OPTIONS
+  MODEL_LIMITS
 } from './constants';
 
 const getPacificDate = () => {
@@ -71,8 +65,9 @@ const getPacificDate = () => {
 function App() {
   const [chats, setChats] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>('');
-  const [memoryFacts, setMemoryFacts] = useState<string[]>([]);
+  const [memoryFacts, setMemoryFacts] = useState<MemoryFact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCategorizing, setIsCategorizing] = useState(false);
   const [model, setModel] = useState('gemma-4-31b-it');
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
@@ -83,8 +78,8 @@ function App() {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('gemoro_theme') || 'escuro');
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
-  const [settingsView, setSettingsView] = useState<'main' | 'theme' | 'advanced_models'>('main');
   const [showDnaModal, setShowDnaModal] = useState(false);
+  const [showLiveSetupModal, setShowLiveSetupModal] = useState(false);
   const [dailyUsage, setDailyUsage] = useState<DailyUsage>(() => {
     const today = getPacificDate();
     const saved = localStorage.getItem('gemini_advanced_usage_v1');
@@ -118,6 +113,7 @@ function App() {
   });
   const [showPersonalitiesModal, setShowPersonalitiesModal] = useState(false);
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // LIVE MODE STATE
   const [isLiveActive, setIsLiveActive] = useState(false);
@@ -141,6 +137,65 @@ function App() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentAiMsgIdRef = useRef<string | null>(null);
 
+  const handleAutoCategorize = useCallback(async () => {
+    if (memoryFacts.length === 0) return;
+    setIsCategorizing(true);
+    console.log("Iniciando organização inteligente do DNA...");
+    try {
+      const prompt = `Você é um especialista em organização de conhecimento. 
+      Analise a seguinte lista de memórias e organize-as em categorias lógicas e interconectadas.
+      
+      RETORNE APENAS UM ARRAY JSON CRU com o seguinte formato para CADA item:
+      { "id": "id_original", "text": "texto_original", "category": "Nova Categoria", "connections": ["id_rel1", "id_rel2"], "timestamp": ${Date.now()} }
+      
+      REGRAS:
+      1. NÃO altere o campo "text".
+      2. Categorize tudo de forma lógica (ex: Pessoal, Trabalho, Hardware, Hobbies).
+      3. Identifique conexões reais entre os fatos.
+      4. Responda APENAS o JSON.
+      
+      LISTA DE FATOS:\n${JSON.stringify(memoryFacts)}`;
+
+      const res = await generateGeminiContent(prompt, 'gemma-4-31b-it', [], "Responda estritamente com um array JSON.");
+      
+      // Extração robusta de JSON
+      let cleanedText = res.text.trim();
+      
+      // Remover blocos de código se existirem
+      if (cleanedText.includes("```")) {
+        cleanedText = cleanedText.replace(/```json|```/g, "").trim();
+      }
+
+      // Encontrar o início e fim do array
+      const start = cleanedText.indexOf("[");
+      const end = cleanedText.lastIndexOf("]");
+      
+      if (start === -1 || end === -1) {
+        throw new Error("Não foi possível encontrar um array JSON na resposta da IA.");
+      }
+
+      const jsonStr = cleanedText.substring(start, end + 1);
+      const organized = JSON.parse(jsonStr);
+      
+      if (Array.isArray(organized) && organized.length > 0) {
+        setMemoryFacts(organized);
+        fetch('/api/memory', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(organized) 
+        });
+        console.log("DNA organizado com sucesso!");
+      } else {
+        throw new Error("A resposta organizada não é um array válido.");
+      }
+    } catch (e) {
+      console.error("Erro crítico na auto-categorização:", e);
+      alert("Houve um problema ao organizar: " + (e instanceof Error ? e.message : "Erro desconhecido"));
+    } finally {
+      setIsCategorizing(false);
+    }
+  }, [memoryFacts]);
+
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = activeChat?.messages || [];
 
@@ -160,8 +215,45 @@ function App() {
           }
         }
         if (memoryRes.ok) {
-          const memory = await memoryRes.json();
-          if (Array.isArray(memory)) setMemoryFacts(memory);
+          const memoryData: any = await memoryRes.json();
+          if (Array.isArray(memoryData)) {
+            if (memoryData.length > 0 && typeof memoryData[0] === 'string') {
+              // Automatic Migration to DNA 2.0
+              console.log("Iniciando migração para DNA 2.0... Total de fatos: ", memoryData.length);
+              const migrationPrompt = `Você é um sistema de migração de dados. Converta a seguinte lista de fatos (strings) em um JSON estruturado com o formato: { id: string, text: string, category: string, connections: string[] (IDs de fatos relacionados), timestamp: number }.
+              As categorias devem ser geradas dinamicamente (ex: Pessoal, Profissional, Hardware, Preferências). 
+              LISTA DE FATOS:\n${memoryData.join('\n')}`;
+              
+              try {
+                const res = await generateGeminiContent(migrationPrompt, 'gemma-4-31b-it', [], "Responda APENAS com o JSON cru contendo um array de objetos.");
+                // Tentar extrair JSON do texto
+                const jsonMatch = res.text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+                const migrated = JSON.parse(jsonMatch ? jsonMatch[0] : res.text);
+                
+                if (Array.isArray(migrated) && migrated.length > 0) {
+                  setMemoryFacts(migrated);
+                  fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migrated) });
+                  console.log("Migração inteligente concluída!");
+                } else {
+                  throw new Error("Resposta da IA inválida ou vazia");
+                }
+              } catch (e) {
+                console.error("Falha na migração com IA, executando fallback local para restaurar visibilidade:", e);
+                const fallback = memoryData.map((f: string) => ({ 
+                  id: uuidv4(), 
+                  text: f, 
+                  category: 'Diversos', 
+                  connections: [], 
+                  timestamp: Date.now() 
+                }));
+                setMemoryFacts(fallback);
+                fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fallback) });
+                console.log("Memórias restauradas em modo de compatibilidade (Diversos).");
+              }
+            } else {
+              setMemoryFacts(memoryData);
+            }
+          }
         }
       } catch (e) {
         console.error("Erro ao carregar dados iniciais:", e);
@@ -236,7 +328,6 @@ function App() {
         }
         if (showSettingsMenu) {
           setShowSettingsMenu(false);
-          setSettingsView('main');
           return;
         }
         if (isLiveActive) {
@@ -268,11 +359,12 @@ function App() {
 
     const systemInstruction = "Você é o Gemoro, uma inteligência artificial avançada. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
       (selectedPersonality.prompt ? `INSTRUÇÃO DE PERSONALIDADE ATIVA: "${selectedPersonality.prompt}"\n\n` : "") +
-      (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f, i) => `[ID: ${i}] ${f}`).join("\n") + "\n\n" : "") +
+      (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f: MemoryFact) => `[ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n") + "\n\n" : "") +
       "Regras de Memória:\n" +
-      "1. Se descobrir um fato NOVO sobre o usuário, adicione <MEMORY>novo fato</MEMORY> na resposta.\n" +
-      "2. Se um fato existente mudou, ATUALIZE-O usando <UPDATE_MEMORY id='X'>novo texto atualizado</UPDATE_MEMORY>.\n" +
-      "3. Se um fato não for mais verdade, EXCLUA-O usando <DELETE_MEMORY id='X'></DELETE_MEMORY>.";
+      "1. Se descobrir um fato NOVO, adicione <MEMORY category='Categoria lógica'>texto do fato</MEMORY> na resposta.\n" +
+      "2. Se possível, relacione com fatos existentes: <MEMORY category='...' connections='id1,id2'>texto</MEMORY>.\n" +
+      "3. Para atualizar: <UPDATE_MEMORY id='ID'>novo texto</UPDATE_MEMORY>.\n" +
+      "4. Para excluir: <DELETE_MEMORY id='ID'></DELETE_MEMORY>.";
 
     try {
       const startTime = performance.now();
@@ -314,18 +406,18 @@ function App() {
           });
         }
         const currentDuration = (performance.now() - startTime) / 1000;
-        setChats(prev => prev.map(c => c.id === targetChatId ? {
+        setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
           ...c,
-          messages: c.messages.map(m => m.id === currentAiMsgId ? { ...m, text: fullText, thoughts: fullThoughts, isGrounded, isSearching, sources: [...allSources], duration: currentDuration } : m)
+          messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { ...m, text: fullText, thoughts: fullThoughts, isGrounded, isSearching, sources: [...allSources], duration: currentDuration } : m)
         } : c));
       }
 
       if (finalUsage) {
-        setDailyUsage(prev => {
+        setDailyUsage((prev: DailyUsage) => {
           const today = getPacificDate();
           let state = prev.date === today ? prev : { date: today, models: {} };
           const modelData = state.models[model] || { requests: 0, tokens: { prompt: 0, candidates: 0, total: 0 } };
-          const newState = {
+          const newState: DailyUsage = {
             ...state,
             models: { ...state.models, [model]: {
               requests: modelData.requests + 1,
@@ -341,29 +433,9 @@ function App() {
         });
       }
 
-      let hasMemoryUpdates = false;
-      let newMemories = [...memoryFacts];
-      const parseModelText = (str: string) => {
-        const memoryRegex = /<MEMORY>(.*?)<\/MEMORY>/gi;
-        const updateRegex = /<UPDATE_MEMORY id='(\d+)'>(.*?)<\/UPDATE_MEMORY>/gi;
-        const deleteRegex = /<DELETE_MEMORY id='(\d+)'><\/DELETE_MEMORY>/gi;
-        let match;
-        while ((match = deleteRegex.exec(str)) !== null) { let idx = parseInt(match[1]); if (newMemories[idx]) { newMemories[idx] = "@@DELETE@@"; hasMemoryUpdates = true; } }
-        str = str.replace(deleteRegex, '');
-        while ((match = updateRegex.exec(str)) !== null) { let idx = parseInt(match[1]); if (newMemories[idx]) { newMemories[idx] = match[2].trim(); hasMemoryUpdates = true; } }
-        str = str.replace(updateRegex, '');
-        while ((match = memoryRegex.exec(str)) !== null) { newMemories.push(match[1].trim()); hasMemoryUpdates = true; }
-        return str.replace(memoryRegex, '').trim();
-      };
+      const finalCleanText = parseMemoryTags(fullText);
 
-      const finalCleanText = parseModelText(fullText);
-      if (hasMemoryUpdates) {
-        newMemories = newMemories.filter(m => m !== "@@DELETE@@");
-        setMemoryFacts(newMemories);
-        fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newMemories) });
-      }
-
-      setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, messages: c.messages.map(m => m.id === currentAiMsgId ? { ...m, text: finalCleanText } : m) } : c));
+      setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { ...c, messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { ...m, text: finalCleanText } : m) } : c));
 
       if (isFirstMessage) {
         generateGeminiContent(
@@ -374,7 +446,7 @@ function App() {
         ).then(res => {
           if (res.text) {
             const cleanTitle = res.text.replace(/["'*]/g, '').trim();
-            setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: cleanTitle, isNaming: false } : c));
+          setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { ...c, title: cleanTitle, isNaming: false } : c));
           } else {
             setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: 'Chat Sem Nome', isNaming: false } : c));
           }
@@ -418,19 +490,85 @@ function App() {
 
 
 
-  const handleLiveStart = useCallback(async () => {
+  const parseMemoryTags = useCallback((str: string) => {
+    let newMemories = [...memoryFacts];
+    let hasMemoryUpdates = false;
+    const memoryTagRegex = /<MEMORY(?:\s+category=['"]([^'"]*)['"])?(?:\s+connections=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/MEMORY>/g;
+    const updateTagRegex = /<UPDATE_MEMORY\s+id=['"]([^'"]*)['"](?:\s+category=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/UPDATE_MEMORY>/g;
+    const deleteTagRegex = /<DELETE_MEMORY\s+id=['"]([^'"]*?)['"]\s*\/>/g;
+
+    let match;
+    // Adicionar
+    while ((match = memoryTagRegex.exec(str)) !== null) {
+      const categoryValue = match[1] || 'Diversos';
+      const connectionsValue = match[2] ? match[2].split(',').map(s => s.trim()) : [];
+      const textValue = match[3].trim();
+      newMemories.push({ id: uuidv4(), text: textValue, category: categoryValue, connections: connectionsValue, timestamp: Date.now() });
+      hasMemoryUpdates = true;
+    }
+    // Deletar
+    while ((match = deleteTagRegex.exec(str)) !== null) {
+      const idValue = match[1];
+      newMemories = newMemories.filter((m: MemoryFact) => m.id !== idValue);
+      hasMemoryUpdates = true;
+    }
+    // Atualizar
+    while ((match = updateTagRegex.exec(str)) !== null) {
+      const idValue = match[1];
+      const categoryValue = match[2];
+      const textValue = match[3].trim();
+      newMemories = newMemories.map((mValue: MemoryFact) => mValue.id === idValue ? { ...mValue, text: textValue, category: categoryValue || mValue.category, timestamp: Date.now() } : mValue);
+      hasMemoryUpdates = true;
+    }
+
+    if (hasMemoryUpdates) {
+      setMemoryFacts(newMemories);
+      fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newMemories) });
+    }
+
+    return str
+      .replace(memoryTagRegex, '')
+      .replace(updateTagRegex, '')
+      .replace(deleteTagRegex, '')
+      .trim();
+  }, [memoryFacts]);
+
+  const handleLiveStart = useCallback(() => {
+    setShowLiveSetupModal(true);
+  }, []);
+
+  const confirmLiveStart = useCallback(async (useMemory: boolean) => {
+    setShowLiveSetupModal(false);
     setIsLiveActive(true);
+    setLiveStatus('connecting');
     setLiveTranscript([]);
     
-    const selectedPersonality = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
-    
+    if (liveAudioContextRef.current) {
+       liveAudioContextRef.current.close();
+    }
     liveAudioContextRef.current = new AudioContext({ sampleRate: 24000 });
-    
-    // Initialize Analyser
-    const analyser = liveAudioContextRef.current.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.connect(liveAudioContextRef.current.destination);
-    setLiveAnalyser(analyser);
+    const analyserNode = liveAudioContextRef.current.createAnalyser();
+    analyserNode.fftSize = 256;
+    analyserNode.connect(liveAudioContextRef.current.destination);
+    setLiveAnalyser(analyserNode);
+
+    // Contexto de Memória
+    let dnaContext = "";
+    if (useMemory && memoryFacts.length > 0) {
+      dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" + 
+        memoryFacts.map(f => `- [ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n");
+    }
+
+    const memoryRules = useMemory ? `
+REGRAS DE MEMÓRIA (MODO LIVE):
+1. Use <MEMORY category='...'>texto</MEMORY> para novos fatos.
+2. Use <UPDATE_MEMORY id='...' category='...'>texto</UPDATE_MEMORY> para atualizar.
+3. Use <DELETE_MEMORY id='...' /> para remover.
+4. IMPORTANTE: NUNCA, SOB HIPÓTESE ALGUMA, PRONUNCIE AS TAGS XML EM VOZ ALTA. Elas devem ficar invisíveis no áudio.
+` : "";
+
+    const selectedPersonalityProfile = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
+    const fullInstructionStr = `${selectedPersonalityProfile.prompt}${dnaContext}${memoryRules}\n\nResponda sempre de forma natural e conversacional.`;
 
     const session = new GeminiLiveSession({
       onStatusChange: (status) => setLiveStatus(status),
@@ -438,6 +576,12 @@ function App() {
       onError: (err) => { alert(err); handleLiveStop(); },
       onTranscript: (role, text) => {
         setLiveTranscript(prev => [...prev, { role, text }]);
+        
+        // Memória em Tempo Real
+        if (role === 'ai' && useMemory) {
+          parseMemoryTags(text);
+        }
+
         setChats(prev => prev.map(c => {
           if (c.id === activeChatId) {
             const newMessage: Message = {
@@ -450,16 +594,15 @@ function App() {
         }));
       },
       onAudioData: (chunk) => {
-        // Enfileirar e agendar áudio
-        if (!liveAudioContextRef.current || !analyser) return;
+        if (!liveAudioContextRef.current || !analyserNode) return;
         const ctx = liveAudioContextRef.current;
         if (ctx.state === 'suspended') ctx.resume();
 
         const buffer = ctx.createBuffer(1, chunk.length, 24000);
-        buffer.copyToChannel(chunk, 0);
+        buffer.copyToChannel(chunk as any, 0);
         const source = ctx.createBufferSource();
         source.buffer = buffer;
-        source.connect(analyser);
+        source.connect(analyserNode);
 
         const now = ctx.currentTime;
         let startTime = nextAudioTimeRef.current;
@@ -477,11 +620,11 @@ function App() {
         source.start(startTime);
         nextAudioTimeRef.current = startTime + buffer.duration;
       }
-    }, selectedPersonality.prompt, liveVoice);
+    }, fullInstructionStr, liveVoice);
 
     liveSessionRef.current = session;
     await session.start();
-  }, [activeChatId, personalities, selectedPersonalityId, liveVoice, handleLiveStop]);
+  }, [activeChatId, personalities, selectedPersonalityId, liveVoice, memoryFacts, handleLiveStop, parseMemoryTags]);
 
   const handleToggleCamera = useCallback(async () => {
     if (!liveSessionRef.current) return;
@@ -635,14 +778,20 @@ function App() {
     executeAIRequest(activeChatId, userMsg.text, userMsg.files || [], apiHistory, false, msgId);
   }, [activeChatId, chats, isLoading, executeAIRequest]);
 
-  const pinnedChats = chats.filter(c => c.pinned && !c.archived);
-  const recentChats = chats.filter(c => !c.pinned && !c.archived);
-  const archivedChats = chats.filter(c => c.archived);
+
 
   return (
-    <div className="flex h-screen overflow-hidden text-[var(--text-primary)]">
-      <aside className="sidebar hidden md:flex flex-col w-72 bg-[#1e1f20] transition-all duration-300">
-        <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4">
+    <div className="flex h-screen overflow-hidden text-[var(--text-primary)] relative">
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''} flex flex-col w-72 bg-[#1e1f20] transition-all duration-300`}>
+        <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 lg:hidden">
+          <div className="flex items-center gap-2">
+            <Bot className="w-6 h-6 text-blue-400" />
+            <span className="font-bold text-white tracking-tighter">Gemoro</span>
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 hidden lg:flex">
           <button className="p-2 hover:bg-white/5 rounded-full transition"><Menu className="w-5 h-5" /></button>
           <button className="p-2 hover:bg-white/5 rounded-full transition ml-auto"><Search className="w-5 h-5" /></button>
         </div>
@@ -664,7 +813,7 @@ function App() {
             {chats.filter(c => !c.archived).map(chat => (
               <div key={chat.id} className="relative group">
                 <div 
-                  onClick={() => setActiveChatId(chat.id)} 
+                  onClick={() => { setActiveChatId(chat.id); setIsSidebarOpen(false); }} 
                   className={`group/item flex items-center gap-3 py-2.5 px-4 mx-1 rounded-full cursor-pointer transition relative ${activeChatId === chat.id ? 'bg-[#1D3153] text-[#A8C7FA]' : 'hover:bg-white/5 text-[var(--text-primary)]'}`}
                 >
                   {editingChatId === chat.id ? (
@@ -740,8 +889,15 @@ function App() {
       </aside>
 
       <main className="main-content flex flex-col h-full w-full bg-[var(--bg-main)]">
-        <header className="p-4 flex justify-between items-center px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]">
-          <div className="flex-1"></div>
+        <header className="p-4 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]">
+          <div className="flex-1 flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl transition md:hidden"
+            >
+              <Menu className="w-6 h-6 text-[var(--text-secondary)]" />
+            </button>
+          </div>
 
           {/* Personality Selector */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -862,7 +1018,7 @@ function App() {
               onToggleCamera={handleToggleCamera}
               onToggleScreen={handleToggleScreen}
               onInterrupt={handleInterruptLive}
-              onVoiceChange={(v) => {
+              onVoiceChange={(v: string) => {
                 setLiveVoice(v);
                 localStorage.setItem('gemoro_live_voice', v);
                 handleLiveStop();
@@ -888,7 +1044,7 @@ function App() {
               onSetEditingMsgText={setEditingMsgText}
               onCancelEdit={() => setEditingMsgId(null)}
               onRegenerate={handleRegenerate}
-              onDelete={(id) => setChats(p => p.map(c => c.id === activeChatId ? {...c, messages: c.messages.filter(m => m.id !== id)} : c))}
+              onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: any) => m.id !== id)} : c))}
               onCopy={(text, id) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }}
               onToggleSources={setExpandedSourcesMsgId}
             />
@@ -926,16 +1082,16 @@ function App() {
           <PersonalitiesModal 
             personalities={personalities}
             onClose={() => setShowPersonalitiesModal(false)}
-            onSave={(p) => {
+            onSave={(p: Personality) => {
               const exists = personalities.find(item => item.id === p.id);
               if (exists) {
-                setPersonalities(prev => prev.map(item => item.id === p.id ? p : item));
+                setPersonalities((prev: Personality[]) => prev.map((item: Personality) => item.id === p.id ? p : item));
               } else {
-                setPersonalities(prev => [...prev, p]);
+                setPersonalities((prev: Personality[]) => [...prev, p]);
               }
             }}
-            onDelete={(id) => {
-              setPersonalities(prev => prev.filter(p => p.id !== id));
+            onDelete={(id: string) => {
+              setPersonalities((prev: Personality[]) => prev.filter((p: Personality) => p.id !== id));
               if (selectedPersonalityId === id) setSelectedPersonalityId('default');
             }}
           />
@@ -943,34 +1099,41 @@ function App() {
       </main>
 
       {showDnaModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
-           <div className="bg-[var(--bg-sidebar)] w-full max-w-2xl rounded-3xl border border-[var(--border-light)] overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
-             <div className="p-6 border-b border-[var(--border-light)] flex justify-between items-center bg-indigo-600/5">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white"><Settings className="w-6 h-6" /></div>
-                  <h3 className="text-xl font-bold">DNA de Memória</h3>
-                </div>
-                <button onClick={() => setShowDnaModal(false)} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition"><X className="w-5 h-5" /></button>
-             </div>
-             <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
-               {memoryFacts.length === 0 ? (
-                 <div className="text-center py-12 opacity-50 italic">Nenhum fato registrado na memória de longo prazo.</div>
-               ) : (
-                 memoryFacts.map((fact, idx) => (
-                   <div key={idx} className="flex gap-3 p-3 bg-[var(--bg-chat-hover)] rounded-xl border border-[var(--border-light)]">
-                     <span className="text-indigo-400 font-bold">#{idx}</span>
-                     <span className="flex-1">{fact}</span>
-                     <button onClick={() => {
-                        const next = memoryFacts.filter((_, i) => i !== idx);
-                        setMemoryFacts(next);
-                        fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
-                     }} className="text-red-400 p-1"><Trash2 className="w-4 h-4" /></button>
-                   </div>
-                 ))
-               )}
-             </div>
-           </div>
-        </div>
+        <DnaModal 
+          memoryFacts={memoryFacts}
+          isCategorizing={isCategorizing}
+          onAutoCategorize={handleAutoCategorize}
+          onClose={() => setShowDnaModal(false)}
+          onDelete={(id) => {
+            const next = memoryFacts.filter((m) => m.id !== id);
+            setMemoryFacts(next);
+            fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+          }}
+          onSave={(fact: MemoryFact) => {
+            let next;
+            if (fact.id) {
+              next = memoryFacts.map(m => m.id === fact.id ? fact : m);
+            } else {
+              next = [...memoryFacts, { ...fact, id: uuidv4(), timestamp: Date.now() }];
+            }
+            setMemoryFacts(next);
+            fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+          }}
+        />
+      )}
+
+      {showLiveSetupModal && (
+        <LiveSetupModal 
+          onClose={() => setShowLiveSetupModal(false)}
+          onConfirm={confirmLiveStart}
+          isConnecting={liveStatus === 'connecting' && isLiveActive}
+        />
+      )}
+      {isSidebarOpen && (
+        <div 
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] md:hidden animate-in fade-in duration-300"
+        ></div>
       )}
     </div>
   );
