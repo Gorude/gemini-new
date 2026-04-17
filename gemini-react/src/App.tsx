@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Pin, 
   Edit2, 
@@ -136,7 +136,7 @@ function App() {
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const [liveAnalyser, setLiveAnalyser] = useState<AnalyserNode | null>(null);
   const [selectionData, setSelectionData] = useState<{ text: string, pos: { x: number, y: number }, messageId: string } | null>(null);
-  const [isCheckingSegment, setIsCheckingSegment] = useState(false);
+  const [isCheckingSegment] = useState(false);
 
   const previousScrollHeightRef = useRef<number>(0);
   const isLazyLoadingRef = useRef<boolean>(false);
@@ -925,7 +925,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           return {
             ...chat,
             messages: chat.messages.map(m => 
-              m.id === msgId ? { ...m, factCheckResults: results, isFactChecking: false } : m
+              m.id === msgId ? { ...m, factCheckResults: results, isVerifying: false } : m
             )
           };
         }
@@ -938,7 +938,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           return {
             ...chat,
             messages: chat.messages.map(m => 
-              m.id === msgId ? { ...m, isFactChecking: false } : m
+              m.id === msgId ? { ...m, isVerifying: false } : m
             )
           };
         }
@@ -947,17 +947,30 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
   }, [activeChat, activeChatId]);
 
-  const handleDeleteChat = (e: any, id: string) => { 
-    e.stopPropagation(); setChats(p => p.filter(c => c.id !== id));
-    if (activeChatId === id) setActiveChatId('');
-  };
-  const handleToggleArchive = (e: any, id: string) => { e.stopPropagation(); setChats(p => p.map(c => c.id === id ? {...c, archived: !c.archived} : c)); };
-  const handleRenameChat = (id: string) => {
+  const handleDeleteChat = useCallback((e: any, id: string) => { 
+    e.stopPropagation(); 
+    if (confirm("Deseja excluir esta conversa para sempre?")) {
+      setChats(p => p.filter(c => c.id !== id));
+      if (activeChatId === id) setActiveChatId('');
+    }
+  }, [activeChatId]);
+
+  const handleToggleArchive = useCallback((e: any, id: string) => { 
+    e.stopPropagation(); 
+    setChats(p => p.map(c => c.id === id ? {...c, archived: !c.archived} : c)); 
+  }, []);
+
+  const handleTogglePin = useCallback((e: any, id: string) => {
+    e.stopPropagation();
+    setChats(p => p.map(c => c.id === id ? { ...c, pinned: !c.pinned } : c));
+  }, []);
+
+  const handleRenameChat = useCallback((id: string) => {
     if (editTitle.trim()) {
       setChats(p => p.map(c => c.id === id ? {...c, title: editTitle.trim()} : c));
     }
     setEditingChatId(null);
-  };
+  }, [editTitle]);
 
   const handleSaveEdit = useCallback((msgId: string) => {
     if (!activeChatId || !editingMsgText.trim() || isLoading) return;

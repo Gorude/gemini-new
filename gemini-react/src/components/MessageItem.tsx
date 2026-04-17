@@ -14,8 +14,7 @@ import {
   Lightbulb, 
   ChevronRight,
   Edit2,
-  ShieldCheck,
-  ExternalLink
+  ShieldCheck
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
@@ -318,11 +317,11 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
              </button>
              <button 
                 onClick={() => onFactCheck(msg.id)} 
-                disabled={isLoading || msg.isFactChecking} 
-                className={`text-[var(--text-placeholder)] hover:text-blue-400 transition flex items-center gap-1.5 ${msg.isFactChecking ? 'text-blue-500 animate-pulse' : ''}`}
+                disabled={isLoading || msg.isVerifying} 
+                className={`text-[var(--text-placeholder)] hover:text-blue-400 transition flex items-center gap-1.5 ${msg.isVerifying ? 'text-blue-500 animate-pulse' : ''}`}
                 title="Checar fatos na web"
               >
-                {msg.isFactChecking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                {msg.isVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                 {msg.factCheckResults && msg.factCheckResults.length > 0 && (
                   <span className="text-[10px] font-bold">FEITO</span>
                 )}

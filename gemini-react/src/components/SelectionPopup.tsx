@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, MessageSquare, Send, X, ShieldCheck, Loader2 } from 'lucide-react';
+import { Send, X, ShieldCheck } from 'lucide-react';
 
 interface SelectionPopupProps {
   text: string;

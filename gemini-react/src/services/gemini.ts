@@ -36,11 +36,11 @@ marked.use(markedKatex({
 
 export function safeMarkdown(content: string): string {
   if (typeof content !== 'string') return "";
-  
+
   // 1. Collapse all variations of multiple newlines (2+) into a single newline
   // This forces "tight" mode for almost everything by default.
   let tightenedContent = content.replace(/(\n\s*){2,}/g, '\n\n');
-  
+
   let html = marked.parse(tightenedContent) as string;
 
   // 2. Aggressive List Cleanup: Strip ANY <p> tags that are direct children of <li>
@@ -53,7 +53,7 @@ export function safeMarkdown(content: string): string {
 
   // 3. Remove spurious empty/whitespace paragraphs that marked might still emit
   html = html.replace(/<p>(\s|&nbsp;|<br\/?>)*<\/p>/gi, '');
-  
+
   // 4. Collapse multiple <br> tags into one
   html = html.replace(/(<br\/?>\s*){2,}/gi, '<br/>');
 
@@ -82,22 +82,22 @@ export interface Message {
   thoughts?: string;
   duration?: number;
   factCheckResults?: FactCheckResult[];
-  isFactChecking?: boolean;
+  isVerifying?: boolean;
 }
 
 
 export async function* streamGeminiContent(
-  text: string, 
-  model: string, 
-  history: {role: string, parts: any[]}[],
+  text: string,
+  model: string,
+  history: { role: string, parts: any[] }[],
   systemInstruction?: string,
   files: { mimeType: string; data: string }[] = [],
   webSearch: boolean = false,
   signal?: AbortSignal,
   thinking: boolean = false
-): AsyncGenerator<{ 
-  text?: string; 
-  thoughts?: string; 
+): AsyncGenerator<{
+  text?: string;
+  thoughts?: string;
   isGrounded?: boolean;
   isSearching?: boolean;
   sources?: { title: string; uri: string }[];
@@ -107,7 +107,7 @@ export async function* streamGeminiContent(
   if (!key) throw new Error("Chave de API FREE não configurada no arquivo .env");
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`;
-  
+
   const currentParts: any[] = [];
   if (files.length > 0) {
     files.forEach(f => {
@@ -120,7 +120,7 @@ export async function* streamGeminiContent(
 
   const payload: any = {
     contents: [...history, { role: "user", parts: currentParts }],
-    generationConfig: { 
+    generationConfig: {
       maxOutputTokens: 8192,
       temperature: 0.7
     }
@@ -129,11 +129,11 @@ export async function* streamGeminiContent(
   if (thinking) {
     // Apenas modelos específicos suportam o parâmetro thinkingConfig nativo (como Gemini Thinking)
     const supportsThinkingConfig = model.includes('thinking') || model.includes('gemini-2.0');
-    
+
     if (supportsThinkingConfig) {
-      payload.generationConfig.thinkingConfig = { 
-        includeThoughts: true, 
-        thinkingLevel: "HIGH" 
+      payload.generationConfig.thinkingConfig = {
+        includeThoughts: true,
+        thinkingLevel: "HIGH"
       };
     } else {
       // Fallback: Instrução via prompt para modelos que não aceitam thinkingConfig
@@ -189,7 +189,7 @@ export async function* streamGeminiContent(
               const parts = candidate.content?.parts || [];
               const metadata = candidate.groundingMetadata;
               const chunkGrounded = !!metadata;
-              
+
               let chunkText = "";
               let chunkThoughts = "";
               let chunkSources: { title: string; uri: string }[] = [];
@@ -213,22 +213,22 @@ export async function* streamGeminiContent(
                     chunkThoughts += part.text;
                   }
                   // Se o pensamento está OFF, descartamos esta parte para honrar o desejo do usuário
-                  return; 
+                  return;
                 }
-                
+
                 // Se a parte contém texto normal
                 if (part.text) {
                   chunkText += part.text;
                 }
               });
 
-              yield { 
-                text: chunkText, 
-                thoughts: chunkThoughts, 
-                isGrounded: chunkGrounded, 
+              yield {
+                text: chunkText,
+                thoughts: chunkThoughts,
+                isGrounded: chunkGrounded,
                 isSearching: chunkIsSearching,
                 sources: chunkSources,
-                usage: json.usageMetadata 
+                usage: json.usageMetadata
               };
 
               // DIAGNÓSTICO: Log do finishReason e estrutura se o texto estiver vazio mas o pensamento não
@@ -268,14 +268,14 @@ export async function generateGeminiContent(
 ) {
   const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, undefined, thinking);
   let fullText = "", fullThoughts = "", isGrounded = false, usage: any = null;
-  
+
   for await (const chunk of gen) {
     if (chunk.text) fullText += chunk.text;
     if (chunk.thoughts) fullThoughts += chunk.thoughts;
     if (chunk.isGrounded) isGrounded = true;
     if (chunk.usage) usage = chunk.usage;
   }
-  
+
   return { text: fullText, thoughts: fullThoughts, isGrounded, usage };
 }
 
@@ -288,7 +288,7 @@ export async function generateImagenContent(
   if (!key) throw new Error("Chave de API PAID (Imagen) não configurada");
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${key}`;
-  
+
   const payload = {
     instances: [{ prompt }],
     parameters: {
@@ -311,7 +311,7 @@ export async function generateImagenContent(
 
   const result = await response.json();
   const base64 = result.predictions?.[0]?.bytesBase64Encoded;
-  
+
   if (!base64) throw new Error("Nenhuma imagem foi gerada pela API.");
 
   return { data: base64, mimeType: "image/png" };
