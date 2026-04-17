@@ -9,7 +9,10 @@ import {
   Globe,
   Monitor,
   User,
-  Zap
+  Zap,
+  Shield,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { MODEL_OPTIONS } from '../constants';
 
@@ -23,6 +26,8 @@ interface SettingsModalProps {
   onSetEnabledModelIds: (ids: string[]) => void;
   onOpenPersonalities: () => void;
   onOpenDna: () => void;
+  paidApiKey: string;
+  onUpdatePaidApiKey: (key: string) => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -34,9 +39,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   enabledModelIds,
   onSetEnabledModelIds,
   onOpenPersonalities,
-  onOpenDna
+  onOpenDna,
+  paidApiKey,
+  onUpdatePaidApiKey
 }) => {
-  const [activeTab, setActiveTab] = useState<'geral' | 'modelos'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'modelos' | 'avancado'>('geral');
+  const [valStatus, setValStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [tempKey, setTempKey] = useState(paidApiKey);
+
+  const validateKey = async (key: string) => {
+    if (!key) {
+      setValStatus('idle');
+      return;
+    }
+    setValStatus('loading');
+    try {
+      // Test the key with a simple models list fetch (low cost, official way to test)
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      if (res.ok) {
+        setValStatus('success');
+        onUpdatePaidApiKey(key);
+      } else {
+        setValStatus('error');
+      }
+    } catch (e) {
+      setValStatus('error');
+    }
+  };
 
   const toggleModel = (id: string) => {
     if (enabledModelIds.includes(id)) {
@@ -84,6 +113,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               <Bot size={18} /> Modelos
             </button>
+            <button 
+              onClick={() => setActiveTab('avancado')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeTab === 'avancado' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 font-bold' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)]'}`}
+            >
+              <Shield size={18} /> Avançado
+            </button>
 
             <div className="h-px bg-[var(--border-light)] my-2 opacity-50"></div>
 
@@ -114,10 +149,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           <header className="p-8 flex justify-between items-center bg-[var(--bg-sidebar)]/50 border-b border-[var(--border-light)]">
             <div>
               <h3 className="text-sm font-black uppercase tracking-[0.2em] text-indigo-500">
-                {activeTab === 'geral' ? 'Preferências de Interface' : 'Gerenciamento de IA'}
+                {activeTab === 'geral' ? 'Preferências de Interface' : activeTab === 'modelos' ? 'Gerenciamento de IA' : 'Configurações Avançadas'}
               </h3>
               <p className="text-xs text-[var(--text-secondary)] mt-1">
-                {activeTab === 'geral' ? 'Ajuste o visual e o layout do sistema.' : 'Escolha quais modelos estarão disponíveis no chat.'}
+                {activeTab === 'geral' ? 'Ajuste o visual e o layout do sistema.' : activeTab === 'modelos' ? 'Escolha quais modelos estarão disponíveis no chat.' : 'Configurações de API e Chaves de Acesso.'}
               </p>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl text-[var(--text-placeholder)] transition-colors">
@@ -165,8 +200,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="bg-[var(--bg-main)] p-6 rounded-2xl border border-[var(--border-light)]">
                     <input 
                       type="range" 
-                      min="5" 
-                      max="35" 
+                      min="1" 
+                      max="20" 
                       step="1" 
                       value={chatMargin} 
                       onChange={(e) => onSetChatMargin(parseInt(e.target.value))}
@@ -212,11 +247,64 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ))}
               </div>
             )}
+
+            {activeTab === 'avancado' && (
+              <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <section className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 text-[var(--text-primary)]">
+                      <Zap size={18} className="text-indigo-400" />
+                      <h4 className="text-sm font-bold">Configuração de APIs</h4>
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-main)] p-6 rounded-2xl border border-[var(--border-light)] space-y-6">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Chave de API Imagen (Paga)</label>
+                        <div className="flex items-center gap-2">
+                          {valStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
+                          {valStatus === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> TRABALHANDO</div>}
+                          {valStatus === 'error' && <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> ERRO</div>}
+                          {valStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-[var(--text-placeholder)] font-bold bg-[var(--bg-sidebar)] px-2 py-0.5 rounded-md">IDLE</div>}
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <input 
+                          type="password"
+                          placeholder="Cole sua chave Imagen paga aqui..."
+                          className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] focus:border-indigo-500 outline-none transition-all pr-24"
+                          value={tempKey}
+                          onChange={(e) => setTempKey(e.target.value)}
+                        />
+                        <button 
+                          onClick={() => validateKey(tempKey)}
+                          disabled={valStatus === 'loading' || !tempKey}
+                          className="absolute right-2 top-2 bottom-2 px-4 bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-600 text-white text-[10px] font-bold rounded-lg transition-all"
+                        >
+                          VALIDAR
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-[var(--text-placeholder)] mt-2">
+                         Esta chave será usada exclusivamente para serviços premium (Imagen 3). Os demais serviços continuam usando a chave do arquivo .env.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <div className="mt-8 p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 space-y-2">
+                  <h5 className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Armazenamento Seguro</h5>
+                  <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed italic">
+                    Sua chave é salva localmente no arquivo app-config.json e nunca é compartilhada ou enviada para outros servidores além da Google AI.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <footer className="p-6 bg-[var(--bg-sidebar)] border-t border-[var(--border-light)] text-center">
             <p className="text-[10px] font-bold text-[var(--text-placeholder)] uppercase tracking-widest">
-              Gemoro 4.0 &copy; 2026 • Advanced Intelligence Platform
+              Gemoro 4.0 © 2026 | Advanced Intelligence Platform
             </p>
           </footer>
         </div>

@@ -338,10 +338,11 @@ export async function generateGeminiContent(
 export async function generateImagenContent(
   prompt: string,
   model: string,
-  aspectRatio: '1:1' | '9:16' | '16:9'
+  aspectRatio: '1:1' | '9:16' | '16:9',
+  manualApiKey?: string
 ): Promise<{ data: string; mimeType: string }> {
-  const key = import.meta.env.VITE_GEMINI_PAID_API_KEY;
-  if (!key) throw new Error("Chave de API PAID (Imagen) não configurada");
+  const key = manualApiKey || import.meta.env.VITE_GEMINI_PAID_API_KEY;
+  if (!key) throw new Error("Chave de API Imagen (Paga) não configurada.");
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${key}`;
 

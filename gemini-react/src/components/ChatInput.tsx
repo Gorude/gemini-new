@@ -160,7 +160,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
         
-        <div className={`input-wrapper p-3 shadow-2xl relative bg-[var(--bg-sidebar)] rounded-2xl border transition-all duration-500 ${isLiveActive ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)] ring-2 ring-blue-500/20' : 'border-[var(--border-light)]'}`}>
+        <div className={`input-wrapper p-3 shadow-2xl relative bg-[var(--bg-sidebar)] rounded-2xl border transition-all duration-500 ${isLoading ? 'generating-glow border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : isLiveActive ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-[var(--border-light)]'}`}>
           {showScrollButton && (
             <button 
               onClick={onScrollToBottom}

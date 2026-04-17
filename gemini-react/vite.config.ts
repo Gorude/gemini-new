@@ -8,6 +8,10 @@ const chatFile = path.resolve(__dirname, 'chat-history.json')
 const memoryFile = path.resolve(__dirname, 'user-memory.json')
 const personalitiesFile = path.resolve(__dirname, 'personalities.json')
 const usageFile = path.resolve(__dirname, 'usage-data.json')
+const configFile = path.resolve(__dirname, 'app-config.json')
+
+if (!fs.existsSync(usageFile)) fs.writeFileSync(usageFile, JSON.stringify({ dailyUsage: [] }))
+if (!fs.existsSync(configFile)) fs.writeFileSync(configFile, JSON.stringify({ paidApiKey: '' }))
 const uploadsDir = path.resolve(__dirname, 'public/uploads')
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 
@@ -72,6 +76,16 @@ function chatHistoryApi() {
             fs.writeFileSync(usageFile, body, 'utf-8')
             res.end(JSON.stringify({ success: true }))
           })
+        } else if (req.url === '/api/config' && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json')
+          res.end(fs.readFileSync(configFile, 'utf-8'))
+        } else if (req.url === '/api/config' && req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: string) => body += chunk)
+          req.on('end', () => {
+            fs.writeFileSync(configFile, body, 'utf-8')
+            res.end(JSON.stringify({ success: true }))
+          })
         } else if (req.url === '/api/upload' && req.method === 'POST') {
           let body = ''
           req.on('data', (chunk: string) => body += chunk)
@@ -102,7 +116,7 @@ export default defineConfig({
   ],
   server: {
     watch: {
-      ignored: ['**/chat-history.json', '**/user-memory.json', '**/personalities.json', '**/usage-data.json']
+      ignored: ['**/chat-history.json', '**/user-memory.json', '**/personalities.json', '**/usage-data.json', '**/app-config.json']
     }
   }
 })

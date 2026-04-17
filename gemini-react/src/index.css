@@ -4,7 +4,7 @@
 
 :root[data-theme="escuro"] {
   --bg-main: #131314;
-  --bg-sidebar: #131314; 
+  --bg-sidebar: #1E1F20; 
   --bg-chat-hover: rgba(255, 255, 255, 0.05);
   --bg-chat-active: #1D3153;
   --bg-nav-active: rgba(255, 255, 255, 0.1);
@@ -253,7 +253,7 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
 }
 
 /* Fix break words for AI/User msg */
-.user-msg, .ai-msg {
+.user-msg, .ai-msg, .response-body {
   word-break: break-word;
   white-space: pre-wrap;
   overflow-wrap: break-word;
@@ -281,25 +281,47 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
   animation: aura-sweep 2s infinite linear;
 }
 
-/* AI Generation LED Strip */
-@keyframes led-sweep {
-  0% { background-position: -100% 0; }
-  100% { background-position: 200% 0; }
+/* AI Generation Glowing Border Animation */
+@keyframes rotate-border {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-.ai-led-strip {
-  height: 3px;
-  width: 100%;
-  background: linear-gradient(90deg,
-    #4285F4 0%,
-    #9B72CB 25%,
-    #D96570 50%,
-    #9B72CB 75%,
-    #4285F4 100%
+.generating-glow {
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  background-color: transparent !important; /* Allow the ::after background to show through */
+}
+
+.generating-glow::before {
+  content: '';
+  position: absolute;
+  top: -150%;
+  left: -50%;
+  width: 200%;
+  height: 400%;
+  background: conic-gradient(
+    transparent,
+    #6366f1 10%, /* indigo-500 */
+    #a5b4fc 20%, /* indigo-300 */
+    transparent 30%,
+    transparent 60%,
+    #6366f1 70%,
+    #a5b4fc 80%,
+    transparent 90%
   );
-  background-size: 200% 100%;
-  animation: led-sweep 3.5s infinite linear;
-  flex-shrink: 0;
+  animation: rotate-border 4s linear infinite;
+  z-index: -1;
+}
+
+.generating-glow::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: var(--bg-sidebar);
+  border-radius: inherit;
+  z-index: -1;
 }
 
 /* Gemini spinning ring loader */
@@ -377,4 +399,13 @@ body { font-family: 'Google Sans', sans-serif; background-color: var(--bg-main);
 
 .fact-link:hover {
   opacity: 1;
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none !important;
 }

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { 
   Pin, 
   Edit2, 
@@ -17,14 +17,44 @@ import {
   BarChart2,
   User,
   Files,
-  Palette
+  Palette,
+  MessageSquare,
+  RotateCcw
 } from 'lucide-react';
 import ChatRuler from './components/ChatRuler';
 import MessageList from './components/MessageList';
 import ChatInput from './components/ChatInput';
+import MessageTimeline from './components/MessageTimeline';
+import SortableChatItem from './components/SortableChatItem';
+
+import {
+  DndContext, 
+  closestCenter,
+  MouseSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+  defaultDropAnimationSideEffects
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
+import { 
+  restrictToVerticalAxis,
+  restrictToParentElement 
+} from '@dnd-kit/modifiers';
+import { Lock, Unlock, GripVertical } from 'lucide-react';
 
 import { 
   generateGeminiContent, 
+  generateImagenContent,
   streamGeminiContent, 
   performFactCheck,
   extractAndParseJson,
@@ -96,6 +126,12 @@ function App() {
     return ['gemma-4-31b-it', 'gemini-3-flash-preview'];
   });
   const [showDnaModal, setShowDnaModal] = useState(false);
+  const [isArchiveExpanded, setIsArchiveExpanded] = useState(false);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [isOrderLocked, setIsOrderLocked] = useState(() => {
+    const saved = localStorage.getItem('gemoro_sidebar_locked');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
   const [showLiveSetupModal, setShowLiveSetupModal] = useState(false);
   const [dailyUsage, setDailyUsage] = useState<DailyUsage>(() => {
     const today = getPacificDate();
@@ -119,7 +155,7 @@ function App() {
   const [visibleMessagesCount, setVisibleMessagesCount] = useState(15);
   const [chatMargin, setChatMargin] = useState(() => {
     const saved = localStorage.getItem('gemoro_chat_margin');
-    return saved ? parseInt(saved, 10) : 15;
+    return saved ? parseInt(saved, 10) : 5;
   });
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [selectedPersonalityId, setSelectedPersonalityId] = useState(() => {
@@ -140,8 +176,8 @@ function App() {
   });
   const [isLiveProactive, setIsLiveProactive] = useState(() => localStorage.getItem('gemoro_live_proactive') === 'true');
   const [proactiveIdleCount, setProactiveIdleCount] = useState(0); // 0: Idle, 1: Probed, 2: Retried (Stopped)
-  const lastLiveActivityRef = useRef<number>(Date.now());
-  const proactiveTimerActiveRef = useRef<boolean>(false);
+  const [paidApiKey, setPaidApiKey] = useState('');
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   
   // Sincronizar Uso Local com o Servidor
   useEffect(() => {
@@ -157,6 +193,25 @@ function App() {
       }
     };
     fetchUsage();
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.paidApiKey) {
+          setPaidApiKey(data.paidApiKey);
+        }
+      })
+      .catch(err => console.error("Erro ao carregar chave de API:", err));
+  }, []);
+
+  const saveConfig = useCallback((config: { paidApiKey: string }) => {
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    }).catch(err => console.error("Erro ao salvar configuração:", err));
   }, []);
 
   useEffect(() => {
@@ -177,6 +232,15 @@ function App() {
   const [liveVideoStream, setLiveVideoStream] = useState<MediaStream | null>(null);
   const [isLiveSpeaking, setIsLiveSpeaking] = useState(false);
   const liveSessionRef = useRef<GeminiLiveSession | null>(null);
+  const proactiveTimerActiveRef = useRef<boolean>(false);
+  const lastLiveActivityRef = useRef<number>(Date.now());
+
+  const resetProactivityState = useCallback((reason: string) => {
+    // Apenas resetamos se estivermos ativos e com proatividade ligada
+    setProactiveIdleCount(0);
+    lastLiveActivityRef.current = Date.now();
+    proactiveTimerActiveRef.current = false;
+  }, []);
   const liveAudioContextRef = useRef<AudioContext | null>(null);
   const audioQueueRef = useRef<Float32Array[]>([]);
   const isPlayingRef = useRef(false);
@@ -220,27 +284,25 @@ function App() {
 
       const elapsed = Date.now() - lastLiveActivityRef.current;
       
-      // Stage 1: Triggered when idle for 30s (Count 0 -> 1)
+      // Monitoramento de Inatividade
       if (proactiveIdleCount === 0 && elapsed > 30000) {
         if (liveSessionRef.current) {
-          console.log("[PROATIVIDADE] Estágio 1: Puxando assunto...");
+          console.log("[PROATIVIDADE] Inatividade detectada (30s). Estágio 1: Puxando assunto...");
           proactiveTimerActiveRef.current = true;
           liveSessionRef.current.sendText("[SISTEMA: Modo Proativo. Analise o contexto e faça uma pergunta curta e pertinente agora.]");
           setProactiveIdleCount(1);
           lastLiveActivityRef.current = Date.now();
         }
       } 
-      // Stage 2: Triggered when silent for 30s AFTER Stage 1 (Count 1 -> 2)
       else if (proactiveIdleCount === 1 && elapsed > 30000) {
         if (liveSessionRef.current) {
-          console.log("[PROATIVIDADE] Estágio 2: Check-in (Você ainda está aí?)...");
+          console.log("[PROATIVIDADE] Inatividade continuada (60s). Estágio 2: Check-in...");
           proactiveTimerActiveRef.current = true;
           liveSessionRef.current.sendText("[SISTEMA: O usuário não respondeu. Pergunte se ele ainda está aí de forma amigável.]");
           setProactiveIdleCount(2);
           lastLiveActivityRef.current = Date.now();
         }
       }
-      // If Stage 2 is reached, we stop until reset by interaction
     }, 1000);
 
     return () => clearInterval(interval);
@@ -421,6 +483,10 @@ function App() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem('gemoro_sidebar_locked', JSON.stringify(isOrderLocked));
+  }, [isOrderLocked]);
+
   // Auto-Save Margins
   useEffect(() => {
     localStorage.setItem('gemoro_chat_margin', chatMargin.toString());
@@ -556,6 +622,28 @@ function App() {
         }
         return c;
       }));
+
+      if (imageGenEnabled) {
+        try {
+          const res = await generateImagenContent(userText, imagenModel, aspectRatio, paidApiKey);
+          const currentDuration = (performance.now() - startTime) / 1000;
+          
+          setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
+            ...c,
+            messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { 
+              ...m, 
+              text: `Gerei esta imagem para você usando **${imagenModel}**:`, 
+              files: [{ name: 'generated_image.png', mimeType: res.mimeType, data: res.data }],
+              duration: currentDuration 
+            } : m)
+          } : c));
+          
+          setIsLoading(false);
+          return;
+        } catch (imgError: any) {
+          throw new Error(`Erro na geração de imagem: ${imgError.message}`);
+        }
+      }
 
       const stream = streamGeminiContent(userText, model, apiHistory, systemInstruction, filesToSend, webSearchEnabled, controller.signal, thinkingEnabled);
       let fullText = "";
@@ -722,20 +810,30 @@ function App() {
       abortControllerRef.current = null;
       currentAiMsgIdRef.current = null;
     }
-  }, [model, webSearchEnabled, thinkingEnabled, memoryFacts, scrollToBottom, personalities, selectedPersonalityId]);
+  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, scrollToBottom, personalities, selectedPersonalityId]);
 
   const handleStopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
+      // Capturamos os IDs antes de qualquer mutação ou aborto
+      const msgIdToRemove = currentAiMsgIdRef.current;
+      const targetChatId = activeChatId;
+      
       abortControllerRef.current.abort();
       
-      // Remover a mensagem vazia/incompleta que estava sendo gerada
-      if (currentAiMsgIdRef.current && activeChatId) {
+      // Remover a mensagem apenas se ela ainda estiver vazia
+      if (msgIdToRemove && targetChatId) {
         setChats(prev => prev.map(c => {
-          if (c.id === activeChatId) {
-            return {
-              ...c,
-              messages: c.messages.filter(m => m.id !== currentAiMsgIdRef.current)
-            };
+          if (c.id === targetChatId) {
+            // Verificamos se a mensagem existe e se está vazia
+            const msg = c.messages.find(m => m.id === msgIdToRemove);
+            const isEmpty = !msg || (!msg.text && !msg.thoughts && (!msg.files || msg.files.length === 0));
+            
+            if (isEmpty) {
+              return {
+                ...c,
+                messages: c.messages.filter(m => m.id !== msgIdToRemove)
+              };
+            }
           }
           return c;
         }));
@@ -891,16 +989,12 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         lastLiveActivityRef.current = Date.now();
         
         if (role === 'user') {
-          console.log("[PROATIVIDADE] Interação do usuário. Ciclo resetado.");
-          setProactiveIdleCount(0);
-          proactiveTimerActiveRef.current = false;
+          resetProactivityState("Fala do usuário");
         } else if (role === 'ai') {
-          // Se recebemos um transcript da IA e NÃO foi disparado pelo timer proativo recente...
-          if (!proactiveTimerActiveRef.current && proactiveIdleCount !== 0) {
-            console.log("[PROATIVIDADE] Resposta natural da IA detectada. Ciclo resetado.");
-            setProactiveIdleCount(0);
+          if (!proactiveTimerActiveRef.current) {
+            resetProactivityState("Fala natural da IA");
           } else {
-            // Se foi proativo, apenas marcamos que o prompt já foi lido para a próxima fala natural resetar
+            // Se foi proativo, apenas marcamos que o prompt já foi lido para liberar o próximo reset natural
             proactiveTimerActiveRef.current = false;
           }
         }
@@ -957,9 +1051,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         setIsLiveSpeaking(true);
         
         lastLiveActivityRef.current = Date.now();
-        // Se a IA começar a falar e NÃO fomos nós que pedimos proativamente, é uma fala reativa (interação)
         if (!proactiveTimerActiveRef.current && proactiveIdleCount !== 0) {
-           setProactiveIdleCount(0);
+           resetProactivityState("Áudio reativo da IA");
         }
 
         source.start(startTime);
@@ -1013,12 +1106,15 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (liveAudioContextRef.current) {
       nextAudioTimeRef.current = liveAudioContextRef.current.currentTime;
     }
-  }, []);
+
+    resetProactivityState("Interrupção manual/VAD");
+  }, [resetProactivityState]);
 
   const handleSend = useCallback((text: string, files: PendingFile[]) => {
     if (text.trim() === '' && files.length === 0) return;
 
     if (isLiveActive && liveSessionRef.current) {
+      resetProactivityState("Chat manual (Live)");
       liveSessionRef.current.sendText(text);
       return;
     }
@@ -1049,13 +1145,32 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (chatWindowRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatWindowRef.current;
       setShowScrollButton(scrollHeight - scrollTop - clientHeight > 300);
+      
       if (scrollTop < 50 && visibleMessagesCount < messages.length && !isLazyLoadingRef.current) {
         isLazyLoadingRef.current = true;
         previousScrollHeightRef.current = scrollHeight;
-        setTimeout(() => setVisibleMessagesCount(prev => prev + 15), 300);
+        // Delay para mostrar o spinner e evitar gatilhos múltiplos rápidos
+        setTimeout(() => {
+          setVisibleMessagesCount(prev => Math.min(prev + 15, messages.length));
+        }, 400);
       }
     }
   }, [messages.length, visibleMessagesCount]);
+
+  // Restauração de Scroll após carregar mensagens antigas (Lazy Loading)
+  useLayoutEffect(() => {
+    if (isLazyLoadingRef.current && chatWindowRef.current && previousScrollHeightRef.current > 0) {
+      const scrollContainer = chatWindowRef.current;
+      const heightDiff = scrollContainer.scrollHeight - previousScrollHeightRef.current;
+      
+      if (heightDiff > 0) {
+        scrollContainer.scrollTop += heightDiff;
+      }
+      
+      isLazyLoadingRef.current = false;
+      previousScrollHeightRef.current = 0;
+    }
+  }, [visibleMessagesCount]);
 
   const handleFactCheck = useCallback(async (msgId: string) => {
     if (!activeChat) return;
@@ -1131,6 +1246,53 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     setEditingChatId(null);
   }, [editTitle]);
 
+  const handleArchiveChat = useCallback((chatId: string) => {
+    setChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, archived: !chat.archived } : chat));
+    if (chatId === activeChatId) setActiveChatId('');
+  }, [activeChatId]);
+
+  const handleRestoreChat = useCallback((chatId: string) => {
+    setChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, archived: false } : chat));
+    setActiveChatId(chatId);
+    
+    // Save to server
+    fetch(`/api/history/${chatId}/archive`, { method: 'POST' });
+  }, []);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragId(null);
+    
+    if (over && active.id !== over.id) {
+      setChats((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
   const handleSaveEdit = useCallback((msgId: string) => {
     if (!activeChatId || !editingMsgText.trim() || isLoading) return;
     const chat = chats.find(c => c.id === activeChatId);
@@ -1173,11 +1335,64 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     executeAIRequest(activeChatId, userMsg.text, userMsg.files || [], apiHistory, false, msgId);
   }, [activeChatId, chats, isLoading, executeAIRequest]);
 
+  const handleJumpToMessage = useCallback((id: string) => {
+    const msgIndex = messages.findIndex(m => m.id === id);
+    if (msgIndex === -1) return;
 
+    // Verificar se a mensagem está fora do alcance da renderização (Lazy Loading)
+    const itemsFromEnd = messages.length - msgIndex;
+    
+    if (itemsFromEnd > visibleMessagesCount) {
+      // Expandir a contagem de mensagens visíveis para incluir o alvo
+      setVisibleMessagesCount(itemsFromEnd + 10);
+      
+      // Pequeno delay para garantir que o React renderizou o novo elemento no DOM
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${id}`);
+        if (el && chatWindowRef.current) {
+          const top = el.offsetTop - 20;
+          chatWindowRef.current.scrollTo({ top, behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      const el = document.getElementById(`msg-${id}`);
+      if (el && chatWindowRef.current) {
+        const top = el.offsetTop - 20;
+        chatWindowRef.current.scrollTo({ top, behavior: 'smooth' });
+      }
+    }
+  }, [messages, visibleMessagesCount]);
+
+
+  // Intersection Observer for Message Timeline sync
+  useEffect(() => {
+    if (!activeChatId || isLiveActive) return;
+
+    const options = {
+      root: chatWindowRef.current,
+      rootMargin: '-45% 0px -45% 0px',
+      threshold: 0
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id.replace('msg-', '');
+          setActiveMessageId(id);
+        }
+      });
+    }, options);
+
+    // Observar todas as mensagens que tenham o ID de âncora
+    const elements = document.querySelectorAll('[id^="msg-"]');
+    elements.forEach(el => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [activeChatId, messages, visibleMessagesCount, isLiveActive]);
 
   return (
     <div className="flex h-screen overflow-hidden text-[var(--text-primary)] relative bg-[var(--bg-main)]">
-      <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'} flex flex-col bg-[#1e1f20] shadow-2xl`}>
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'} flex flex-col bg-[var(--bg-sidebar)] shadow-2xl`}>
         <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 lg:hidden">
           <div className="flex items-center gap-2">
             <Bot className="w-6 h-6 text-blue-400" />
@@ -1199,57 +1414,115 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             <SquarePen className="w-5 h-5 opacity-70" />
             <span>Nova conversa</span>
           </button>
+          
+          <button 
+            onClick={() => setIsArchiveExpanded(!isArchiveExpanded)} 
+            className={`flex items-center gap-3 px-4 py-2.5 mt-2 w-full rounded-full transition text-sm font-medium border border-transparent ${isArchiveExpanded ? 'bg-white/5 text-[var(--text-primary)] border-white/5' : 'hover:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+          >
+            <Archive className={`w-4 h-4 transition-transform duration-300 ${isArchiveExpanded ? 'text-blue-400' : 'opacity-50'}`} />
+            <span>Arquivadas</span>
+            <div className="ml-auto flex items-center gap-2">
+              {chats.filter(c => c.archived).length > 0 && (
+                <span className="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md text-[9px] font-bold">
+                  {chats.filter(c => c.archived).length}
+                </span>
+              )}
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isArchiveExpanded ? 'rotate-180' : 'opacity-30'}`} />
+            </div>
+          </button>
+
+          {/* Drawer de Arquivadas */}
+          {isArchiveExpanded && (
+            <div className="mt-1 ml-4 border-l border-white/5 pl-2 space-y-1 animate-in slide-in-from-top-2 duration-300">
+              {chats.filter(c => c.archived).length === 0 ? (
+                <div className="text-[10px] text-[var(--text-secondary)] opacity-40 py-2 px-4 italic">Sem arquivados</div>
+              ) : (
+                chats.filter(c => c.archived).map(chat => (
+                  <div 
+                    key={chat.id} 
+                    onClick={() => { setActiveChatId(chat.id); setIsSidebarOpen(false); }}
+                    className={`group/arch flex items-center gap-2 py-1.5 px-3 rounded-xl cursor-pointer hover:bg-white/5 transition text-[var(--text-secondary)] hover:text-white ${activeChatId === chat.id ? 'bg-white/5 text-white' : ''}`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 opacity-40 group-hover/arch:opacity-100 transition-opacity" />
+                    <span className="text-xs truncate flex-1">{chat.title}</span>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleRestoreChat(chat.id); }}
+                      className="opacity-0 group-hover/arch:opacity-100 p-1 hover:bg-blue-500/20 rounded-md transition text-blue-400"
+                      title="Restaurar"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); if(confirm('Excluir permanentemente?')) handleDeleteChat(e, chat.id); }}
+                      className="opacity-0 group-hover/arch:opacity-100 p-1 hover:bg-red-500/20 rounded-md transition text-red-400"
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
-          <div className="text-[14px] font-medium text-[var(--text-primary)] px-4 mb-4 mt-6">Conversas</div>
+          <div className="flex items-center justify-between px-4 mb-4 mt-6">
+            <div className="text-[14px] font-medium text-[var(--text-primary)]">Conversas</div>
+            <button 
+              onClick={() => setIsOrderLocked(!isOrderLocked)}
+              className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-[var(--text-secondary)] opacity-40 hover:opacity-100 hover:bg-white/5' : 'text-blue-400 bg-blue-500/10'}`}
+              title={isOrderLocked ? "Destravar reordenação" : "Travar reordenação"}
+            >
+              {isOrderLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+            </button>
+          </div>
           
           <div className="space-y-1">
-            {chats.filter(c => !c.archived).map(chat => (
-              <div key={chat.id} className="relative group">
-                <div 
-                  onClick={() => { setActiveChatId(chat.id); setIsSidebarOpen(false); setActiveTab('chat'); }} 
-                  className={`group/item flex items-center gap-3 py-2.5 px-4 mx-1 rounded-full cursor-pointer transition relative ${activeChatId === chat.id ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)]' : 'hover:bg-white/5 text-[var(--text-primary)]'}`}
-                >
-                  {editingChatId === chat.id ? (
-                    <input autoFocus className="bg-transparent border-none outline-none text-white w-full text-[14px]" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} onBlur={() => handleRenameChat(chat.id)} onKeyDown={(e) => e.key === 'Enter' && handleRenameChat(chat.id)} />
-                  ) : (
-                    <span className="truncate text-[14px] flex-1 font-normal">{chat.title}</span>
-                  )}
+            <DndContext 
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              modifiers={[restrictToVerticalAxis]}
+            >
+              <SortableContext 
+                items={chats.filter(c => !c.archived).map(c => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {chats.filter(c => !c.archived).map(chat => (
+                  <SortableChatItem 
+                    key={chat.id}
+                    chat={chat}
+                    activeChatId={activeChatId}
+                    editingChatId={editingChatId}
+                    editTitle={editTitle}
+                    menuOpenId={menuOpenId}
+                    isLocked={isOrderLocked}
+                    onSelect={(id) => { setActiveChatId(id); setIsSidebarOpen(false); setActiveTab('chat'); }}
+                    onRename={handleRenameChat}
+                    onEditTitleChange={setEditTitle}
+                    onRenameConfirm={handleRenameChat}
+                    onToggleMenu={(id) => setMenuOpenId(menuOpenId === id ? null : id)}
+                    onTogglePin={handleTogglePin}
+                    onArchive={handleArchiveChat}
+                    onDelete={handleDeleteChat}
+                    onSetEditingId={(id, title) => { setEditingChatId(id); setEditTitle(title); }}
+                  />
+                ))}
+              </SortableContext>
 
-                  {chat.pinned && <Pin className="w-3.5 h-3.5 opacity-60 ml-1" />}
-                  
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === chat.id ? null : chat.id); }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className={`p-1 hover:bg-white/10 rounded-full transition shrink-0 ${activeChatId === chat.id || menuOpenId === chat.id ? 'opacity-100' : 'opacity-0 group-hover/item:opacity-100'}`}
-                  >
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {menuOpenId === chat.id && (
-                  <div 
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-4 top-full mt-1 bg-[#1e1f20] border border-[var(--border-light)] rounded-xl py-2 w-48 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200"
-                  >
-                    <button onClick={(e) => { e.stopPropagation(); setEditingChatId(chat.id); setEditTitle(chat.title); setMenuOpenId(null); }} className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2">
-                      <Edit2 className="w-4 h-4 opacity-60" /> Renomear
-                    </button>
-                    <button onClick={(e) => { handleTogglePin(e, chat.id); setMenuOpenId(null); }} className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2">
-                      <Pin className="w-4 h-4 opacity-60" /> {chat.pinned ? 'Desafixar' : 'Fixar'}
-                    </button>
-                    <button onClick={(e) => { handleToggleArchive(e, chat.id); setMenuOpenId(null); }} className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2">
-                      <Archive className="w-4 h-4 opacity-60" /> Arquivar
-                    </button>
-                    <button onClick={(e) => { handleDeleteChat(e, chat.id); setMenuOpenId(null); }} className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2 text-red-400">
-                      <Trash2 className="w-4 h-4" /> Excluir
-                    </button>
+              <DragOverlay adjustScale={false}>
+                {activeDragId ? (
+                  <div className="bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] py-2.5 px-4 rounded-full opacity-80 shadow-2xl border border-white/10 flex items-center gap-3">
+                    <GripVertical className="w-4 h-4 opacity-50" />
+                    <span className="text-sm font-medium truncate">
+                      {chats.find(c => c.id === activeDragId)?.title}
+                    </span>
                   </div>
-                )}
-              </div>
-            ))}
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
         </div>
 
@@ -1352,7 +1625,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
         <ChatRuler margin={chatMargin} onMarginChange={setChatMargin} />
 
-        {isLoading && <div className="ai-led-strip" />}
+        {/* Removida a fita de LED do topo */}
 
         {showAnalytics && (
           <div className="absolute top-20 right-8 bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-3xl p-6 w-96 shadow-2xl z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
@@ -1445,9 +1718,33 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onCancelEdit={() => setEditingMsgId(null)}
                     onRegenerate={handleRegenerate}
                     onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: any) => m.id !== id)} : c))}
-                    onCopy={(text, id) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }}
+                    onCopy={(text, id) => { 
+                      let finalOutput = text;
+                      if (!id.endsWith('-md')) {
+                        // Strip Markdown for plain text copy
+                        finalOutput = text
+                          .replace(/^#+\s+/gm, '') // Headings
+                          .replace(/(\*\*|__)(.*?)\1/g, '$2') // Bold
+                          .replace(/(\*|_)(.*?)\1/g, '$2') // Italic
+                          .replace(/`{3,}/g, '') // Code blocks
+                          .replace(/`(.+?)`/g, '$1') // Inline code
+                          .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Links
+                          .replace(/^[*-]\s+/gm, ''); // List items
+                      }
+                      navigator.clipboard.writeText(finalOutput); 
+                      setCopiedId(id); 
+                      setTimeout(() => setCopiedId(null), 2000); 
+                    }}
                     onToggleSources={setExpandedSourcesMsgId}
                     onSelectionChange={(text, pos, msgId) => setSelectionData({ text, pos, messageId: msgId })}
+                  />
+                )}
+                
+                {activeChat && messages.length > 0 && !isLiveActive && (
+                  <MessageTimeline 
+                    messages={messages} 
+                    onJumpToMessage={handleJumpToMessage} 
+                    activeId={activeMessageId}
                   />
                 )}
               </div>
@@ -1513,6 +1810,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             }}
           />
         )}
+
+
       </main>
 
         {showDnaModal && (
@@ -1560,6 +1859,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           }}
           enabledModelIds={enabledModelIds}
           onSetEnabledModelIds={setEnabledModelIds}
+          paidApiKey={paidApiKey}
+          onUpdatePaidApiKey={(key) => {
+            setPaidApiKey(key);
+            saveConfig({ paidApiKey: key });
+          }}
           onOpenPersonalities={() => setShowPersonalitiesModal(true)}
           onOpenDna={() => setShowDnaModal(true)}
         />

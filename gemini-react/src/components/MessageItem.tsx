@@ -79,7 +79,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   const isEditing = editingMsgId === msg.id;
 
   return (
-    <div className={`group/msg relative flex flex-col w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300`}>
+    <div id={`msg-${msg.id}`} className={`group/msg relative flex flex-col w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300`}>
       {/* Context Indicator Line */}
       {isContext && (
         <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-indigo-500/50 opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
@@ -337,7 +337,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           </div>
         </div>
       ) : (
-         <div className="flex flex-col items-end max-w-[85%]">
+         <div className="flex flex-col items-end max-w-full md:max-w-[95%]">
            {msg.files && msg.files.length > 0 && (
              <div className="flex gap-2 mb-2 flex-wrap justify-end">
                {msg.files.map((f, i) => (

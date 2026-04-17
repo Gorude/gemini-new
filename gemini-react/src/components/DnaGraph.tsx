@@ -234,7 +234,7 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
                 <span className="text-[var(--text-secondary)] text-[10px] uppercase font-black tracking-tighter flex items-center gap-2"><Link size={12} /> Comprimento Link</span>
                 <span className="text-indigo-500 font-mono text-xs bg-indigo-500/5 px-2 py-0.5 rounded-md">{linkDistance}</span>
               </div>
-              <input type="range" min="10" max="2000" step="10" value={linkDistance} onChange={e => setNodeSize(Number(e.target.value))} className="w-full h-1.5 bg-[var(--border-light)] rounded-full appearance-none cursor-pointer accent-indigo-500" />
+              <input type="range" min="10" max="2000" step="10" value={linkDistance} onChange={e => setLinkDistance(Number(e.target.value))} className="w-full h-1.5 bg-[var(--border-light)] rounded-full appearance-none cursor-pointer accent-indigo-500" />
             </div>
 
             {/* Range 0-2000 per Study */}
