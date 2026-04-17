@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Volume2, Settings, Camera, Monitor } from 'lucide-react';
+import { X, Volume2, Settings, Camera, Monitor, Zap } from 'lucide-react';
 
 interface LiveViewProps {
   status: 'connecting' | 'connected' | 'error' | 'disconnected';
@@ -12,6 +12,8 @@ interface LiveViewProps {
   onToggleCamera: () => void;
   onToggleScreen: () => void;
   onInterrupt: () => void;
+  isProactiveEnabled: boolean;
+  onToggleProactive: () => void;
   onClose: () => void;
 }
 
@@ -96,9 +98,10 @@ const LiveView: React.FC<LiveViewProps> = ({
   analyser,
   visionType,
   videoStream,
-  onVoiceChange, 
   onToggleCamera,
   onToggleScreen,
+  isProactiveEnabled,
+  onToggleProactive,
   onClose
 }) => {
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
@@ -159,6 +162,14 @@ const LiveView: React.FC<LiveViewProps> = ({
           title="Compartilhar Tela"
         >
           <Monitor className="w-5 h-5" />
+        </button>
+
+        <button 
+          onClick={onToggleProactive}
+          className={`p-3 rounded-2xl transition shadow-xl border ${isProactiveEnabled ? 'bg-indigo-600 border-indigo-400 text-white shadow-indigo-500/40' : 'bg-[var(--bg-sidebar)] border-[var(--border-light)] text-[var(--text-secondary)] hover:text-white'}`}
+          title={isProactiveEnabled ? "Desativar Proatividade" : "Ativar Proatividade"}
+        >
+          <Zap className={`w-5 h-5 ${isProactiveEnabled ? 'animate-pulse' : ''}`} />
         </button>
 
         <button 

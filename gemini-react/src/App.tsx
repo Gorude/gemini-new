@@ -27,6 +27,7 @@ import {
   generateGeminiContent, 
   streamGeminiContent, 
   performFactCheck,
+  extractAndParseJson,
   type Message 
 } from './services/gemini';
 
@@ -54,8 +55,10 @@ import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
 import SelectionPopup from './components/SelectionPopup';
 
+import SettingsModal from './components/SettingsModal';
 import { 
-  MODEL_LIMITS
+  MODEL_LIMITS,
+  MODEL_OPTIONS
 } from './constants';
 
 const getPacificDate = () => {
@@ -82,7 +85,16 @@ function App() {
   const [expandedSourcesMsgId, setExpandedSourcesMsgId] = useState<string | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('gemoro_theme') || 'escuro');
-  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [enabledModelIds, setEnabledModelIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('gemoro_enabled_models');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return ['gemma-4-31b-it', 'gemini-3-flash-preview'];
+  });
   const [showDnaModal, setShowDnaModal] = useState(false);
   const [showLiveSetupModal, setShowLiveSetupModal] = useState(false);
   const [dailyUsage, setDailyUsage] = useState<DailyUsage>(() => {
@@ -118,7 +130,43 @@ function App() {
   const [showThemeSubMenu, setShowThemeSubMenu] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'chat' | 'files'>('chat');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gemoro_sidebar_open');
+      if (saved !== null) return saved === 'true';
+      return window.innerWidth > 1024;
+    }
+    return true;
+  });
+  const [isLiveProactive, setIsLiveProactive] = useState(() => localStorage.getItem('gemoro_live_proactive') === 'true');
+  const [proactiveIdleCount, setProactiveIdleCount] = useState(0); // 0: Idle, 1: Probed, 2: Retried (Stopped)
+  const lastLiveActivityRef = useRef<number>(Date.now());
+  const proactiveTimerActiveRef = useRef<boolean>(false);
+  
+  // Sincronizar Uso Local com o Servidor
+  useEffect(() => {
+    const fetchUsage = async () => {
+      try {
+        const res = await fetch('/api/usage');
+        const data = await res.json();
+        if (data && data.date === getPacificDate()) {
+          setDailyUsage(data);
+        }
+      } catch (e) {
+        console.error("Erro ao carregar uso do servidor:", e);
+      }
+    };
+    fetchUsage();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(dailyUsage));
+    fetch('/api/usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dailyUsage)
+    }).catch(e => console.error("Erro ao salvar uso no servidor:", e));
+  }, [dailyUsage]);
   
   // LIVE MODE STATE
   const [isLiveActive, setIsLiveActive] = useState(false);
@@ -137,6 +185,19 @@ function App() {
   const [liveAnalyser, setLiveAnalyser] = useState<AnalyserNode | null>(null);
   const [selectionData, setSelectionData] = useState<{ text: string, pos: { x: number, y: number }, messageId: string } | null>(null);
   const [isCheckingSegment] = useState(false);
+  const [categorizationProgress, setCategorizationProgress] = useState<{ current: number, total: number }>({ current: 0, total: 0 });
+
+  useEffect(() => {
+    localStorage.setItem('gemoro_enabled_models', JSON.stringify(enabledModelIds));
+  }, [enabledModelIds]);
+
+  useEffect(() => {
+    localStorage.setItem('gemoro_sidebar_open', isSidebarOpen.toString());
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    localStorage.setItem('gemoro_live_proactive', isLiveProactive.toString());
+  }, [isLiveProactive]);
 
   const previousScrollHeightRef = useRef<number>(0);
   const isLazyLoadingRef = useRef<boolean>(false);
@@ -145,62 +206,126 @@ function App() {
   const currentAiMsgIdRef = useRef<string | null>(null);
   const timerIntervalRef = useRef<any>(null);
 
+  useEffect(() => {
+    if (!isLiveActive || !isLiveProactive) {
+      setProactiveIdleCount(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (isLiveSpeaking) {
+        lastLiveActivityRef.current = Date.now();
+        return;
+      }
+
+      const elapsed = Date.now() - lastLiveActivityRef.current;
+      
+      // Stage 1: Triggered when idle for 30s (Count 0 -> 1)
+      if (proactiveIdleCount === 0 && elapsed > 30000) {
+        if (liveSessionRef.current) {
+          console.log("[PROATIVIDADE] Estágio 1: Puxando assunto...");
+          proactiveTimerActiveRef.current = true;
+          liveSessionRef.current.sendText("[SISTEMA: Modo Proativo. Analise o contexto e faça uma pergunta curta e pertinente agora.]");
+          setProactiveIdleCount(1);
+          lastLiveActivityRef.current = Date.now();
+        }
+      } 
+      // Stage 2: Triggered when silent for 30s AFTER Stage 1 (Count 1 -> 2)
+      else if (proactiveIdleCount === 1 && elapsed > 30000) {
+        if (liveSessionRef.current) {
+          console.log("[PROATIVIDADE] Estágio 2: Check-in (Você ainda está aí?)...");
+          proactiveTimerActiveRef.current = true;
+          liveSessionRef.current.sendText("[SISTEMA: O usuário não respondeu. Pergunte se ele ainda está aí de forma amigável.]");
+          setProactiveIdleCount(2);
+          lastLiveActivityRef.current = Date.now();
+        }
+      }
+      // If Stage 2 is reached, we stop until reset by interaction
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isLiveActive, isLiveProactive, proactiveIdleCount]);
+
   const handleAutoCategorize = useCallback(async () => {
     if (memoryFacts.length === 0) return;
     setIsCategorizing(true);
-    console.log("Iniciando organização inteligente do DNA...");
+    setCategorizationProgress({ current: 0, total: 0 });
+    
+    console.log("Iniciando organização inteligente em lotes...");
+    
+    // Configurações de lote (batching) para garantir estabilidade JSON
+    const CHUNK_SIZE = 15;
+    const chunks: any[][] = [];
+    for (let i = 0; i < memoryFacts.length; i += CHUNK_SIZE) {
+      chunks.push(memoryFacts.slice(i, i + CHUNK_SIZE));
+    }
+
+    setCategorizationProgress({ current: 0, total: chunks.length });
+    let currentFacts = [...memoryFacts];
+
     try {
-      const prompt = `Você é um especialista em organização de conhecimento. 
-      Analise a seguinte lista de memórias e organize-as em categorias lógicas e interconectadas.
-      
-      RETORNE APENAS UM ARRAY JSON CRU com o seguinte formato para CADA item:
-      { "id": "id_original", "text": "texto_original", "category": "Nova Categoria", "connections": ["id_rel1", "id_rel2"], "timestamp": ${Date.now()} }
-      
-      REGRAS:
-      1. NÃO altere o campo "text".
-      2. Categorize tudo de forma lógica (ex: Pessoal, Trabalho, Hardware, Hobbies).
-      3. Identifique conexões reais entre os fatos.
-      4. Responda APENAS o JSON.
-      
-      LISTA DE FATOS:\n${JSON.stringify(memoryFacts)}`;
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        console.log(`Processando lote ${i + 1}/${chunks.length}...`);
+        
+        const prompt = `Você é um especialista em organização de conhecimento. 
+        Analise a seguinte lista de memórias e organize-as em categorias lógicas e interconectadas.
+        
+        RETORNE APENAS UM OBJETO JSON DE MAPEAMENTO no seguinte formato:
+        { 
+          "id_original": { "c": "Nova Categoria", "n": ["id_rel1", "id_rel2"] }
+        }
+        
+        REGRAS:
+        1. Use "c" para a categoria e "n" para o array de IDs de conexões (links).
+        2. Categorize tudo de forma lógica (ex: Pessoal, Trabalho, Hardware, Hobbies).
+        3. Identifique conexões reais entre os fatos.
+        4. Responda APENAS o JSON. Não repita o texto dos fatos.
+        
+        LISTA DE FATOS DESTE LOTE (ID e Texto):\n${JSON.stringify(chunk.map(f => ({ id: f.id, t: f.text })))}`;
 
-      const res = await generateGeminiContent(prompt, 'gemma-4-31b-it', [], "Responda estritamente com um array JSON.");
-      
-      // Extração robusta de JSON
-      let cleanedText = res.text.trim();
-      
-      // Remover blocos de código se existirem
-      if (cleanedText.includes("```")) {
-        cleanedText = cleanedText.replace(/```json|```/g, "").trim();
-      }
+        try {
+          // Native JSON mode forced
+          const res = await generateGeminiContent(prompt, 'gemma-4-31b-it', [], "Você é um organizador de dados JSON.", [], false, false, true);
+          const mapping = extractAndParseJson(res.text);
 
-      // Encontrar o início e fim do array
-      const start = cleanedText.indexOf("[");
-      const end = cleanedText.lastIndexOf("]");
-      
-      if (start === -1 || end === -1) {
-        throw new Error("Não foi possível encontrar um array JSON na resposta da IA.");
-      }
+          if (mapping && typeof mapping === 'object' && !Array.isArray(mapping)) {
+            currentFacts = currentFacts.map(fact => {
+              const update = mapping[fact.id];
+              if (update) {
+                return {
+                  ...fact,
+                  category: update.c || fact.category,
+                  connections: Array.isArray(update.n) ? update.n.filter(id => id !== fact.id) : fact.connections,
+                  timestamp: Date.now()
+                };
+              }
+              return fact;
+            });
 
-      const jsonStr = cleanedText.substring(start, end + 1);
-      const organized = JSON.parse(jsonStr);
-      
-      if (Array.isArray(organized) && organized.length > 0) {
-        setMemoryFacts(organized);
-        fetch('/api/memory', { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(organized) 
-        });
-        console.log("DNA organizado com sucesso!");
-      } else {
-        throw new Error("A resposta organizada não é um array válido.");
+            // Atualização parcial do estado para feedback visual imediato
+            setMemoryFacts([...currentFacts]);
+            setCategorizationProgress(prev => ({ ...prev, current: i + 1 }));
+            
+            // Checkpoint no servidor
+            fetch('/api/memory', { 
+              method: 'POST', 
+              headers: { 'Content-Type': 'application/json' }, 
+              body: JSON.stringify(currentFacts) 
+            });
+          }
+        } catch (batchError) {
+          console.error(`Erro no lote ${i + 1}:`, batchError);
+          // Continua para o próximo lote se um falhar
+        }
       }
+      console.log("Organização de DNA concluída com sucesso!");
     } catch (e) {
-      console.error("Erro crítico na auto-categorização:", e);
+      console.error("Erro fatal na auto-categorização:", e);
       alert("Houve um problema ao organizar: " + (e instanceof Error ? e.message : "Erro desconhecido"));
     } finally {
       setIsCategorizing(false);
+      setCategorizationProgress({ current: 0, total: 0 });
     }
   }, [memoryFacts]);
 
@@ -366,8 +491,8 @@ function App() {
           setShowDnaModal(false);
           return;
         }
-        if (showSettingsMenu) {
-          setShowSettingsMenu(false);
+        if (showSettingsModal) {
+          setShowSettingsModal(false);
           return;
         }
         if (isLiveActive) {
@@ -378,7 +503,7 @@ function App() {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [showPersonalitiesModal, showDnaModal, showSettingsMenu, isLiveActive, handleLiveStop]);
+  }, [showPersonalitiesModal, showDnaModal, showSettingsModal, isLiveActive, handleLiveStop]);
 
   const scrollToBottom = useCallback((force = false, smooth = false) => {
     if (chatWindowRef.current) {
@@ -763,7 +888,34 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       onTranscript: (role, text) => {
         setLiveTranscript(prev => [...prev, { role, text }]);
         
-        // Memória em Tempo Real
+        lastLiveActivityRef.current = Date.now();
+        
+        if (role === 'user') {
+          console.log("[PROATIVIDADE] Interação do usuário. Ciclo resetado.");
+          setProactiveIdleCount(0);
+          proactiveTimerActiveRef.current = false;
+        } else if (role === 'ai') {
+          // Se recebemos um transcript da IA e NÃO foi disparado pelo timer proativo recente...
+          if (!proactiveTimerActiveRef.current && proactiveIdleCount !== 0) {
+            console.log("[PROATIVIDADE] Resposta natural da IA detectada. Ciclo resetado.");
+            setProactiveIdleCount(0);
+          } else {
+            // Se foi proativo, apenas marcamos que o prompt já foi lido para a próxima fala natural resetar
+            proactiveTimerActiveRef.current = false;
+          }
+        }
+
+        // Voice Commands for Proactivity
+        if (role === 'user') {
+          const lowerText = text.toLowerCase();
+          if (lowerText.includes("ativar proatividade") || lowerText.includes("ligar proatividade") || lowerText.includes("modo proativo ligado")) {
+            console.log("[LIVE] Comand de voz: Ativando Proatividade");
+            setIsLiveProactive(true);
+          } else if (lowerText.includes("desativar proatividade") || lowerText.includes("desligar proatividade") || lowerText.includes("parar proatividade") || lowerText.includes("modo proativo desligado")) {
+            console.log("[LIVE] Comando de voz: Desativando Proatividade");
+            setIsLiveProactive(false);
+          }
+        }
         if (role === 'ai' && useMemory) {
           parseMemoryTags(text);
         }
@@ -803,6 +955,13 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         
         activeSourcesRef.current.add(source);
         setIsLiveSpeaking(true);
+        
+        lastLiveActivityRef.current = Date.now();
+        // Se a IA começar a falar e NÃO fomos nós que pedimos proativamente, é uma fala reativa (interação)
+        if (!proactiveTimerActiveRef.current && proactiveIdleCount !== 0) {
+           setProactiveIdleCount(0);
+        }
+
         source.start(startTime);
         nextAudioTimeRef.current = startTime + buffer.duration;
       }
@@ -1017,8 +1176,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
 
   return (
-    <div className="flex h-screen overflow-hidden text-[var(--text-primary)] relative">
-      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''} flex flex-col w-72 bg-[#1e1f20] transition-all duration-300`}>
+    <div className="flex h-screen overflow-hidden text-[var(--text-primary)] relative bg-[var(--bg-main)]">
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'} flex flex-col bg-[#1e1f20] shadow-2xl`}>
         <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 lg:hidden">
           <div className="flex items-center gap-2">
             <Bot className="w-6 h-6 text-blue-400" />
@@ -1028,7 +1187,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         </div>
 
         <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 hidden lg:flex">
-          <button className="p-2 hover:bg-white/5 rounded-full transition"><Menu className="w-5 h-5" /></button>
+          <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition hover:rotate-90 transition-transform duration-300"><Menu className="w-5 h-5" /></button>
           <button className="p-2 hover:bg-white/5 rounded-full transition ml-auto"><Search className="w-5 h-5" /></button>
         </div>
 
@@ -1096,82 +1255,27 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
         <div className="mt-auto p-4 border-t border-[var(--border-light)] relative">
           <button 
-            onClick={() => setShowSettingsMenu(!showSettingsMenu)} 
-            className={`flex items-center gap-3 px-4 py-3 w-full rounded-full transition font-medium ${showSettingsMenu ? 'bg-[var(--bg-chat-hover)] text-white' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]'}`}
+            onClick={() => setShowSettingsModal(true)} 
+            className={`flex items-center gap-3 px-4 py-3 w-full rounded-full transition font-medium hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]`}
           >
-            <Settings className={`w-5 h-5 transition-transform duration-300 ${showSettingsMenu ? 'rotate-90 text-blue-400' : 'opacity-70'}`} /> 
-            <span className="text-[14px]">Configurações e ajuda</span>
+            <Settings className={`w-5 h-5 transition-transform duration-300 opacity-70`} /> 
+            <span className="text-[14px]">Configurações</span>
           </button>
           
-          {showSettingsMenu && (
-            <div className="absolute bottom-20 left-4 bg-[var(--bg-modal)] border border-[var(--border-light)] rounded-2xl p-2 w-64 shadow-2xl z-[80] animate-in fade-in slide-in-from-bottom-4 duration-200">
-              <div className="relative">
-                {showThemeSubMenu && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[var(--bg-modal)] border border-[var(--border-light)] rounded-2xl p-2 shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-200">
-                    <div className="text-[9px] uppercase font-bold text-[var(--text-placeholder)] mb-2 px-2 tracking-[0.2em] opacity-70">Escolha o Tema</div>
-                    <div className="grid grid-cols-1 gap-1">
-                      {['claro', 'escuro', 'areia', 'galaxia'].map(t => (
-                        <button 
-                          key={t} 
-                          onClick={() => { setTheme(t); setShowThemeSubMenu(false); setShowSettingsMenu(false); }} 
-                          className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${theme === t ? 'bg-[#4f46e5] text-white' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
-                        >
-                          {t.toUpperCase()}
-                          {theme === t && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                <button 
-                  onClick={() => setShowThemeSubMenu(!showThemeSubMenu)}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-[14px] font-medium transition-all flex items-center gap-3 group ${showThemeSubMenu ? 'bg-[var(--bg-chat-hover)] text-[var(--text-primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)]'}`}
-                >
-                  <div className={`p-1.5 rounded-lg transition-colors ${showThemeSubMenu ? 'bg-indigo-600/20' : 'bg-[var(--border-light)] group-hover:bg-[var(--border-main)]'}`}>
-                    <Palette className={`w-4 h-4 ${showThemeSubMenu ? 'text-indigo-400' : 'text-amber-400'}`} />
-                  </div>
-                  Alterar Tema
-                </button>
-              </div>
-
-              <div className="h-px bg-[var(--border-light)] my-2 mx-2"></div>
-              
-              <button 
-                onClick={() => { setShowPersonalitiesModal(true); setShowSettingsMenu(false); }}
-                className="w-full text-left px-4 py-3 rounded-xl text-[14px] font-medium hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center gap-3 group"
-              >
-                <div className="p-1.5 rounded-lg bg-[var(--border-light)] group-hover:bg-[var(--border-main)] transition-colors">
-                  <User className="w-4 h-4 text-blue-400" />
-                </div>
-                Personalidades
-              </button>
-
-              <div className="h-px bg-[var(--border-light)] my-2 mx-2"></div>
-              
-              <button 
-                onClick={() => { setShowDnaModal(true); setShowSettingsMenu(false); }}
-                className="w-full text-left px-4 py-3 rounded-xl text-[14px] font-medium hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center gap-3 group"
-              >
-                <div className="p-1.5 rounded-lg bg-[var(--border-light)] group-hover:bg-[var(--border-main)] transition-colors">
-                  <Bot className="w-4 h-4 text-emerald-400" />
-                </div>
-                DNA de Memória
-              </button>
-            </div>
-          )}
         </div>
       </aside>
 
       <main className="main-content flex flex-col h-full w-full bg-[var(--bg-main)]">
         <header className="p-4 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]">
           <div className="flex-1 flex items-center gap-4">
-            <button 
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl transition md:hidden"
-            >
-              <Menu className="w-6 h-6 text-[var(--text-secondary)]" />
-            </button>
+            {!isSidebarOpen && (
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2.5 hover:bg-[var(--bg-chat-hover)] rounded-xl transition-all hover:scale-110 active:scale-90"
+              >
+                <Menu className="w-6 h-6 text-[var(--text-secondary)]" />
+              </button>
+            )}
           </div>
 
           {/* Personality Selector */}
@@ -1315,6 +1419,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                       handleLiveStop();
                       setTimeout(handleLiveStart, 500);
                     }}
+                    isProactiveEnabled={isLiveProactive}
+                    onToggleProactive={() => setIsLiveProactive(!isLiveProactive)}
                     onClose={handleLiveStop}
                   />
                 ) : (
@@ -1383,6 +1489,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 onSetAspectRatio={setAspectRatio}
                 onScrollToBottom={() => scrollToBottom(true, true)}
                 onStop={handleStopGeneration}
+                enabledModelIds={enabledModelIds}
               />
             </>
           )}
@@ -1412,6 +1519,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         <DnaModal 
           memoryFacts={memoryFacts}
           isCategorizing={isCategorizing}
+          progress={categorizationProgress}
           onAutoCategorize={handleAutoCategorize}
           onClose={() => setShowDnaModal(false)}
           onDelete={(id) => {
@@ -1437,6 +1545,23 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           onClose={() => setShowLiveSetupModal(false)}
           onConfirm={confirmLiveStart}
           isConnecting={liveStatus === 'connecting' && isLiveActive}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal 
+          onClose={() => setShowSettingsModal(false)}
+          theme={theme}
+          onSetTheme={setTheme}
+          chatMargin={chatMargin}
+          onSetChatMargin={(m) => {
+            setChatMargin(m);
+            localStorage.setItem('gemoro_chat_margin', m.toString());
+          }}
+          enabledModelIds={enabledModelIds}
+          onSetEnabledModelIds={setEnabledModelIds}
+          onOpenPersonalities={() => setShowPersonalitiesModal(true)}
+          onOpenDna={() => setShowDnaModal(true)}
         />
       )}
       {isSidebarOpen && (

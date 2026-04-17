@@ -34,6 +34,59 @@ marked.use(markedKatex({
 }));
 
 
+export function extractAndParseJson(text: string): any {
+  if (!text) return null;
+  
+  let cleaned = text.trim();
+  
+  // 1. Remove markdown code blocks if present
+  if (cleaned.includes("```")) {
+    cleaned = cleaned.replace(/```json|```/g, "").trim();
+  }
+
+  // 2. Find the first [ or { and the last ] or }
+  const firstBrace = cleaned.indexOf('{');
+  const firstBracket = cleaned.indexOf('[');
+  const lastBrace = cleaned.lastIndexOf('}');
+  const lastBracket = cleaned.lastIndexOf(']');
+
+  let start = -1;
+  let end = -1;
+
+  // Decide if we are looking for an object or an array
+  if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+    start = firstBracket;
+    end = lastBracket;
+  } else if (firstBrace !== -1) {
+    start = firstBrace;
+    end = lastBrace;
+  }
+
+  if (start === -1 || end === -1) {
+    throw new Error("Não foi possível encontrar uma estrutura JSON válida na resposta.");
+  }
+
+  const jsonStr = cleaned.substring(start, end + 1);
+  
+  try {
+    // Attempt standard parse first
+    return JSON.parse(jsonStr);
+  } catch (e: any) {
+    console.warn("JSON.parse falhou, tentando limpeza agressiva...", e.message);
+    
+    // Attempt 3: Fix trailing commas and other common issues using a simpler approach
+    try {
+      const fixedJson = jsonStr
+        .replace(/,\s*([\]}])/g, '$1') // Remove trailing commas
+        .replace(/\\n/g, "\\n")      // Ensure newlines are escaped correctly
+        .replace(/\\'/g, "'");        // Fix unescaped single quotes
+      return JSON.parse(fixedJson);
+    } catch (e2) {
+      throw e; // Throw original error if cleanup fails
+    }
+  }
+}
+
 export function safeMarkdown(content: string): string {
   if (typeof content !== 'string') return "";
 
@@ -94,7 +147,8 @@ export async function* streamGeminiContent(
   files: { mimeType: string; data: string }[] = [],
   webSearch: boolean = false,
   signal?: AbortSignal,
-  thinking: boolean = false
+  thinking: boolean = false,
+  jsonMode: boolean = false
 ): AsyncGenerator<{
   text?: string;
   thoughts?: string;
@@ -122,7 +176,8 @@ export async function* streamGeminiContent(
     contents: [...history, { role: "user", parts: currentParts }],
     generationConfig: {
       maxOutputTokens: 8192,
-      temperature: 0.7
+      temperature: 0.7,
+      ...(jsonMode ? { response_mime_type: "application/json" } : {})
     }
   };
 
@@ -264,9 +319,10 @@ export async function generateGeminiContent(
   systemInstruction?: string,
   files: any[] = [],
   webSearch: boolean = false,
-  thinking: boolean = false
+  thinking: boolean = false,
+  jsonMode: boolean = false
 ) {
-  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, undefined, thinking);
+  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, undefined, thinking, jsonMode);
   let fullText = "", fullThoughts = "", isGrounded = false, usage: any = null;
 
   for await (const chunk of gen) {
@@ -338,9 +394,9 @@ export async function performFactCheck(text: string): Promise<FactCheckResult[]>
 
   try {
     const res = await generateGeminiContent(prompt, model, [], "Você é um checador de fatos rigoroso da Reuters.", [], true);
-    const jsonMatch = res.text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    const sanitized = extractAndParseJson(res.text);
+    if (Array.isArray(sanitized)) {
+      return sanitized;
     }
     return [];
   } catch (e) {

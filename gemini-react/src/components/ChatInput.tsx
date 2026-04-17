@@ -39,6 +39,7 @@ interface ChatInputProps {
   onSetImagenModel: (id: string) => void;
   onSetAspectRatio: (ratio: '1:1' | '9:16' | '16:9') => void;
   onScrollToBottom: () => void;
+  enabledModelIds: string[];
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
@@ -65,7 +66,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onSetModel,
   onSetImagenModel,
   onSetAspectRatio,
-  onScrollToBottom
+  onScrollToBottom,
+  enabledModelIds
 }) => {
   const [input, setInput] = useState('');
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
@@ -281,7 +283,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 
                 {isModelMenuOpen && (
                   <div className="absolute bottom-[115%] right-0 bg-[var(--bg-sidebar)] shadow-2xl rounded-2xl py-2 min-w-64 z-50 overflow-hidden flex flex-col items-start origin-bottom-right animate-in fade-in zoom-in-95 duration-200">
-                    {MODEL_OPTIONS.map(opt => (
+                    {MODEL_OPTIONS.filter(opt => enabledModelIds.includes(opt.id)).map(opt => (
                       <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'bg-blue-500/10' : ''}`}>
                         <div className="flex items-center gap-2">
                           <span className="text-[13px] font-medium text-[var(--text-primary)]">{opt.name}</span>
