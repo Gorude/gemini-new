@@ -16,9 +16,9 @@ interface SortableChatItemProps {
   onEditTitleChange: (val: string) => void;
   onRenameConfirm: (id: string) => void;
   onToggleMenu: (id: string) => void;
-  onTogglePin: (e: any, id: string) => void;
+  onTogglePin: (e: React.MouseEvent, id: string) => void;
   onArchive: (id: string) => void;
-  onDelete: (e: any, id: string) => void;
+  onDelete: (e: React.MouseEvent, id: string) => void;
   onSetEditingId: (id: string, title: string) => void;
 }
 
@@ -30,7 +30,6 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
   menuOpenId,
   isLocked,
   onSelect,
-  onRename,
   onEditTitleChange,
   onRenameConfirm,
   onToggleMenu,
@@ -121,7 +120,7 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
             <Pin className="w-4 h-4 opacity-60" /> {chat.pinned ? 'Desafixar' : 'Fixar'}
           </button>
           <button 
-            onClick={(e) => { onArchive(chat.id); onToggleMenu(''); }} 
+            onClick={() => { onArchive(chat.id); onToggleMenu(''); }} 
             className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
           >
             <Archive className="w-4 h-4 opacity-60" /> Arquivar

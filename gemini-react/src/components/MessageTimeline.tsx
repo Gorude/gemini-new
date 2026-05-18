@@ -11,7 +11,6 @@ interface MessageTimelineProps {
 const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMessage, activeId }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [popupPos, setPopupPos] = useState({ top: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -36,10 +35,8 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
     return clean.length > length ? clean.substring(0, length) + '...' : clean;
   };
 
-  const handleItemHover = (e: React.MouseEvent, id: string) => {
+  const handleItemHover = (id: string) => {
     setHoveredId(id);
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setPopupPos({ top: rect.top });
   };
 
   if (validMessages.length < 2) return null;
@@ -90,7 +87,7 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
               key={msg.id}
               data-msg-id={msg.id}
               className={`group flex items-center justify-end gap-3 cursor-pointer transition-all duration-300 py-1 rounded-lg shrink-0 ${hoveredId === msg.id || activeId === msg.id ? 'bg-white/5' : ''}`}
-              onMouseEnter={(e) => handleItemHover(e, msg.id)}
+              onMouseEnter={() => handleItemHover(msg.id)}
               onClick={() => onJumpToMessage(msg.id)}
             >
               {/* Texto do Nível 1 */}

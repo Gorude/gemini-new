@@ -18,8 +18,8 @@ if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 function chatHistoryApi() {
   return {
     name: 'chat-history-api',
-    configureServer(server: any) {
-      server.middlewares.use((req: any, res: any, next: any) => {
+    configureServer(server: import('vite').ViteDevServer) {
+      server.middlewares.use((req: import('http').IncomingMessage, res: import('http').ServerResponse, next: () => void) => {
         if (req.url === '/api/history' && req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json')
           if (fs.existsSync(chatFile)) {
@@ -95,7 +95,7 @@ function chatHistoryApi() {
               const buffer = Buffer.from(payload.data, 'base64')
               fs.writeFileSync(path.join(uploadsDir, payload.filename), buffer)
               res.end(JSON.stringify({ success: true, path: '/uploads/' + payload.filename }))
-            } catch (e) {
+            } catch {
               res.end(JSON.stringify({ error: true }))
             }
           })

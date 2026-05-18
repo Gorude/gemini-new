@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import markedKatex from 'marked-katex-extension';
+import { logger } from './logger';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.min.css';
 import 'katex/dist/katex.min.css';
@@ -208,16 +209,61 @@ export async function* streamGeminiContent(
     };
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal
-  });
+  // API REQUEST LOGGING
+  logger.addLog('api-request', `Request: ${model}`, { url, payload });
 
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.error?.message || `Erro na API: ${response.status}`);
+  const maxRetries = 5;
+  let attempt = 0;
+  let response: Response | null = null;
+  let lastError: Error | null = null;
+
+  while (attempt < maxRetries) {
+    attempt++;
+    try {
+      if (attempt > 1) {
+        logger.addLog('warn', `Tentando reconectar com a API (${attempt}/${maxRetries})...`);
+      }
+      
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal
+      });
+
+      if (res.ok) {
+        response = res;
+        break;
+      } else {
+        const errorBody = await res.json().catch(() => ({}));
+        const errMsg = errorBody.error?.message || `Erro na API: ${res.status}`;
+        
+        // Se for um erro do servidor (>= 500), faremos nova tentativa com backoff exponencial
+        if (res.status >= 500) {
+          logger.addLog('warn', `Erro transiente da API (${res.status}): ${errMsg}. Nova tentativa em ${attempt * 1000}ms...`);
+          lastError = new Error(errMsg);
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          continue;
+        } else {
+          // Erros de cliente (400, 403, etc.) não devem ser retentados pois são definitivos
+          logger.addLog('api-error', `Erro definitivo de cliente (${res.status}): ${errMsg}`, { error: errMsg });
+          throw new Error(errMsg);
+        }
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw err; // Requisição abortada manualmente pelo usuário
+      }
+      logger.addLog('warn', `Falha de rede/conexão: ${err.message}. Nova tentativa em ${attempt * 1000}ms...`);
+      lastError = err;
+      await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+    }
+  }
+
+  if (!response) {
+    const errMsg = lastError?.message || "Conexão com a API esgotada após várias tentativas.";
+    logger.addLog('api-error', `API Connection Exhausted after ${maxRetries} attempts`, { error: errMsg });
+    throw new Error(errMsg);
   }
 
   const reader = response.body?.getReader();
@@ -225,6 +271,11 @@ export async function* streamGeminiContent(
 
   const decoder = new TextDecoder();
   let buffer = "";
+
+  let accumulatedText = "";
+  let accumulatedThoughts = "";
+  const accumulatedSources: { title: string; uri: string }[] = [];
+  let finalUsage: any = null;
 
   try {
     while (true) {
@@ -277,6 +328,17 @@ export async function* streamGeminiContent(
                 }
               });
 
+              accumulatedText += chunkText;
+              accumulatedThoughts += chunkThoughts;
+              chunkSources.forEach(src => {
+                if (!accumulatedSources.some(s => s.uri === src.uri)) {
+                  accumulatedSources.push(src);
+                }
+              });
+              if (json.usageMetadata) {
+                finalUsage = json.usageMetadata;
+              }
+
               yield {
                 text: chunkText,
                 thoughts: chunkThoughts,
@@ -308,6 +370,15 @@ export async function* streamGeminiContent(
     }
   } finally {
     reader.releaseLock();
+    // API RESPONSE LOGGING
+    logger.addLog('api-response', `Response: ${model} completed`, {
+      response: {
+        text: accumulatedText,
+        thoughts: accumulatedThoughts,
+        sources: accumulatedSources,
+        usage: finalUsage
+      }
+    });
   }
 }
 
@@ -376,10 +447,14 @@ export async function generateImagenContent(
 
 export async function performFactCheck(text: string): Promise<FactCheckResult[]> {
   const model = "gemma-4-31b-it";
-  const prompt = `Analise o texto a seguir e REALIZE UMA PESQUISA NA WEB para verificar cada afirmação de fato contida nela.
+  const prompt = `Analise o texto a seguir e REALIZE PESQUISAS NA WEB (usando a ferramenta google_search) para verificar cada afirmação de fato.
   
   TEXTO PARA CHECAGEM:
   "${text}"
+  
+  INSTRUÇÕES OBRIGATÓRIAS DE PESQUISA:
+  - Você DEVE planejar e chamar a ferramenta 'google_search' para coletar fatos e links reais e atualizados sobre o texto acima.
+  - Não responda nada de cabeça ou sem basear sua resposta em fontes retornadas pela busca.
   
   MISSÃO:
   1. Decompunha o texto em segmentos que contêm afirmações factuais (datas, nomes, leis, eventos, descobertas, etc).
@@ -394,7 +469,12 @@ export async function performFactCheck(text: string): Promise<FactCheckResult[]>
   - Responda APENAS o JSON.`;
 
   try {
-    const res = await generateGeminiContent(prompt, model, [], "Você é um checador de fatos rigoroso da Reuters.", [], true);
+    const systemInstruction = 
+      "Você é um checador de fatos rigoroso da Reuters. " +
+      "Você DEVE OBRIGATORIAMENTE realizar pesquisas no Google (usando a ferramenta 'google_search') para validar cada afirmação no texto. " +
+      "Não faça conjecturas e não responda baseando-se apenas em seu conhecimento interno de treinamento.";
+
+    const res = await generateGeminiContent(prompt, model, [], systemInstruction, [], true);
     const sanitized = extractAndParseJson(res.text);
     if (Array.isArray(sanitized)) {
       return sanitized;

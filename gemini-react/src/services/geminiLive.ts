@@ -231,7 +231,6 @@ export class GeminiLiveSession {
     // Normalizar chaves (Suporte a camelCase e snake_case recebidos)
     const serverContent = msg.serverContent || msg.server_content;
     const modelTurn = serverContent?.modelTurn || serverContent?.model_turn;
-    const transcription = serverContent?.inputTranscription || serverContent?.input_transcription || serverContent?.outputTranscription || serverContent?.output_transcription;
 
     // Tratar áudio de saída da IA (inlineData ou inline_data) e thoughts
     if (modelTurn?.parts) {

@@ -1,7 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import { 
-  Pin, 
-  Edit2, 
   Archive, 
   Trash2, 
   ChevronDown, 
@@ -11,13 +9,11 @@ import {
   Menu,
   Search,
   SquarePen,
-  MoreVertical,
   Activity,
   Zap,
   BarChart2,
   User,
   Files,
-  Palette,
   MessageSquare,
   RotateCcw
 } from 'lucide-react';
@@ -35,10 +31,9 @@ import {
   KeyboardSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
-  DragStartEvent,
-  DragOverlay,
-  defaultDropAnimationSideEffects
+  type DragEndEvent,
+  type DragStartEvent,
+  DragOverlay
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -47,8 +42,7 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { 
-  restrictToVerticalAxis,
-  restrictToParentElement 
+  restrictToVerticalAxis
 } from '@dnd-kit/modifiers';
 import { Lock, Unlock, GripVertical } from 'lucide-react';
 
@@ -84,11 +78,12 @@ import PersonalitiesModal from './components/PersonalitiesModal';
 import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
 import SelectionPopup from './components/SelectionPopup';
+import { logger } from './services/logger';
+import LogWindow from './components/LogWindow';
 
 import SettingsModal from './components/SettingsModal';
 import { 
-  MODEL_LIMITS,
-  MODEL_OPTIONS
+  MODEL_LIMITS
 } from './constants';
 
 const getPacificDate = () => {
@@ -99,6 +94,8 @@ const getPacificDate = () => {
     day: '2-digit' 
   }).format(new Date());
 };
+
+let isLoggerInitialized = false;
 
 function App() {
   const [chats, setChats] = useState<ChatSession[]>([]);
@@ -121,7 +118,7 @@ function App() {
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {}
+      } catch { /* ignore */ }
     }
     return ['gemma-4-31b-it', 'gemini-3-flash-preview'];
   });
@@ -140,7 +137,7 @@ function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.date === today) return parsed;
-      } catch (e) {}
+      } catch { /* ignore */ }
     }
     return { date: today, models: {} };
   });
@@ -163,7 +160,6 @@ function App() {
   });
   const [showPersonalitiesModal, setShowPersonalitiesModal] = useState(false);
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
-  const [showThemeSubMenu, setShowThemeSubMenu] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'chat' | 'files'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -193,6 +189,57 @@ function App() {
       }
     };
     fetchUsage();
+  }, []);
+
+  // INTERCEPTAR EVENTOS DO CONSOLE E EXCEÇÕES GLOBAIS
+  useEffect(() => {
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    console.log = (...args: any[]) => {
+      originalLog.apply(console, args);
+      const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+      logger.addLog('info', message);
+    };
+
+    console.warn = (...args: any[]) => {
+      originalWarn.apply(console, args);
+      const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+      logger.addLog('warn', message);
+    };
+
+    console.error = (...args: any[]) => {
+      originalError.apply(console, args);
+      const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+      logger.addLog('error', message);
+    };
+
+    const handleGlobalError = (event: ErrorEvent) => {
+      logger.addLog('error', `Erro Global: ${event.message} em ${event.filename}:${event.lineno}`);
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message = reason instanceof Error ? reason.message : String(reason);
+      logger.addLog('error', `Rejeição de Promise Não Tratada: ${message}`, { reason });
+    };
+
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    if (!isLoggerInitialized) {
+      logger.addLog('info', 'Sistema de rastreamento de logs ativado.');
+      isLoggerInitialized = true;
+    }
+
+    return () => {
+      console.log = originalLog;
+      console.warn = originalWarn;
+      console.error = originalError;
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
   }, []);
 
   useEffect(() => {
@@ -236,6 +283,7 @@ function App() {
   const lastLiveActivityRef = useRef<number>(Date.now());
 
   const resetProactivityState = useCallback((reason: string) => {
+    console.log("[PROATIVIDADE] Resetando estado de proatividade. Motivo:", reason);
     // Apenas resetamos se estivermos ativos e com proatividade ligada
     setProactiveIdleCount(0);
     lastLiveActivityRef.current = Date.now();
@@ -268,7 +316,7 @@ function App() {
   const chatWindowRef = useRef<HTMLElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentAiMsgIdRef = useRef<string | null>(null);
-  const timerIntervalRef = useRef<any>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!isLiveActive || !isLiveProactive) {
@@ -306,7 +354,7 @@ function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isLiveActive, isLiveProactive, proactiveIdleCount]);
+  }, [isLiveActive, isLiveProactive, proactiveIdleCount, isLiveSpeaking]);
 
   const handleAutoCategorize = useCallback(async () => {
     if (memoryFacts.length === 0) return;
@@ -317,7 +365,7 @@ function App() {
     
     // Configurações de lote (batching) para garantir estabilidade JSON
     const CHUNK_SIZE = 15;
-    const chunks: any[][] = [];
+    const chunks: MemoryFact[][] = [];
     for (let i = 0; i < memoryFacts.length; i += CHUNK_SIZE) {
       chunks.push(memoryFacts.slice(i, i + CHUNK_SIZE));
     }
@@ -358,7 +406,7 @@ function App() {
                 return {
                   ...fact,
                   category: update.c || fact.category,
-                  connections: Array.isArray(update.n) ? update.n.filter(id => id !== fact.id) : fact.connections,
+                  connections: Array.isArray(update.n) ? update.n.filter((id: string) => id !== fact.id) : fact.connections,
                   timestamp: Date.now()
                 };
               }
@@ -392,7 +440,7 @@ function App() {
   }, [memoryFacts]);
 
   const activeChat = chats.find(c => c.id === activeChatId);
-  const messages = activeChat?.messages || [];
+  const messages = useMemo(() => activeChat?.messages || [], [activeChat]);
 
   // Load Initial Data
   useEffect(() => {
@@ -411,14 +459,14 @@ function App() {
           }
         }
         if (memoryRes.ok) {
-          const memoryData: any = await memoryRes.json();
+          const memoryData = (await memoryRes.json()) as Array<string | MemoryFact>;
           if (Array.isArray(memoryData)) {
             if (memoryData.length > 0 && typeof memoryData[0] === 'string') {
               // Automatic Migration to DNA 2.0
               console.log("Iniciando migração para DNA 2.0... Total de fatos: ", memoryData.length);
               const migrationPrompt = `Você é um sistema de migração de dados. Converta a seguinte lista de fatos (strings) em um JSON estruturado com o formato: { id: string, text: string, category: string, connections: string[] (IDs de fatos relacionados), timestamp: number }.
               As categorias devem ser geradas dinamicamente (ex: Pessoal, Profissional, Hardware, Preferências). 
-              LISTA DE FATOS:\n${memoryData.join('\n')}`;
+              LISTA DE FATOS:\n${(memoryData as string[]).join('\n')}`;
               
               try {
                 const res = await generateGeminiContent(migrationPrompt, 'gemma-4-31b-it', [], "Responda APENAS com o JSON cru contendo um array de objetos.");
@@ -435,7 +483,7 @@ function App() {
                 }
               } catch (e) {
                 console.error("Falha na migração com IA, executando fallback local para restaurar visibilidade:", e);
-                const fallback = memoryData.map((f: string) => ({ 
+                const fallback = (memoryData as string[]).map((f: string) => ({ 
                   id: uuidv4(), 
                   text: f, 
                   category: 'Diversos', 
@@ -447,7 +495,7 @@ function App() {
                 console.log("Memórias restauradas em modo de compatibilidade (Diversos).");
               }
             } else {
-              setMemoryFacts(memoryData);
+              setMemoryFacts(memoryData as MemoryFact[]);
             }
           }
         }
@@ -470,7 +518,7 @@ function App() {
                     body: saved 
                   });
                 }
-              } catch (e) {}
+              } catch { /* ignore */ }
             }
           }
         }
@@ -581,7 +629,57 @@ function App() {
     }
   }, []);
 
-  const executeAIRequest = useCallback(async (targetChatId: string, userText: string, filesToSend: PendingFile[], apiHistory: any[], isFirstMessage: boolean, replaceId?: string) => {
+  const parseMemoryTags = useCallback((str: string) => {
+    let newMemories = [...memoryFacts];
+    let hasMemoryUpdates = false;
+    const memoryTagRegex = /<MEMORY(?:\s+category=['"]([^'"]*)['"])?(?:\s+connections=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/MEMORY>/g;
+    const updateTagRegex = /<UPDATE_MEMORY\s+id=['"]([^'"]*)['"](?:\s+category=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/UPDATE_MEMORY>/g;
+    const deleteTagRegex = /<DELETE_MEMORY\s+id=['"]([^'"]*?)['"]\s*\/>/g;
+
+    let match;
+    // Adicionar
+    while ((match = memoryTagRegex.exec(str)) !== null) {
+      const categoryValue = match[1] || 'Diversos';
+      const connectionsValue = match[2] ? match[2].split(',').map(s => s.trim()) : [];
+      const textValue = match[3].trim();
+      newMemories.push({ id: uuidv4(), text: textValue, category: categoryValue, connections: connectionsValue, timestamp: Date.now() });
+      hasMemoryUpdates = true;
+    }
+    // Deletar
+    while ((match = deleteTagRegex.exec(str)) !== null) {
+      const idValue = match[1];
+      newMemories = newMemories.filter((m: MemoryFact) => m.id !== idValue);
+      hasMemoryUpdates = true;
+    }
+    // Atualizar
+    while ((match = updateTagRegex.exec(str)) !== null) {
+      const idValue = match[1];
+      const categoryValue = match[2];
+      const textValue = match[3].trim();
+      newMemories = newMemories.map((mValue: MemoryFact) => mValue.id === idValue ? { ...mValue, text: textValue, category: categoryValue || mValue.category, timestamp: Date.now() } : mValue);
+      hasMemoryUpdates = true;
+    }
+
+    if (hasMemoryUpdates) {
+      setMemoryFacts(newMemories);
+      fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newMemories) });
+    }
+
+    return str
+      .replace(memoryTagRegex, '')
+      .replace(updateTagRegex, '')
+      .replace(deleteTagRegex, '')
+      .trim();
+  }, [memoryFacts]);
+
+  const executeAIRequest = useCallback(async (
+    targetChatId: string, 
+    userText: string, 
+    filesToSend: PendingFile[], 
+    apiHistory: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }>, 
+    isFirstMessage: boolean, 
+    replaceId?: string
+  ) => {
     setIsLoading(true);
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -608,7 +706,7 @@ function App() {
         const elapsed = (performance.now() - startTime) / 1000;
         setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
           ...c,
-          messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { ...m, duration: elapsed } : m)
+          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { ...m, duration: elapsed } : m)
         } : c));
       }, 100);
 
@@ -630,7 +728,7 @@ function App() {
           
           setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
             ...c,
-            messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { 
+            messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
               ...m, 
               text: `Gerei esta imagem para você usando **${imagenModel}**:`, 
               files: [{ name: 'generated_image.png', mimeType: res.mimeType, data: res.data }],
@@ -640,15 +738,15 @@ function App() {
           
           setIsLoading(false);
           return;
-        } catch (imgError: any) {
-          throw new Error(`Erro na geração de imagem: ${imgError.message}`);
+        } catch (imgError: unknown) {
+          throw new Error(`Erro na geração de imagem: ${imgError instanceof Error ? imgError.message : String(imgError)}`);
         }
       }
 
       const stream = streamGeminiContent(userText, model, apiHistory, systemInstruction, filesToSend, webSearchEnabled, controller.signal, thinkingEnabled);
       let fullText = "";
       let fullThoughts = "";
-      let allSources: { title: string; uri: string }[] = [];
+      const allSources: { title: string; uri: string }[] = [];
       let isSearching = webSearchEnabled;
       let isGrounded = false;
       let finalUsage = null;
@@ -692,7 +790,7 @@ function App() {
 
         setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
           ...c,
-          messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { 
+          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
             ...m, 
             text: currentCleanText, 
             thoughts: streamingThoughts.trim(), 
@@ -707,7 +805,7 @@ function App() {
       if (finalUsage) {
         setDailyUsage((prev: DailyUsage) => {
           const today = getPacificDate();
-          let state = prev.date === today ? prev : { date: today, models: {} };
+          const state = prev.date === today ? prev : { date: today, models: {} };
           const modelData = state.models[model] || { requests: 0, tokens: { prompt: 0, candidates: 0, total: 0 } };
           const newState: DailyUsage = {
             ...state,
@@ -745,7 +843,7 @@ function App() {
         // Mostrar estado temporário amigável
         setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
           ...c,
-          messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { ...m, text: "_Finalizando resposta baseada no raciocínio..._", thoughts: finalThoughts.trim() } : m)
+          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { ...m, text: "_Finalizando resposta baseada no raciocínio..._", thoughts: finalThoughts.trim() } : m)
         } : c));
 
         try {
@@ -768,7 +866,7 @@ function App() {
 
       setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { 
         ...c, 
-        messages: c.messages.map((m: any) => m.id === currentAiMsgId ? { 
+        messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
           ...m, 
           text: finalCleanText, 
           thoughts: finalThoughts.trim(),
@@ -797,9 +895,9 @@ function App() {
           setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: userText.substring(0, 25)+'...', isNaming: false } : c));
         });
       }
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
-      const errorMsg: Message = { id: Date.now().toString(), role: 'ai', text: `**[Erro]:** ${error.message}` };
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      const errorMsg: Message = { id: Date.now().toString(), role: 'ai', text: `**[Erro]:** ${error instanceof Error ? error.message : String(error)}` };
       setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, messages: [...c.messages, errorMsg] } : c));
     } finally {
       if (timerIntervalRef.current) {
@@ -810,7 +908,7 @@ function App() {
       abortControllerRef.current = null;
       currentAiMsgIdRef.current = null;
     }
-  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, scrollToBottom, personalities, selectedPersonalityId]);
+  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, selectedPersonalityId, parseMemoryTags]);
 
   const handleStopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -899,48 +997,6 @@ function App() {
     executeAIRequest(activeChatId, contextualPrompt, [], apiHistory, false);
   }, [activeChatId, chats, executeAIRequest]);
 
-  const parseMemoryTags = useCallback((str: string) => {
-    let newMemories = [...memoryFacts];
-    let hasMemoryUpdates = false;
-    const memoryTagRegex = /<MEMORY(?:\s+category=['"]([^'"]*)['"])?(?:\s+connections=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/MEMORY>/g;
-    const updateTagRegex = /<UPDATE_MEMORY\s+id=['"]([^'"]*)['"](?:\s+category=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/UPDATE_MEMORY>/g;
-    const deleteTagRegex = /<DELETE_MEMORY\s+id=['"]([^'"]*?)['"]\s*\/>/g;
-
-    let match;
-    // Adicionar
-    while ((match = memoryTagRegex.exec(str)) !== null) {
-      const categoryValue = match[1] || 'Diversos';
-      const connectionsValue = match[2] ? match[2].split(',').map(s => s.trim()) : [];
-      const textValue = match[3].trim();
-      newMemories.push({ id: uuidv4(), text: textValue, category: categoryValue, connections: connectionsValue, timestamp: Date.now() });
-      hasMemoryUpdates = true;
-    }
-    // Deletar
-    while ((match = deleteTagRegex.exec(str)) !== null) {
-      const idValue = match[1];
-      newMemories = newMemories.filter((m: MemoryFact) => m.id !== idValue);
-      hasMemoryUpdates = true;
-    }
-    // Atualizar
-    while ((match = updateTagRegex.exec(str)) !== null) {
-      const idValue = match[1];
-      const categoryValue = match[2];
-      const textValue = match[3].trim();
-      newMemories = newMemories.map((mValue: MemoryFact) => mValue.id === idValue ? { ...mValue, text: textValue, category: categoryValue || mValue.category, timestamp: Date.now() } : mValue);
-      hasMemoryUpdates = true;
-    }
-
-    if (hasMemoryUpdates) {
-      setMemoryFacts(newMemories);
-      fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newMemories) });
-    }
-
-    return str
-      .replace(memoryTagRegex, '')
-      .replace(updateTagRegex, '')
-      .replace(deleteTagRegex, '')
-      .trim();
-  }, [memoryFacts]);
 
   const handleLiveStart = useCallback(() => {
     setShowLiveSetupModal(true);
@@ -1031,7 +1087,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         if (ctx.state === 'suspended') ctx.resume();
 
         const buffer = ctx.createBuffer(1, chunk.length, 24000);
-        buffer.copyToChannel(chunk as any, 0);
+        buffer.copyToChannel(chunk as unknown as Float32Array<ArrayBuffer>, 0);
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(analyserNode);
@@ -1062,7 +1118,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     liveSessionRef.current = session;
     await session.start();
-  }, [activeChatId, personalities, selectedPersonalityId, liveVoice, memoryFacts, handleLiveStop, parseMemoryTags]);
+  }, [activeChatId, personalities, selectedPersonalityId, liveVoice, memoryFacts, handleLiveStop, parseMemoryTags, proactiveIdleCount, resetProactivityState]);
 
   const handleToggleCamera = useCallback(async () => {
     if (!liveSessionRef.current) return;
@@ -1074,7 +1130,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         await liveSessionRef.current.startCamera();
         setLiveVisionType('camera');
       }
-    } catch (err) {
+    } catch {
       alert("Não foi possível acessar a câmera.");
     }
   }, [liveVisionType]);
@@ -1089,7 +1145,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         await liveSessionRef.current.startScreen();
         setLiveVisionType('screen');
       }
-    } catch (err) {
+    } catch {
       alert("Não foi possível compartilhar a tela.");
     }
   }, [liveVisionType]);
@@ -1097,7 +1153,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   const handleInterruptLive = useCallback(() => {
     // Parar todos os nós de áudio ativos e agendados
     activeSourcesRef.current.forEach(source => {
-      try { source.stop(); } catch(e) {}
+      try { source.stop(); } catch { /* ignore */ }
     });
     activeSourcesRef.current.clear();
     setIsLiveSpeaking(false);
@@ -1139,7 +1195,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }));
 
     executeAIRequest(targetId, text, files, apiHistory, isFirst);
-  }, [activeChatId, activeChat, executeAIRequest, isLiveActive]);
+  }, [activeChatId, activeChat, executeAIRequest, isLiveActive, resetProactivityState]);
 
   const handleScroll = useCallback(() => {
     if (chatWindowRef.current) {
@@ -1181,7 +1237,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         return {
           ...chat,
           messages: chat.messages.map(m => 
-            m.id === msgId ? { ...m, isFactChecking: true } : m
+            m.id === msgId ? { ...m, isVerifying: true } : m
           )
         };
       }
@@ -1221,7 +1277,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
   }, [activeChat, activeChatId]);
 
-  const handleDeleteChat = useCallback((e: any, id: string) => { 
+  const handleDeleteChat = useCallback((e: React.MouseEvent, id: string) => { 
     e.stopPropagation(); 
     if (confirm("Deseja excluir esta conversa para sempre?")) {
       setChats(p => p.filter(c => c.id !== id));
@@ -1229,12 +1285,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
   }, [activeChatId]);
 
-  const handleToggleArchive = useCallback((e: any, id: string) => { 
-    e.stopPropagation(); 
-    setChats(p => p.map(c => c.id === id ? {...c, archived: !c.archived} : c)); 
-  }, []);
-
-  const handleTogglePin = useCallback((e: any, id: string) => {
+  const handleTogglePin = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     setChats(p => p.map(c => c.id === id ? { ...c, pinned: !c.pinned } : c));
   }, []);
@@ -1717,7 +1768,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onSetEditingMsgText={setEditingMsgText}
                     onCancelEdit={() => setEditingMsgId(null)}
                     onRegenerate={handleRegenerate}
-                    onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: any) => m.id !== id)} : c))}
+                    onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: Message) => m.id !== id)} : c))}
                     onCopy={(text, id) => { 
                       let finalOutput = text;
                       if (!id.endsWith('-md')) {
@@ -1874,6 +1925,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] md:hidden animate-in fade-in duration-300"
         ></div>
       )}
+      <LogWindow />
     </div>
   );
 }

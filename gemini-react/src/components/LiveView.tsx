@@ -98,6 +98,7 @@ const LiveView: React.FC<LiveViewProps> = ({
   analyser,
   visionType,
   videoStream,
+  onVoiceChange,
   onToggleCamera,
   onToggleScreen,
   isProactiveEnabled,
