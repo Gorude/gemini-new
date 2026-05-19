@@ -1,1 +1,1 @@
-{"date":"2026-05-19","models":{"gemma-4-31b-it":{"requests":2,"tokens":{"prompt":113696,"candidates":1475,"total":115639}}}}
+{"date":"2026-05-19","models":{"gemma-4-31b-it":{"requests":10,"tokens":{"prompt":570427,"candidates":6992,"total":581142}}}}

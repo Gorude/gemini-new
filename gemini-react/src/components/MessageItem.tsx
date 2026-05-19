@@ -66,6 +66,41 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   const [verifySeconds, setVerifySeconds] = React.useState(0);
   const [isTimerHovered, setIsTimerHovered] = React.useState(false);
 
+  const [isVisible, setIsVisible] = React.useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const heightRef = React.useRef<number>(120);
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.height > 0) {
+          heightRef.current = entry.target.getBoundingClientRect().height;
+        }
+      }
+    });
+    resizeObserver.observe(el);
+
+    const intersectionObserver = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+      },
+      {
+        root: null,
+        rootMargin: '600px 0px 600px 0px',
+        threshold: 0
+      }
+    );
+    intersectionObserver.observe(el);
+
+    return () => {
+      resizeObserver.disconnect();
+      intersectionObserver.disconnect();
+    };
+  }, []);
+
   React.useEffect(() => {
     let interval: any = null;
     if (msg.isVerifying) {
@@ -99,10 +134,65 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
       );
     }
   };
+
+  const parsedHtml = React.useMemo(() => {
+    if (!msg.text) return "";
+    
+    if (msg.text.includes('❌ **Erro:**')) {
+      return safeMarkdown(msg.text.replace('❌', '').trim());
+    }
+
+    if (msg.factCheckResults && msg.factCheckResults.length > 0) {
+      let textWithMarkers = msg.text;
+      const markers: Record<string, string> = {};
+      
+      const sortedResults = [...msg.factCheckResults].sort((a, b) => b.segment.length - a.segment.length);
+      
+      sortedResults.forEach((res, i) => {
+        const markerId = `FACTCHECKMARKER${i}`;
+        const escapedSegment = res.segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const flexibleRegex = new RegExp(escapedSegment.split('\\ ').join('\\s+'), 'g');
+        
+        if (flexibleRegex.test(textWithMarkers)) {
+          const className = res.isVerified ? 'fact-verified' : 'fact-unverified';
+          const sourceLink = res.isVerified && res.sourceUrl 
+            ? `<a href="${res.sourceUrl}" target="_blank" class="fact-link" title="Ver fonte original">🔗</a>` 
+            : '';
+          
+          markers[markerId] = `<span class="${className}" title="${res.explanation || ''}">${res.segment}${sourceLink}</span>`;
+          textWithMarkers = textWithMarkers.replace(flexibleRegex, markerId);
+        }
+      });
+
+      let finalHtml = safeMarkdown(textWithMarkers);
+      
+      Object.entries(markers).forEach(([id, htmlCode]) => {
+        finalHtml = finalHtml.split(id).join(htmlCode);
+      });
+      
+      return finalHtml;
+    }
+
+    return safeMarkdown(msg.text);
+  }, [msg.text, msg.factCheckResults]);
+
   const isEditing = editingMsgId === msg.id;
 
+  const forceRender = !msg.text || msg.isSearching || msg.isVerifying || (msg.role === 'ai' && isLoading);
+
+  if (!isVisible && !forceRender && heightRef.current > 0) {
+    return (
+      <div 
+        ref={containerRef}
+        id={`msg-${msg.id}`} 
+        className={`w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'}`}
+        style={{ height: `${heightRef.current}px` }}
+      />
+    );
+  }
+
   return (
-    <div id={`msg-${msg.id}`} className={`group/msg relative flex flex-col w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300`}>
+    <div ref={containerRef} id={`msg-${msg.id}`} className={`group/msg relative flex flex-col w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300 animate-message-entrance`}>
       {/* Context Indicator Line */}
       {isContext && (
         <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-indigo-500/50 opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
@@ -247,7 +337,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 <span className="font-medium">Mostrar Raciocínio</span>
                 <ChevronRight className="w-3 h-3 transition-transform group-open/think:rotate-90" />
               </summary>
-              <div className="thought-content mt-2 pl-3 border-l-2 border-amber-500/30 text-[13px] text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
+              <div className="thought-panel text-[13px] leading-relaxed whitespace-pre-wrap">
                 {msg.thoughts}
               </div>
             </details>
@@ -256,51 +346,13 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           {msg.text.includes('❌ **Erro:**') ? (
              <div className="flex items-center gap-2 text-red-400 bg-red-900/20 p-4 border border-red-500/30 rounded-lg text-sm">
                <AlertCircle className="w-5 h-5 shrink-0" />
-               <div dangerouslySetInnerHTML={{ __html: safeMarkdown(msg.text.replace('❌', '').trim()) }} />
+               <div dangerouslySetInnerHTML={{ __html: parsedHtml }} />
              </div>
           ) : msg.text ? (
             <div 
               onMouseUp={handleMouseUp}
               className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em]"
-              dangerouslySetInnerHTML={{ 
-                __html: msg.factCheckResults && msg.factCheckResults.length > 0 
-                  ? (() => {
-                      let textWithMarkers = msg.text;
-                      const markers: Record<string, string> = {};
-                      
-                      const sortedResults = [...msg.factCheckResults].sort((a, b) => b.segment.length - a.segment.length);
-                      
-                      sortedResults.forEach((res, i) => {
-                        const markerId = `FACTCHECKMARKER${i}`;
-                        // Escape regex characters
-                        const escapedSegment = res.segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        // Usar regex com suporte a múltiplos espaços para maior flexibilidade
-                        const flexibleRegex = new RegExp(escapedSegment.split('\\ ').join('\\s+'), 'g');
-                        
-                        if (flexibleRegex.test(textWithMarkers)) {
-                          const className = res.isVerified ? 'fact-verified' : 'fact-unverified';
-                          const sourceLink = res.isVerified && res.sourceUrl 
-                            ? `<a href="${res.sourceUrl}" target="_blank" class="fact-link" title="Ver fonte original">🔗</a>` 
-                            : '';
-                          
-                          markers[markerId] = `<span class="${className}" title="${res.explanation || ''}">${res.segment}${sourceLink}</span>`;
-                          textWithMarkers = textWithMarkers.replace(flexibleRegex, markerId);
-                        }
-                      });
-
-                      // Converter Markdown
-                      let finalHtml = safeMarkdown(textWithMarkers);
-                      
-                      // Injetar os destaques de volta no HTML final
-                      Object.entries(markers).forEach(([id, htmlCode]) => {
-                        // Usar replaceAll ou split/join para substituir todas as ocorrências do marcador
-                        finalHtml = finalHtml.split(id).join(htmlCode);
-                      });
-                      
-                      return finalHtml;
-                    })()
-                  : safeMarkdown(msg.text) 
-              }}
+              dangerouslySetInnerHTML={{ __html: parsedHtml }}
             />
           ) : null}
 
@@ -416,9 +468,9 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                </div>
              </div>
            ) : (
-             <div className="relative group/user bubble-container">
-               <div className="user-msg text-[var(--text-primary)] shadow-lg px-5 py-3 bg-[var(--bg-user-bubble)] rounded-3xl rounded-tr-sm">{msg.text}</div>
-               <div className="flex items-center gap-3 mt-2 justify-end opacity-0 group-hover/user:opacity-100 transition-opacity">
+              <div className="relative group/user bubble-container">
+                <div className="user-msg text-white shadow-xl">{msg.text}</div>
+                <div className="flex items-center gap-3 mt-2 justify-end opacity-0 group-hover/user:opacity-100 transition-opacity">
                  <button onClick={() => onEditPrompt(msg.id, msg.text)} className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition" title="Editar prompt" >
                    <Edit2 className="w-3.5 h-3.5" />
                  </button>
