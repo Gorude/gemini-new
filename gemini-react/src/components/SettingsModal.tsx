@@ -89,12 +89,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}></div>
       
-      <div className="relative w-full max-w-2xl bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-300 h-[600px]">
+      <div className="relative w-full max-w-2xl glass-modal rounded-[2rem] shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in zoom-in-95 duration-300 h-[600px]">
         
         {/* Sidebar Tabs */}
-        <div className="w-full md:w-64 bg-[var(--bg-main)]/50 border-r border-[var(--border-light)] p-8 flex flex-col gap-8">
+        <div className="w-full md:w-64 bg-[var(--bg-main)]/20 border-r border-[var(--border-light)] p-8 flex flex-col gap-8">
           <div className="flex items-center gap-3 px-2">
-            <div className="p-2 bg-indigo-500 rounded-xl text-white shadow-lg shadow-indigo-500/20">
+            <div className="p-2 bg-indigo-500 rounded-xl text-white shadow-lg shadow-indigo-500/25">
               <Settings size={20} />
             </div>
             <h2 className="text-lg font-bold text-[var(--text-primary)]">Configurações</h2>
@@ -103,19 +103,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           <nav className="flex flex-col gap-2">
             <button 
               onClick={() => setActiveTab('geral')}
-              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeTab === 'geral' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 font-bold' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)]'}`}
+              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 ${activeTab === 'geral' ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] hover:translate-x-1'}`}
             >
               <Layout size={18} /> Geral
             </button>
             <button 
               onClick={() => setActiveTab('modelos')}
-              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeTab === 'modelos' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 font-bold' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)]'}`}
+              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 ${activeTab === 'modelos' ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] hover:translate-x-1'}`}
             >
               <Bot size={18} /> Modelos
             </button>
             <button 
               onClick={() => setActiveTab('avancado')}
-              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeTab === 'avancado' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 font-bold' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)]'}`}
+              className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 ${activeTab === 'avancado' ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] hover:translate-x-1'}`}
             >
               <Shield size={18} /> Avançado
             </button>
@@ -124,13 +124,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <button 
               onClick={() => { onClose(); onOpenPersonalities(); }}
-              className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] group"
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] hover:translate-x-1 group"
             >
               <User size={18} className="text-blue-400 group-hover:scale-110 transition-transform" /> Personalidades
             </button>
             <button 
               onClick={() => { onClose(); onOpenDna(); }}
-              className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] group"
+              className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] hover:translate-x-1 group"
             >
               <Zap size={18} className="text-emerald-400 group-hover:scale-110 transition-transform" /> DNA de Memória
             </button>
@@ -146,7 +146,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Content Area */}
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="p-8 flex justify-between items-center bg-[var(--bg-sidebar)]/50 border-b border-[var(--border-light)]">
+          <header className="p-8 flex justify-between items-center bg-[var(--bg-sidebar)]/30 border-b border-[var(--border-light)] backdrop-blur-md">
             <div>
               <h3 className="text-sm font-black uppercase tracking-[0.2em] text-indigo-500">
                 {activeTab === 'geral' ? 'Preferências de Interface' : activeTab === 'modelos' ? 'Gerenciamento de IA' : 'Configurações Avançadas'}
@@ -155,12 +155,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 {activeTab === 'geral' ? 'Ajuste o visual e o layout do sistema.' : activeTab === 'modelos' ? 'Escolha quais modelos estarão disponíveis no chat.' : 'Configurações de API e Chaves de Acesso.'}
               </p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl text-[var(--text-placeholder)] transition-colors">
+            <button onClick={onClose} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl text-[var(--text-placeholder)] transition-colors hover:scale-105 active:scale-95 duration-200">
               <X size={20} />
             </button>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[var(--bg-sidebar)]/30">
+          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[var(--bg-sidebar)]/10">
             {activeTab === 'geral' && (
               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 
@@ -171,19 +171,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <h4 className="text-sm font-bold">Tema Visual</h4>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {themes.map(t => (
-                      <button 
-                        key={t.id}
-                        onClick={() => onSetTheme(t.id)}
-                        className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${theme === t.id ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400' : 'bg-[var(--bg-main)] border-[var(--border-light)] text-[var(--text-secondary)] hover:border-[var(--border-main)]'}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-4 h-4 rounded-full border border-white/20 shadow-sm" style={{ backgroundColor: t.color }}></div>
-                          <span className="text-xs font-bold uppercase tracking-widest">{t.name}</span>
-                        </div>
-                        {theme === t.id && <Check size={16} />}
-                      </button>
-                    ))}
+                    {themes.map(t => {
+                      const isSelected = theme === t.id;
+                      let shadowClass = '';
+                      if (isSelected) {
+                        if (t.id === 'escuro') shadowClass = 'shadow-[0_0_20px_rgba(99,102,241,0.25)] border-indigo-500 bg-indigo-500/10 text-indigo-400';
+                        else if (t.id === 'claro') shadowClass = 'shadow-[0_0_20px_rgba(79,70,229,0.2)] border-indigo-600 bg-indigo-500/10 text-indigo-600';
+                        else if (t.id === 'areia') shadowClass = 'shadow-[0_0_20px_rgba(180,83,9,0.2)] border-amber-600 bg-amber-500/10 text-amber-700';
+                        else if (t.id === 'galaxia') shadowClass = 'shadow-[0_0_25px_rgba(217,70,239,0.35)] border-pink-500 bg-pink-500/10 text-pink-400';
+                      } else {
+                        shadowClass = 'bg-[var(--bg-main)]/50 border-[var(--border-light)] text-[var(--text-secondary)] hover:border-[var(--border-main)] hover:scale-105';
+                      }
+                      
+                      return (
+                        <button 
+                          key={t.id}
+                          onClick={() => onSetTheme(t.id)}
+                          className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 active:scale-95 ${shadowClass}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 rounded-full border border-white/20 shadow-inner" style={{ backgroundColor: t.color }}></div>
+                            <span className="text-xs font-bold uppercase tracking-widest">{t.name}</span>
+                          </div>
+                          {isSelected && <Check size={16} />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </section>
 
