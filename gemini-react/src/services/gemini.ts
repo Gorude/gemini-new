@@ -391,9 +391,10 @@ export async function generateGeminiContent(
   files: any[] = [],
   webSearch: boolean = false,
   thinking: boolean = false,
-  jsonMode: boolean = false
+  jsonMode: boolean = false,
+  signal?: AbortSignal
 ) {
-  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, undefined, thinking, jsonMode);
+  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, signal, thinking, jsonMode);
   let fullText = "", fullThoughts = "", isGrounded = false, usage: any = null;
 
   for await (const chunk of gen) {
@@ -445,7 +446,7 @@ export async function generateImagenContent(
   return { data: base64, mimeType: "image/png" };
 }
 
-export async function performFactCheck(text: string): Promise<FactCheckResult[]> {
+export async function performFactCheck(text: string, signal?: AbortSignal): Promise<FactCheckResult[]> {
   const model = "gemma-4-31b-it";
   const prompt = `Analise o texto a seguir e REALIZE PESQUISAS NA WEB (usando a ferramenta google_search) para verificar cada afirmação de fato.
   
@@ -474,7 +475,7 @@ export async function performFactCheck(text: string): Promise<FactCheckResult[]>
       "Você DEVE OBRIGATORIAMENTE realizar pesquisas no Google (usando a ferramenta 'google_search') para validar cada afirmação no texto. " +
       "Não faça conjecturas e não responda baseando-se apenas em seu conhecimento interno de treinamento.";
 
-    const res = await generateGeminiContent(prompt, model, [], systemInstruction, [], true);
+    const res = await generateGeminiContent(prompt, model, [], systemInstruction, [], true, false, false, signal);
     const sanitized = extractAndParseJson(res.text);
     if (Array.isArray(sanitized)) {
       return sanitized;

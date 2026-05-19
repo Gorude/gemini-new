@@ -25,7 +25,7 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
         finalMargin = Math.max(0, Math.min(45, rightPercentage));
       }
       
-      onMarginChange(Math.round(finalMargin));
+      onMarginChange(parseFloat(finalMargin.toFixed(2)));
     };
 
     const handleMouseUp = () => {

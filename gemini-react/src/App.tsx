@@ -152,7 +152,7 @@ function App() {
   const [visibleMessagesCount, setVisibleMessagesCount] = useState(15);
   const [chatMargin, setChatMargin] = useState(() => {
     const saved = localStorage.getItem('gemoro_chat_margin');
-    return saved ? parseInt(saved, 10) : 5;
+    return saved ? parseFloat(saved) : 5;
   });
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [selectedPersonalityId, setSelectedPersonalityId] = useState(() => {
@@ -316,6 +316,7 @@ function App() {
   const chatWindowRef = useRef<HTMLElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentAiMsgIdRef = useRef<string | null>(null);
+  const factCheckControllersRef = useRef<Record<string, AbortController>>({});
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -1228,9 +1229,35 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
   }, [visibleMessagesCount]);
 
+  const handleCancelFactCheck = useCallback((msgId: string) => {
+    if (factCheckControllersRef.current[msgId]) {
+      factCheckControllersRef.current[msgId].abort();
+      delete factCheckControllersRef.current[msgId];
+    }
+    setChats(prev => prev.map(chat => {
+      if (chat.id === activeChatId) {
+        return {
+          ...chat,
+          messages: chat.messages.map(m => 
+            m.id === msgId ? { ...m, isVerifying: false } : m
+          )
+        };
+      }
+      return chat;
+    }));
+  }, [activeChatId]);
+
   const handleFactCheck = useCallback(async (msgId: string) => {
     if (!activeChat) return;
     
+    // Abort existing fact check for this message if any
+    if (factCheckControllersRef.current[msgId]) {
+      factCheckControllersRef.current[msgId].abort();
+    }
+
+    const controller = new AbortController();
+    factCheckControllersRef.current[msgId] = controller;
+
     // Set loading state for this message
     setChats(prev => prev.map(chat => {
       if (chat.id === activeChatId) {
@@ -1248,8 +1275,10 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (!msg) return;
 
     try {
-      const results = await performFactCheck(msg.text);
+      const results = await performFactCheck(msg.text, controller.signal);
       
+      delete factCheckControllersRef.current[msgId];
+
       setChats(prev => prev.map(chat => {
         if (chat.id === activeChatId) {
           return {
@@ -1261,8 +1290,15 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         }
         return chat;
       }));
-    } catch (e) {
-      console.error("Fact check failed:", e);
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        console.log(`Fact check aborted for message ${msgId}`);
+      } else {
+        console.error("Fact check failed:", e);
+      }
+      
+      delete factCheckControllersRef.current[msgId];
+
       setChats(prev => prev.map(chat => {
         if (chat.id === activeChatId) {
           return {
@@ -1491,7 +1527,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 chats.filter(c => c.archived).map(chat => (
                   <div 
                     key={chat.id} 
-                    onClick={() => { setActiveChatId(chat.id); setIsSidebarOpen(false); }}
+                    onClick={() => { setActiveChatId(chat.id); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
                     className={`group/arch flex items-center gap-2 py-1.5 px-3 rounded-xl cursor-pointer hover:bg-white/5 transition text-[var(--text-secondary)] hover:text-white ${activeChatId === chat.id ? 'bg-white/5 text-white' : ''}`}
                   >
                     <MessageSquare className="w-3.5 h-3.5 opacity-40 group-hover/arch:opacity-100 transition-opacity" />
@@ -1550,7 +1586,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     editTitle={editTitle}
                     menuOpenId={menuOpenId}
                     isLocked={isOrderLocked}
-                    onSelect={(id) => { setActiveChatId(id); setIsSidebarOpen(false); setActiveTab('chat'); }}
+                    onSelect={(id) => { setActiveChatId(id); if (window.innerWidth < 768) setIsSidebarOpen(false); setActiveTab('chat'); }}
                     onRename={handleRenameChat}
                     onEditTitleChange={setEditTitle}
                     onRenameConfirm={handleRenameChat}
@@ -1758,6 +1794,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     chatWindowRef={chatWindowRef}
                     isLoading={isLoading}
                     onFactCheck={handleFactCheck}
+                    onCancelFactCheck={handleCancelFactCheck}
                     editingMsgId={editingMsgId}
                     editingMsgText={editingMsgText}
                     copiedId={copiedId}

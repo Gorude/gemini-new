@@ -14,7 +14,8 @@ import {
   Lightbulb, 
   ChevronRight,
   Edit2,
-  ShieldCheck
+  ShieldCheck,
+  Clock
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
@@ -37,6 +38,7 @@ interface MessageItemProps {
   onCopy: (text: string, id: string) => void;
   onToggleSources: (id: string | null) => void;
   onFactCheck: (id: string) => void;
+  onCancelFactCheck?: (id: string) => void;
   onSelectionChange?: (text: string, pos: { x: number, y: number }, messageId: string) => void;
 }
 
@@ -58,8 +60,29 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   onCopy,
   onToggleSources,
   onFactCheck,
+  onCancelFactCheck,
   onSelectionChange
 }) => {
+  const [verifySeconds, setVerifySeconds] = React.useState(0);
+  const [isTimerHovered, setIsTimerHovered] = React.useState(false);
+
+  React.useEffect(() => {
+    let interval: any = null;
+    if (msg.isVerifying) {
+      setVerifySeconds(0);
+      const startTime = Date.now();
+      interval = setInterval(() => {
+        setVerifySeconds((Date.now() - startTime) / 1000);
+      }, 100);
+    } else {
+      setVerifySeconds(0);
+      setIsTimerHovered(false);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [msg.isVerifying]);
+
   const handleMouseUp = () => {
     if (!onSelectionChange) return;
 
@@ -316,14 +339,43 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                {copiedId === msg.id + '-md' ? <Check className="w-4 h-4 text-green-500" /> : <FileText className="w-4 h-4" />}
              </button>
              <button 
-                onClick={() => onFactCheck(msg.id)} 
-                disabled={isLoading || msg.isVerifying} 
-                className={`text-[var(--text-placeholder)] hover:text-blue-400 transition flex items-center gap-1.5 ${msg.isVerifying ? 'text-blue-500 animate-pulse' : ''}`}
-                title="Checar fatos na web"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (msg.isVerifying) {
+                    onCancelFactCheck?.(msg.id);
+                  } else {
+                    onFactCheck(msg.id);
+                  }
+                }} 
+                disabled={isLoading && !msg.isVerifying} 
+                onMouseEnter={() => msg.isVerifying && setIsTimerHovered(true)}
+                onMouseLeave={() => setIsTimerHovered(false)}
+                className={`text-[var(--text-placeholder)] hover:text-blue-400 transition flex items-center gap-1.5 ${
+                  msg.isVerifying 
+                    ? (isTimerHovered ? 'text-red-500 hover:text-red-600 font-bold scale-105' : 'text-blue-500 font-semibold') 
+                    : ''
+                }`}
+                title={msg.isVerifying ? "Cancelar checagem de fatos" : "Checar fatos na web"}
               >
-                {msg.isVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                {msg.factCheckResults && msg.factCheckResults.length > 0 && (
-                  <span className="text-[10px] font-bold">FEITO</span>
+                {msg.isVerifying ? (
+                  isTimerHovered ? (
+                    <>
+                      <X className="w-3.5 h-3.5 text-red-500 animate-in fade-in zoom-in duration-200" />
+                      <span className="text-[10px] font-bold text-red-500 animate-in fade-in duration-200">CANCELAR</span>
+                    </>
+                  ) : (
+                    <>
+                      <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                      <span className="text-[10px] font-bold text-blue-400">{verifySeconds.toFixed(1)}s</span>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    {msg.factCheckResults && msg.factCheckResults.length > 0 && (
+                      <span className="text-[10px] font-bold">FEITO</span>
+                    )}
+                  </>
                 )}
               </button>
              <button onClick={() => onDelete(msg.id)} disabled={isLoading} className="text-[var(--text-placeholder)] hover:text-red-400 transition" >

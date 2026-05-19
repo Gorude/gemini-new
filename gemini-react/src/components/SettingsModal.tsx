@@ -195,16 +195,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Monitor size={18} className="text-blue-400" />
                       <h4 className="text-sm font-bold">Margens Laterais (Desktop)</h4>
                     </div>
-                    <span className="text-xs font-mono bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-lg">{chatMargin}%</span>
+                    <span className="text-xs font-mono bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-lg">{chatMargin.toFixed(1)}%</span>
                   </div>
                   <div className="bg-[var(--bg-main)] p-6 rounded-2xl border border-[var(--border-light)]">
                     <input 
                       type="range" 
                       min="1" 
                       max="20" 
-                      step="1" 
+                      step="0.1" 
                       value={chatMargin} 
-                      onChange={(e) => onSetChatMargin(parseInt(e.target.value))}
+                      onChange={(e) => onSetChatMargin(parseFloat(e.target.value))}
                       className="w-full h-1.5 bg-[var(--border-light)] rounded-full appearance-none cursor-pointer accent-indigo-500"
                     />
                     <div className="flex justify-between mt-3 text-[10px] text-[var(--text-placeholder)] font-bold uppercase tracking-widest">

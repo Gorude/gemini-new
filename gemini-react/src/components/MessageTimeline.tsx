@@ -76,7 +76,11 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
 
       {/* Container Principal (Ticks + Sidebar) */}
       <div 
-        className={`flex items-center transition-all duration-500 ease-out h-[50vh] max-h-[500px] ${isExpanded ? 'w-60 bg-[rgba(19,19,20,0.6)] backdrop-blur-xl rounded-2xl p-2 pr-4 shadow-2xl' : 'w-6'}`}
+        className={`flex items-center transition-all duration-500 ease-out h-[50vh] max-h-[500px] py-2 rounded-2xl ${
+          isExpanded 
+            ? 'w-60 bg-[rgba(19,19,20,0.6)] backdrop-blur-xl px-2 pr-4 shadow-2xl' 
+            : 'w-6 px-0'
+        }`}
       >
         <div 
           ref={scrollContainerRef}
@@ -86,16 +90,20 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
             <div 
               key={msg.id}
               data-msg-id={msg.id}
-              className={`group flex items-center justify-end gap-3 cursor-pointer transition-all duration-300 py-1 rounded-lg shrink-0 ${hoveredId === msg.id || activeId === msg.id ? 'bg-white/5' : ''}`}
+              className={`group flex items-center justify-end cursor-pointer transition-all duration-500 ease-out py-1 rounded-lg shrink-0 ${
+                isExpanded ? 'gap-3' : 'gap-0'
+              } ${hoveredId === msg.id || activeId === msg.id ? 'bg-white/5' : ''}`}
               onMouseEnter={() => handleItemHover(msg.id)}
               onClick={() => onJumpToMessage(msg.id)}
             >
               {/* Texto do Nível 1 */}
-              {isExpanded && (
-                <span className={`text-[10px] font-medium truncate max-w-[170px] transition-all duration-300 whitespace-nowrap ${activeId === msg.id ? 'text-white' : 'text-[var(--text-secondary)]'}`}>
-                  {getPreviewText(msg.text, 40)}
-                </span>
-              )}
+              <span className={`text-[10px] font-medium truncate transition-all duration-500 ease-out whitespace-nowrap overflow-hidden ${activeId === msg.id ? 'text-white' : 'text-[var(--text-secondary)]'} ${
+                isExpanded 
+                  ? 'max-w-[170px] opacity-100 translate-x-0 pointer-events-auto' 
+                  : 'max-w-0 opacity-0 translate-x-2 pointer-events-none'
+              }`}>
+                {getPreviewText(msg.text, 40)}
+              </span>
 
               {/* O Tick (Barra) */}
               <div 
