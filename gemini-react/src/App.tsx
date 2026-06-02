@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
-import { 
-  Archive, 
-  Trash2, 
-  ChevronDown, 
-  X, 
-  Bot, 
-  Settings, 
+import {
+  Archive,
+  Trash2,
+  ChevronDown,
+  X,
+  Settings,
   Menu,
   Search,
   SquarePen,
@@ -23,9 +22,10 @@ import MessageList from './components/MessageList';
 import ChatInput from './components/ChatInput';
 import MessageTimeline from './components/MessageTimeline';
 import SortableChatItem from './components/SortableChatItem';
+import NemonIcon from './components/NemonIcon';
 
 import {
-  DndContext, 
+  DndContext,
   closestCenter,
   MouseSensor,
   TouchSensor,
@@ -42,22 +42,23 @@ import {
   verticalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
-import { 
+import {
   restrictToVerticalAxis
 } from '@dnd-kit/modifiers';
 import { Lock, Unlock, GripVertical } from 'lucide-react';
 
-import { 
-  generateGeminiContent, 
+import {
+  generateGeminiContent,
   generateImagenContent,
-  streamGeminiContent, 
+  streamGeminiContent,
   performFactCheck,
   extractAndParseJson,
-  type Message 
+  setGlobalPaidApiKey,
+  type Message
 } from './services/gemini';
 
-import { 
-  type ChatSession, 
+import {
+  type ChatSession,
   type DailyUsage,
   type PendingFile,
   type Personality,
@@ -72,10 +73,8 @@ const DEFAULT_PERSONALITY: Personality = {
   prompt: ''
 };
 
-import DnaModal from './components/DnaModal';
 import LiveView from './components/LiveView';
 import LiveSetupModal from './components/LiveSetupModal';
-import PersonalitiesModal from './components/PersonalitiesModal';
 import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
 import SelectionPopup from './components/SelectionPopup';
@@ -83,16 +82,17 @@ import { logger } from './services/logger';
 import LogWindow from './components/LogWindow';
 
 import SettingsModal from './components/SettingsModal';
-import { 
-  MODEL_LIMITS
+import {
+  MODEL_LIMITS,
+  MODEL_OPTIONS
 } from './constants';
 
 const getPacificDate = () => {
-  return new Intl.DateTimeFormat('en-CA', { 
-    timeZone: 'America/Los_Angeles', 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit' 
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
   }).format(new Date());
 };
 
@@ -112,22 +112,20 @@ function App() {
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9'>('1:1');
   const [expandedSourcesMsgId, setExpandedSourcesMsgId] = useState<string | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('gemoro_theme') || 'escuro');
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem('nemon-theme') || 'escuro');
   const [enabledModelIds, setEnabledModelIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('gemoro_enabled_models');
+    const saved = localStorage.getItem('nemon_enabled_models');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch { /* ignore */ }
     }
-    return ['gemma-4-31b-it', 'gemini-3-flash-preview'];
+    return ['gemma-4-31b-it', 'gemini-3.1-flash-lite-preview'];
   });
-  const [showDnaModal, setShowDnaModal] = useState(false);
   const [isArchiveExpanded, setIsArchiveExpanded] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [isOrderLocked, setIsOrderLocked] = useState(() => {
-    const saved = localStorage.getItem('gemoro_sidebar_locked');
+    const saved = localStorage.getItem('nemon_sidebar_locked');
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [showLiveSetupModal, setShowLiveSetupModal] = useState(false);
@@ -152,17 +150,17 @@ function App() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [visibleMessagesCount, setVisibleMessagesCount] = useState(15);
   const [chatMargin, setChatMargin] = useState(() => {
-    const saved = localStorage.getItem('gemoro_chat_margin');
+    const saved = localStorage.getItem('nemon_chat_margin');
     return saved ? parseFloat(saved) : 5;
   });
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [selectedPersonalityId, setSelectedPersonalityId] = useState(() => {
-    return localStorage.getItem('gemoro_selected_personality_id') || 'default';
+    return localStorage.getItem('nemon_selected_personality_id') || 'default';
   });
-  const [showPersonalitiesModal, setShowPersonalitiesModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'geral' | 'modelos' | 'avancado' | 'personalidades' | 'dna'>('geral');
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
   const [chatFontSize, setChatFontSize] = useState<number>(() => {
-    const saved = localStorage.getItem('gemoro_chat_font_size');
+    const saved = localStorage.getItem('nemon_chat_font_size');
     if (saved === 'sm') return 13;
     if (saved === 'md') return 15.5;
     if (saved === 'lg') return 18;
@@ -171,20 +169,20 @@ function App() {
   });
   const [showFontSizeSelector, setShowFontSizeSelector] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'chat' | 'files'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'settings'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('gemoro_sidebar_open');
+      const saved = localStorage.getItem('nemon_sidebar_open');
       if (saved !== null) return saved === 'true';
       return window.innerWidth > 1024;
     }
     return true;
   });
-  const [isLiveProactive, setIsLiveProactive] = useState(() => localStorage.getItem('gemoro_live_proactive') === 'true');
+  const [isLiveProactive, setIsLiveProactive] = useState(() => localStorage.getItem('nemon_live_proactive') === 'true');
   const [proactiveIdleCount, setProactiveIdleCount] = useState(0); // 0: Idle, 1: Probed, 2: Retried (Stopped)
   const [paidApiKey, setPaidApiKey] = useState('');
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
-  
+
   // Sincronizar Uso Local com o Servidor
   useEffect(() => {
     const fetchUsage = async () => {
@@ -258,6 +256,7 @@ function App() {
       .then(data => {
         if (data && data.paidApiKey) {
           setPaidApiKey(data.paidApiKey);
+          setGlobalPaidApiKey(data.paidApiKey);
         }
       })
       .catch(err => console.error("Erro ao carregar chave de API:", err));
@@ -279,12 +278,12 @@ function App() {
       body: JSON.stringify(dailyUsage)
     }).catch(e => console.error("Erro ao salvar uso no servidor:", e));
   }, [dailyUsage]);
-  
+
   // LIVE MODE STATE
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [liveStatus, setLiveStatus] = useState<'connecting' | 'connected' | 'error' | 'disconnected'>('disconnected');
   const [liveTranscript, setLiveTranscript] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
-  const [liveVoice, setLiveVoice] = useState(() => localStorage.getItem('gemoro_live_voice') || 'Charon');
+  const [liveVoice, setLiveVoice] = useState(() => localStorage.getItem('nemon_live_voice') || 'Charon');
   const [liveVisionType, setLiveVisionType] = useState<'camera' | 'screen' | null>(null);
   const [liveVideoStream, setLiveVideoStream] = useState<MediaStream | null>(null);
   const [isLiveSpeaking, setIsLiveSpeaking] = useState(false);
@@ -310,20 +309,20 @@ function App() {
   const [categorizationProgress, setCategorizationProgress] = useState<{ current: number, total: number }>({ current: 0, total: 0 });
 
   useEffect(() => {
-    localStorage.setItem('gemoro_enabled_models', JSON.stringify(enabledModelIds));
+    localStorage.setItem('nemon_enabled_models', JSON.stringify(enabledModelIds));
   }, [enabledModelIds]);
 
   useEffect(() => {
-    localStorage.setItem('gemoro_sidebar_open', isSidebarOpen.toString());
+    localStorage.setItem('nemon_sidebar_open', isSidebarOpen.toString());
   }, [isSidebarOpen]);
 
   useEffect(() => {
-    localStorage.setItem('gemoro_live_proactive', isLiveProactive.toString());
+    localStorage.setItem('nemon_live_proactive', isLiveProactive.toString());
   }, [isLiveProactive]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--chat-font-size', `${chatFontSize}px`);
-    localStorage.setItem('gemoro_chat_font_size', chatFontSize.toString());
+    localStorage.setItem('nemon_chat_font_size', chatFontSize.toString());
   }, [chatFontSize]);
 
   const previousScrollHeightRef = useRef<number>(0);
@@ -348,7 +347,7 @@ function App() {
       }
 
       const elapsed = Date.now() - lastLiveActivityRef.current;
-      
+
       // Monitoramento de Inatividade
       if (proactiveIdleCount === 0 && elapsed > 30000) {
         if (liveSessionRef.current) {
@@ -358,7 +357,7 @@ function App() {
           setProactiveIdleCount(1);
           lastLiveActivityRef.current = Date.now();
         }
-      } 
+      }
       else if (proactiveIdleCount === 1 && elapsed > 30000) {
         if (liveSessionRef.current) {
           console.log("[PROATIVIDADE] Inatividade continuada (60s). Estágio 2: Check-in...");
@@ -377,9 +376,9 @@ function App() {
     if (memoryFacts.length === 0) return;
     setIsCategorizing(true);
     setCategorizationProgress({ current: 0, total: 0 });
-    
+
     console.log("Iniciando organização inteligente em lotes...");
-    
+
     // Configurações de lote (batching) para garantir estabilidade JSON
     const CHUNK_SIZE = 15;
     const chunks: MemoryFact[][] = [];
@@ -394,7 +393,7 @@ function App() {
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         console.log(`Processando lote ${i + 1}/${chunks.length}...`);
-        
+
         const prompt = `Você é um especialista em organização de conhecimento. 
         Analise a seguinte lista de memórias e organize-as em categorias lógicas e interconectadas.
         
@@ -433,12 +432,12 @@ function App() {
             // Atualização parcial do estado para feedback visual imediato
             setMemoryFacts([...currentFacts]);
             setCategorizationProgress(prev => ({ ...prev, current: i + 1 }));
-            
+
             // Checkpoint no servidor
-            fetch('/api/memory', { 
-              method: 'POST', 
-              headers: { 'Content-Type': 'application/json' }, 
-              body: JSON.stringify(currentFacts) 
+            fetch('/api/memory', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(currentFacts)
             });
           }
         } catch (batchError) {
@@ -484,13 +483,13 @@ function App() {
               const migrationPrompt = `Você é um sistema de migração de dados. Converta a seguinte lista de fatos (strings) em um JSON estruturado com o formato: { id: string, text: string, category: string, connections: string[] (IDs de fatos relacionados), timestamp: number }.
               As categorias devem ser geradas dinamicamente (ex: Pessoal, Profissional, Hardware, Preferências). 
               LISTA DE FATOS:\n${(memoryData as string[]).join('\n')}`;
-              
+
               try {
                 const res = await generateGeminiContent(migrationPrompt, 'gemma-4-31b-it', [], "Responda APENAS com o JSON cru contendo um array de objetos.");
                 // Tentar extrair JSON do texto
                 const jsonMatch = res.text.match(/\[\s*\{[\s\S]*\}\s*\]/);
                 const migrated = JSON.parse(jsonMatch ? jsonMatch[0] : res.text);
-                
+
                 if (Array.isArray(migrated) && migrated.length > 0) {
                   setMemoryFacts(migrated);
                   fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migrated) });
@@ -500,12 +499,12 @@ function App() {
                 }
               } catch (e) {
                 console.error("Falha na migração com IA, executando fallback local para restaurar visibilidade:", e);
-                const fallback = (memoryData as string[]).map((f: string) => ({ 
-                  id: uuidv4(), 
-                  text: f, 
-                  category: 'Diversos', 
-                  connections: [], 
-                  timestamp: Date.now() 
+                const fallback = (memoryData as string[]).map((f: string) => ({
+                  id: uuidv4(),
+                  text: f,
+                  category: 'Diversos',
+                  connections: [],
+                  timestamp: Date.now()
                 }));
                 setMemoryFacts(fallback);
                 fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fallback) });
@@ -523,16 +522,16 @@ function App() {
             setPersonalities(persData);
           } else {
             // Migration from localStorage
-            const saved = localStorage.getItem('gemoro_personalities');
+            const saved = localStorage.getItem('nemon_personalities');
             if (saved) {
               try {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) {
                   setPersonalities(parsed);
-                  fetch('/api/personalities', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: saved 
+                  fetch('/api/personalities', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: saved
                   });
                 }
               } catch { /* ignore */ }
@@ -549,12 +548,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('gemoro_sidebar_locked', JSON.stringify(isOrderLocked));
+    localStorage.setItem('nemon_sidebar_locked', JSON.stringify(isOrderLocked));
   }, [isOrderLocked]);
 
   // Auto-Save Margins
   useEffect(() => {
-    localStorage.setItem('gemoro_chat_margin', chatMargin.toString());
+    localStorage.setItem('nemon_chat_margin', chatMargin.toString());
   }, [chatMargin]);
 
   // Auto-Save Personalities
@@ -566,7 +565,7 @@ function App() {
         body: JSON.stringify(personalities)
       });
     }
-    localStorage.setItem('gemoro_selected_personality_id', selectedPersonalityId);
+    localStorage.setItem('nemon_selected_personality_id', selectedPersonalityId);
   }, [personalities, selectedPersonalityId]);
 
   const saveChats = useCallback((chatsToSave: ChatSession[]) => {
@@ -614,7 +613,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('gemoro_theme', theme);
+    localStorage.setItem('nemon-theme', theme);
   }, [theme]);
 
   // LIVE MODE LOGIC
@@ -639,16 +638,8 @@ function App() {
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showPersonalitiesModal) {
-          setShowPersonalitiesModal(false);
-          return;
-        }
-        if (showDnaModal) {
-          setShowDnaModal(false);
-          return;
-        }
-        if (showSettingsModal) {
-          setShowSettingsModal(false);
+        if (activeTab === 'settings') {
+          setActiveTab('chat');
           return;
         }
         if (isLiveActive) {
@@ -659,7 +650,7 @@ function App() {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [showPersonalitiesModal, showDnaModal, showSettingsModal, isLiveActive, handleLiveStop]);
+  }, [activeTab, isLiveActive, handleLiveStop]);
 
   const scrollToBottom = useCallback((force = false, smooth = false) => {
     if (chatWindowRef.current) {
@@ -715,11 +706,11 @@ function App() {
   }, [memoryFacts]);
 
   const executeAIRequest = useCallback(async (
-    targetChatId: string, 
-    userText: string, 
-    filesToSend: PendingFile[], 
-    apiHistory: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }>, 
-    isFirstMessage: boolean, 
+    targetChatId: string,
+    userText: string,
+    filesToSend: PendingFile[],
+    apiHistory: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }>,
+    isFirstMessage: boolean,
     replaceId?: string
   ) => {
     setIsLoading(true);
@@ -728,7 +719,7 @@ function App() {
 
     const selectedPersonality = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
 
-    const systemInstruction = "Você é o Gemoro, uma inteligência artificial avançada, empática e extremante RÁPIDA. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
+    const systemInstruction = "Você é o Nemon, uma inteligência artificial avançada, empática e extremante RÁPIDA. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
       (selectedPersonality.prompt ? `INSTRUÇÃO DE PERSONALIDADE ATIVA: "${selectedPersonality.prompt}"\n\n` : "") +
       (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f: MemoryFact) => `[ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n") + "\n\n" : "") +
       "Regras de Pesquisa e Memória:\n" +
@@ -755,7 +746,7 @@ function App() {
       setChats(prev => prev.map(c => {
         if (c.id === targetChatId) {
           const freshMsg: Message = { id: currentAiMsgId, role: 'ai', text: '', thoughts: '', duration: 0, isSearching: webSearchEnabled };
-          const updatedMsgs = replaceId 
+          const updatedMsgs = replaceId
             ? c.messages.map(m => m.id === replaceId ? freshMsg : m)
             : [...c.messages, freshMsg];
           return { ...c, messages: updatedMsgs };
@@ -767,17 +758,17 @@ function App() {
         try {
           const res = await generateImagenContent(userText, imagenModel, aspectRatio, paidApiKey);
           const currentDuration = (performance.now() - startTime) / 1000;
-          
+
           setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
             ...c,
-            messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
-              ...m, 
-              text: `Gerei esta imagem para você usando **${imagenModel}**:`, 
+            messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? {
+              ...m,
+              text: `Gerei esta imagem para você usando **${imagenModel}**:`,
               files: [{ name: 'generated_image.png', mimeType: res.mimeType, data: res.data }],
-              duration: currentDuration 
+              duration: currentDuration
             } : m)
           } : c));
-          
+
           setIsLoading(false);
           return;
         } catch (imgError: unknown) {
@@ -807,11 +798,11 @@ function App() {
             }
           });
         }
-        
+
         // Limpeza em tempo real para o streaming
         let streamingText = fullText;
         let streamingThoughts = fullThoughts;
-        
+
         // 1. Extrair blocos completos de <thinking>
         const completeThinkingMatch = /<thinking>([\s\S]*?)<\/thinking>/g;
         let m;
@@ -821,25 +812,25 @@ function App() {
           }
           streamingText = streamingText.replace(m[0], '');
         }
-        
+
         // 2. Ocultar blocos incompletos ou texto que parece ser raciocínio (fallback)
         if (streamingText.includes('<thinking>')) {
           streamingText = streamingText.split('<thinking>')[0];
         }
-        
+
         const currentDuration = (performance.now() - startTime) / 1000;
         const currentCleanText = parseMemoryTags(streamingText).trim();
 
         setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
           ...c,
-          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
-            ...m, 
-            text: currentCleanText, 
-            thoughts: streamingThoughts.trim(), 
-            isGrounded, 
-            isSearching, 
-            sources: [...allSources], 
-            duration: currentDuration 
+          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? {
+            ...m,
+            text: currentCleanText,
+            thoughts: streamingThoughts.trim(),
+            isGrounded,
+            isSearching,
+            sources: [...allSources],
+            duration: currentDuration
           } : m)
         } : c));
       }
@@ -851,14 +842,16 @@ function App() {
           const modelData = state.models[model] || { requests: 0, tokens: { prompt: 0, candidates: 0, total: 0 } };
           const newState: DailyUsage = {
             ...state,
-            models: { ...state.models, [model]: {
-              requests: modelData.requests + 1,
-              tokens: {
-                prompt: modelData.tokens.prompt + (finalUsage.promptTokenCount || 0),
-                candidates: modelData.tokens.candidates + (finalUsage.candidatesTokenCount || 0),
-                total: modelData.tokens.total + (finalUsage.totalTokenCount || 0),
+            models: {
+              ...state.models, [model]: {
+                requests: modelData.requests + 1,
+                tokens: {
+                  prompt: modelData.tokens.prompt + (finalUsage.promptTokenCount || 0),
+                  candidates: modelData.tokens.candidates + (finalUsage.candidatesTokenCount || 0),
+                  total: modelData.tokens.total + (finalUsage.totalTokenCount || 0),
+                }
               }
-            }}
+            }
           };
           localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(newState));
           return newState;
@@ -893,30 +886,30 @@ function App() {
             `O modelo gerou apenas o raciocínio interno. Com base no raciocínio abaixo, escreva apenas a RESPOSTA FINAL amigável e direta para o usuário (em Português), ignorando a parte técnica do planejamento:\n\n${finalThoughts}`,
             model,
             [],
-            "Você é o Gemoro. Resuma o raciocínio em uma resposta final útil."
+            "Você é o Nemon. Resuma o raciocínio em uma resposta final útil."
           );
           if (recoveryRes.text) {
             finalCleanText = parseMemoryTags(recoveryRes.text).trim();
           }
         } catch (e) {
           console.warn("Falha na auto-recuperação:", e);
-          finalCleanText = finalThoughts; 
+          finalCleanText = finalThoughts;
         }
       } else if (!finalCleanText && finalThoughts) {
         finalCleanText = finalThoughts;
       }
 
-      setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { 
-        ...c, 
-        messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
-          ...m, 
-          text: finalCleanText, 
+      setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
+        ...c,
+        messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? {
+          ...m,
+          text: finalCleanText,
           thoughts: finalThoughts.trim(),
           isSearching: false,
           isGrounded,
           isVerifying: false,
           sources: [...allSources]
-        } : m) 
+        } : m)
       } : c));
 
       if (isFirstMessage) {
@@ -928,13 +921,13 @@ function App() {
         ).then(res => {
           if (res.text) {
             const cleanTitle = res.text.replace(/["'*]/g, '').trim();
-          setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { ...c, title: cleanTitle, isNaming: false } : c));
+            setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { ...c, title: cleanTitle, isNaming: false } : c));
           } else {
             setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: 'Chat Sem Nome', isNaming: false } : c));
           }
         }).catch(err => {
           console.warn("Aviso: Falha na autogeração de título", err);
-          setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: userText.substring(0, 25)+'...', isNaming: false } : c));
+          setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: userText.substring(0, 25) + '...', isNaming: false } : c));
         });
       }
     } catch (error: unknown) {
@@ -961,9 +954,9 @@ function App() {
       // Capturamos os IDs antes de qualquer mutação ou aborto
       const msgIdToRemove = currentAiMsgIdRef.current;
       const targetChatId = activeChatId;
-      
+
       abortControllerRef.current.abort();
-      
+
       // Remover a mensagem apenas se ela ainda estiver vazia
       if (msgIdToRemove && targetChatId) {
         setChats(prev => prev.map(c => {
@@ -971,7 +964,7 @@ function App() {
             // Verificamos se a mensagem existe e se está vazia
             const msg = c.messages.find(m => m.id === msgIdToRemove);
             const isEmpty = !msg || (!msg.text && !msg.thoughts && (!msg.files || msg.files.length === 0));
-            
+
             if (isEmpty) {
               return {
                 ...c,
@@ -982,7 +975,7 @@ function App() {
           return c;
         }));
       }
-      
+
       setIsLoading(false);
       currentAiMsgIdRef.current = null;
       setChats(prev => {
@@ -1011,7 +1004,7 @@ function App() {
               if (msg.id === messageId) {
                 // Filtrar resultados antigos que coincidem com os novos segmentos para evitar sobreposição
                 const existingResults = msg.factCheckResults || [];
-                const filteredOld = existingResults.filter(old => 
+                const filteredOld = existingResults.filter(old =>
                   !results.some(newRes => newRes.segment === old.segment)
                 );
                 const newResults = [...filteredOld, ...results];
@@ -1034,7 +1027,7 @@ function App() {
 
   const handleAskAboutSegment = useCallback((segmentText: string, questionText: string) => {
     const contextualPrompt = `Contexto selecionado: "${segmentText}"\n\nPergunta do usuário: ${questionText}`;
-    
+
     // Obter histórico para manter o contexto do chat
     const activeChat = chats.find(c => c.id === activeChatId);
     if (!activeChat) return;
@@ -1057,9 +1050,9 @@ function App() {
     setIsLiveActive(true);
     setLiveStatus('connecting');
     setLiveTranscript([]);
-    
+
     if (liveAudioContextRef.current) {
-       liveAudioContextRef.current.close();
+      liveAudioContextRef.current.close();
     }
     liveAudioContextRef.current = new AudioContext({ sampleRate: 24000 });
     const analyserNode = liveAudioContextRef.current.createAnalyser();
@@ -1070,7 +1063,7 @@ function App() {
     // Contexto de Memória
     let dnaContext = "";
     if (useMemory && memoryFacts.length > 0) {
-      dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" + 
+      dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" +
         memoryFacts.map(f => `- [ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n");
     }
 
@@ -1091,9 +1084,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       onError: (err) => { alert(err); handleLiveStop(); },
       onTranscript: (role, text) => {
         setLiveTranscript(prev => [...prev, { role, text }]);
-        
+
         lastLiveActivityRef.current = Date.now();
-        
+
         if (role === 'user') {
           resetProactivityState("Fala do usuário");
         } else if (role === 'ai') {
@@ -1152,13 +1145,13 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           activeSourcesRef.current.delete(source);
           setIsLiveSpeaking(activeSourcesRef.current.size > 0);
         };
-        
+
         activeSourcesRef.current.add(source);
         setIsLiveSpeaking(true);
-        
+
         lastLiveActivityRef.current = Date.now();
         if (!proactiveTimerActiveRef.current && proactiveIdleCount !== 0) {
-           resetProactivityState("Áudio reativo da IA");
+          resetProactivityState("Áudio reativo da IA");
         }
 
         source.start(startTime);
@@ -1207,7 +1200,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     });
     activeSourcesRef.current.clear();
     setIsLiveSpeaking(false);
-    
+
     // Resetar o cronograma de áudio para o tempo atual
     if (liveAudioContextRef.current) {
       nextAudioTimeRef.current = liveAudioContextRef.current.currentTime;
@@ -1236,7 +1229,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
     const newUserMsg: Message = { id: Date.now().toString(), role: 'user', text, files };
     setChats(prev => prev.map(c => c.id === targetId ? { ...c, messages: [...c.messages, newUserMsg] } : c));
-    
+
     // apiHistory construction
     const currentChat = targetId === activeChatId ? activeChat : { messages: [] };
     const apiHistory = (currentChat?.messages || []).map(m => ({
@@ -1251,7 +1244,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (chatWindowRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatWindowRef.current;
       setShowScrollButton(scrollHeight - scrollTop - clientHeight > 300);
-      
+
       if (scrollTop < 50 && visibleMessagesCount < messages.length && !isLazyLoadingRef.current) {
         isLazyLoadingRef.current = true;
         previousScrollHeightRef.current = scrollHeight;
@@ -1268,11 +1261,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (isLazyLoadingRef.current && chatWindowRef.current && previousScrollHeightRef.current > 0) {
       const scrollContainer = chatWindowRef.current;
       const heightDiff = scrollContainer.scrollHeight - previousScrollHeightRef.current;
-      
+
       if (heightDiff > 0) {
         scrollContainer.scrollTop += heightDiff;
       }
-      
+
       isLazyLoadingRef.current = false;
       previousScrollHeightRef.current = 0;
     }
@@ -1287,7 +1280,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       if (chat.id === activeChatId) {
         return {
           ...chat,
-          messages: chat.messages.map(m => 
+          messages: chat.messages.map(m =>
             m.id === msgId ? { ...m, isVerifying: false } : m
           )
         };
@@ -1298,7 +1291,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
   const handleFactCheck = useCallback(async (msgId: string) => {
     if (!activeChat) return;
-    
+
     // Abort existing fact check for this message if any
     if (factCheckControllersRef.current[msgId]) {
       factCheckControllersRef.current[msgId].abort();
@@ -1312,7 +1305,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       if (chat.id === activeChatId) {
         return {
           ...chat,
-          messages: chat.messages.map(m => 
+          messages: chat.messages.map(m =>
             m.id === msgId ? { ...m, isVerifying: true } : m
           )
         };
@@ -1325,14 +1318,14 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     try {
       const results = await performFactCheck(msg.text, controller.signal);
-      
+
       delete factCheckControllersRef.current[msgId];
 
       setChats(prev => prev.map(chat => {
         if (chat.id === activeChatId) {
           return {
             ...chat,
-            messages: chat.messages.map(m => 
+            messages: chat.messages.map(m =>
               m.id === msgId ? { ...m, factCheckResults: results, isVerifying: false } : m
             )
           };
@@ -1345,14 +1338,14 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       } else {
         console.error("Fact check failed:", e);
       }
-      
+
       delete factCheckControllersRef.current[msgId];
 
       setChats(prev => prev.map(chat => {
         if (chat.id === activeChatId) {
           return {
             ...chat,
-            messages: chat.messages.map(m => 
+            messages: chat.messages.map(m =>
               m.id === msgId ? { ...m, isVerifying: false } : m
             )
           };
@@ -1362,8 +1355,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
   }, [activeChat, activeChatId]);
 
-  const handleDeleteChat = useCallback((e: React.MouseEvent, id: string) => { 
-    e.stopPropagation(); 
+  const handleDeleteChat = useCallback((e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     if (confirm("Deseja excluir esta conversa para sempre?")) {
       setChats(p => p.filter(c => c.id !== id));
       if (activeChatId === id) setActiveChatId('');
@@ -1377,7 +1370,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
   const handleRenameChat = useCallback((id: string) => {
     if (editTitle.trim()) {
-      setChats(p => p.map(c => c.id === id ? {...c, title: editTitle.trim()} : c));
+      setChats(p => p.map(c => c.id === id ? { ...c, title: editTitle.trim() } : c));
     }
     setEditingChatId(null);
   }, [editTitle]);
@@ -1390,7 +1383,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   const handleRestoreChat = useCallback((chatId: string) => {
     setChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, archived: false } : chat));
     setActiveChatId(chatId);
-    
+
     // Save to server
     fetch(`/api/history/${chatId}/archive`, { method: 'POST' });
   }, []);
@@ -1419,7 +1412,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveDragId(null);
-    
+
     if (over && active.id !== over.id) {
       setChats((items) => {
         const oldIndex = items.findIndex((i) => i.id === active.id);
@@ -1442,7 +1435,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       if (c.id === activeChatId) {
         const updatedMsgs = [...c.messages];
         updatedMsgs[msgIndex] = { ...updatedMsgs[msgIndex], text: newText };
-        if (updatedMsgs[msgIndex+1]?.role === 'ai') updatedMsgs[msgIndex+1] = { ...updatedMsgs[msgIndex+1], text: '', thoughts: '' };
+        if (updatedMsgs[msgIndex + 1]?.role === 'ai') updatedMsgs[msgIndex + 1] = { ...updatedMsgs[msgIndex + 1], text: '', thoughts: '' };
         return { ...c, messages: updatedMsgs };
       }
       return c;
@@ -1452,7 +1445,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       role: m.role === 'ai' ? 'model' : 'user',
       parts: [...(m.files?.map(f => ({ inlineData: { mimeType: f.mimeType, data: f.data } })) || []), { text: m.text }]
     }));
-    executeAIRequest(activeChatId, newText, chat.messages[msgIndex].files || [], apiHistory, false, chat.messages[msgIndex+1]?.id);
+    executeAIRequest(activeChatId, newText, chat.messages[msgIndex].files || [], apiHistory, false, chat.messages[msgIndex + 1]?.id);
   }, [activeChatId, chats, editingMsgText, isLoading, executeAIRequest]);
 
   const handleRegenerate = useCallback((msgId: string) => {
@@ -1461,9 +1454,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (!chat) return;
     const idx = chat.messages.findIndex(m => m.id === msgId);
     if (idx <= 0) return;
-    const userMsg = chat.messages[idx-1];
+    const userMsg = chat.messages[idx - 1];
     setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: c.messages.map(m => m.id === msgId ? { ...m, text: '', thoughts: '' } : m) } : c));
-    const historyBefore = chat.messages.slice(0, idx-1);
+    const historyBefore = chat.messages.slice(0, idx - 1);
     const apiHistory = historyBefore.map(m => ({
       role: m.role === 'ai' ? 'model' : 'user',
       parts: [...(m.files?.map(f => ({ inlineData: { mimeType: f.mimeType, data: f.data } })) || []), { text: m.text }]
@@ -1477,11 +1470,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     // Verificar se a mensagem está fora do alcance da renderização (Lazy Loading)
     const itemsFromEnd = messages.length - msgIndex;
-    
+
     if (itemsFromEnd > visibleMessagesCount) {
       // Expandir a contagem de mensagens visíveis para incluir o alvo
       setVisibleMessagesCount(itemsFromEnd + 10);
-      
+
       // Pequeno delay para garantir que o React renderizou o novo elemento no DOM
       setTimeout(() => {
         const el = document.getElementById(`msg-${id}`);
@@ -1531,8 +1524,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'} flex flex-col glass-sidebar shadow-2xl`}>
         <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 lg:hidden">
           <div className="flex items-center gap-2">
-            <Bot className="w-6 h-6 text-blue-400" />
-            <span className="font-bold text-white tracking-tighter">Gemoro</span>
+            <NemonIcon size={24} />
+            <span className="font-bold text-white tracking-tighter">Nemon</span>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition"><X className="w-5 h-5" /></button>
         </div>
@@ -1543,23 +1536,23 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         </div>
 
         <div className="px-4 mb-8">
-          <button 
-            onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); setActiveTab('chat'); }} 
+          <button
+            onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); setActiveTab('chat'); }}
             className="flex items-center gap-3 px-4 py-3 w-full rounded-full hover:bg-white/5 transition text-[var(--text-primary)] font-medium"
           >
             <SquarePen className="w-5 h-5 opacity-70" />
             <span>Nova conversa</span>
           </button>
-          
-          <button 
-            onClick={() => setIsArchiveExpanded(!isArchiveExpanded)} 
+
+          <button
+            onClick={() => setIsArchiveExpanded(!isArchiveExpanded)}
             className={`flex items-center gap-3 px-4 py-2.5 mt-2 w-full rounded-full transition text-sm font-medium border border-transparent ${isArchiveExpanded ? 'bg-white/5 text-[var(--text-primary)] border-white/5' : 'hover:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
           >
-            <Archive className={`w-4 h-4 transition-transform duration-300 ${isArchiveExpanded ? 'text-blue-400' : 'opacity-50'}`} />
+            <Archive className={`w-4 h-4 transition-transform duration-300 ${isArchiveExpanded ? '' : 'opacity-50'}`} style={isArchiveExpanded ? { color: 'var(--accent-text)' } : {}} />
             <span>Arquivadas</span>
             <div className="ml-auto flex items-center gap-2">
               {chats.filter(c => c.archived).length > 0 && (
-                <span className="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md text-[9px] font-bold">
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold" style={{ background: 'var(--accent-bg)', color: 'var(--accent-text)' }}>
                   {chats.filter(c => c.archived).length}
                 </span>
               )}
@@ -1574,22 +1567,25 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 <div className="text-[10px] text-[var(--text-secondary)] opacity-40 py-2 px-4 italic">Sem arquivados</div>
               ) : (
                 chats.filter(c => c.archived).map(chat => (
-                  <div 
-                    key={chat.id} 
+                  <div
+                    key={chat.id}
                     onClick={() => { setActiveChatId(chat.id); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
                     className={`group/arch flex items-center gap-2 py-1.5 px-3 rounded-xl cursor-pointer hover:bg-white/5 transition text-[var(--text-secondary)] hover:text-white ${activeChatId === chat.id ? 'bg-white/5 text-white' : ''}`}
                   >
                     <MessageSquare className="w-3.5 h-3.5 opacity-40 group-hover/arch:opacity-100 transition-opacity" />
                     <span className="text-xs truncate flex-1">{chat.title}</span>
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); handleRestoreChat(chat.id); }}
-                      className="opacity-0 group-hover/arch:opacity-100 p-1 hover:bg-blue-500/20 rounded-md transition text-blue-400"
+                      className="opacity-0 group-hover/arch:opacity-100 p-1 rounded-md transition"
+                      style={{ color: 'var(--accent-text)' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-bg)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = ''}
                       title="Restaurar"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); if(confirm('Excluir permanentemente?')) handleDeleteChat(e, chat.id); }}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (confirm('Excluir permanentemente?')) handleDeleteChat(e, chat.id); }}
                       className="opacity-0 group-hover/arch:opacity-100 p-1 hover:bg-red-500/20 rounded-md transition text-red-400"
                       title="Excluir"
                     >
@@ -1605,29 +1601,30 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
           <div className="flex items-center justify-between px-4 mb-4 mt-6">
             <div className="text-[14px] font-medium text-[var(--text-primary)]">Conversas</div>
-            <button 
+            <button
               onClick={() => setIsOrderLocked(!isOrderLocked)}
-              className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-[var(--text-secondary)] opacity-40 hover:opacity-100 hover:bg-white/5' : 'text-blue-400 bg-blue-500/10'}`}
+              className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-[var(--text-secondary)] opacity-40 hover:opacity-100 hover:bg-white/5' : ''}`}
+              style={!isOrderLocked ? { color: 'var(--accent-text)', background: 'var(--accent-bg)' } : {}}
               title={isOrderLocked ? "Destravar reordenação" : "Travar reordenação"}
             >
               {isOrderLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
             </button>
           </div>
-          
+
           <div className="space-y-1">
-            <DndContext 
+            <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               modifiers={[restrictToVerticalAxis]}
             >
-              <SortableContext 
+              <SortableContext
                 items={chats.filter(c => !c.archived).map(c => c.id)}
                 strategy={verticalListSortingStrategy}
               >
                 {chats.filter(c => !c.archived).map(chat => (
-                  <SortableChatItem 
+                  <SortableChatItem
                     key={chat.id}
                     chat={chat}
                     activeChatId={activeChatId}
@@ -1663,14 +1660,17 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         </div>
 
         <div className="mt-auto p-4 border-t border-[var(--border-light)] relative">
-          <button 
-            onClick={() => setShowSettingsModal(true)} 
-            className={`flex items-center gap-3 px-4 py-3 w-full rounded-full transition font-medium hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]`}
+          <button
+            onClick={() => {
+              setActiveTab('settings');
+              setSettingsTab('geral');
+              if (window.innerWidth < 768) setIsSidebarOpen(false);
+            }}
+            className={`flex items-center gap-3 px-4 py-3 w-full rounded-full transition font-medium transition-all duration-300 ${activeTab === 'settings' ? 'bg-[var(--bg-chat-active)] text-white shadow-lg shadow-black/10' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]'}`}
           >
-            <Settings className={`w-5 h-5 transition-transform duration-300 opacity-70`} /> 
+            <Settings className={`w-5 h-5 transition-transform duration-300 ${activeTab === 'settings' ? 'rotate-90 opacity-100' : 'opacity-70'}`} style={activeTab === 'settings' ? { color: 'var(--accent-text)' } : {}} />
             <span className="text-[14px]">Configurações</span>
           </button>
-          
         </div>
       </aside>
 
@@ -1678,7 +1678,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         <header className="p-4 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
           <div className="flex-1 flex items-center gap-4">
             {!isSidebarOpen && (
-              <button 
+              <button
                 onClick={() => setIsSidebarOpen(true)}
                 className="p-2.5 hover:bg-[var(--bg-chat-hover)] rounded-xl transition-all hover:scale-110 active:scale-90"
               >
@@ -1691,12 +1691,12 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3">
             {/* Personality Selector */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
                 className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
               >
                 <div className="flex items-center gap-2 overflow-hidden">
-                  <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                  <User className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-text)' }} />
                   <span className="text-xs font-bold tracking-tight text-[var(--text-primary)] truncate">
                     {personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
                   </span>
@@ -1706,25 +1706,28 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
               {showPersonalitySelector && (
                 <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl py-2 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
-                  <button 
+                  <button
                     onClick={() => { setSelectedPersonalityId('default'); setShowPersonalitySelector(false); }}
-                    className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'bg-blue-500/10 text-blue-400 font-bold' : 'text-[var(--text-secondary)]'}`}
+                    className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
+                    style={selectedPersonalityId === 'default' ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                   >
                     <User className="w-3.5 h-3.5" /> Normal (Padrão)
                   </button>
                   {personalities.map(p => (
-                    <button 
+                    <button
                       key={p.id}
                       onClick={() => { setSelectedPersonalityId(p.id); setShowPersonalitySelector(false); }}
-                      className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'bg-blue-500/10 text-blue-400 font-bold' : 'text-[var(--text-secondary)]'}`}
+                      className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
+                      style={selectedPersonalityId === p.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                     >
                       <User className="w-3.5 h-3.5" /> {p.name}
                     </button>
                   ))}
                   <div className="h-px bg-[var(--border-light)] my-2"></div>
-                  <button 
-                    onClick={() => { setShowPersonalitiesModal(true); setShowPersonalitySelector(false); }}
-                    className="w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 text-blue-400 font-medium"
+                  <button
+                    onClick={() => { setActiveTab('settings'); setSettingsTab('personalidades'); setShowPersonalitySelector(false); }}
+                    className="w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 font-medium"
+                    style={{ color: 'var(--accent-text)' }}
                   >
                     <Settings className="w-3.5 h-3.5" /> Gerenciar Personalidades
                   </button>
@@ -1734,12 +1737,12 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
             {/* Font Size Selector */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
                 className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
                 title="Tamanho da Fonte"
               >
-                <Type className="w-4 h-4 text-blue-400" />
+                <Type className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
               </button>
 
               {showFontSizeSelector && (
@@ -1749,16 +1752,17 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                   </div>
                   <div className="flex justify-between items-center text-xs font-semibold text-[var(--text-secondary)]">
                     <span>Tamanho</span>
-                    <span className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md font-mono">{chatFontSize}px</span>
+                    <span className="px-2 py-0.5 rounded-md font-mono" style={{ color: 'var(--accent-text)', background: 'var(--accent-bg)' }}>{chatFontSize}px</span>
                   </div>
-                  <input 
-                    type="range" 
-                    min="12" 
-                    max="24" 
-                    step="0.5" 
-                    value={chatFontSize} 
+                  <input
+                    type="range"
+                    min="12"
+                    max="24"
+                    step="0.5"
+                    value={chatFontSize}
                     onChange={(e) => setChatFontSize(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-[var(--border-light)] rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
+                    className="w-full h-1.5 bg-[var(--border-light)] rounded-lg appearance-none cursor-pointer focus:outline-none"
+                    style={{ accentColor: 'var(--accent)' }}
                   />
                   <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] font-medium">
                     <span>12px</span>
@@ -1771,22 +1775,22 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
           <div className="flex-1 flex justify-end items-center gap-2">
             {activeChatId && (
-              <button 
+              <button
                 onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:scale-105 active:scale-95 ${
-                  activeTab === 'files' 
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' 
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:scale-105 active:scale-95 ${activeTab === 'files'
+                    ? 'text-white shadow-lg'
                     : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border-[var(--border-light)] hover:border-[var(--glow-active)]'
-                }`}
+                  }`}
+                style={activeTab === 'files' ? { background: 'var(--accent)', borderColor: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' } : {}}
                 title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
               >
-                <Files className={`w-3.5 h-3.5 ${activeTab === 'files' ? 'text-white' : 'text-blue-400'}`} />
+                <Files className={`w-3.5 h-3.5 ${activeTab === 'files' ? 'text-white' : ''}`} style={activeTab !== 'files' ? { color: 'var(--accent-text)' } : {}} />
                 <span className="hidden sm:inline">{activeTab === 'chat' ? 'Arquivos' : 'Chat'}</span>
               </button>
             )}
 
-            <button 
-              onClick={() => setShowAnalytics(!showAnalytics)} 
+            <button
+              onClick={() => setShowAnalytics(!showAnalytics)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border border-[var(--border-light)] hover:border-[var(--glow-active)] transition-all duration-200 hover:scale-105 active:scale-95"
             >
               <Activity className="w-3.5 h-3.5 text-green-400" />
@@ -1800,7 +1804,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
         </header>
 
-        <ChatRuler margin={chatMargin} onMarginChange={setChatMargin} />
+        {activeTab === 'chat' && <ChatRuler margin={chatMargin} onMarginChange={setChatMargin} />}
 
         {/* Removida a fita de LED do topo */}
 
@@ -1808,11 +1812,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           <div className="absolute top-20 right-8 glass-modal rounded-3xl p-6 w-96 shadow-2xl z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)] flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-indigo-400" /> Analytics Hoje
+                <BarChart2 className="w-4 h-4" style={{ color: 'var(--accent-text)' }} /> Analytics Hoje
               </h3>
               <button onClick={() => setShowAnalytics(false)} className="p-1.5 hover:bg-[var(--bg-chat-hover)] rounded-full text-[var(--text-placeholder)]"><X className="w-4 h-4" /></button>
             </div>
-            
+
             <div className="space-y-6">
               {Object.entries(dailyUsage.models).length === 0 ? (
                 <div className="text-center py-8 text-xs text-[var(--text-placeholder)] italic">Nenhum dado de uso registrado hoje.</div>
@@ -1827,7 +1831,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                         <span className="text-[var(--text-placeholder)]">{data.requests} / {limit.rpd} reqs</span>
                       </div>
                       <div className="h-1.5 bg-[var(--bg-chat-hover)] rounded-full overflow-hidden">
-                        <div className={`h-full transition-all duration-1000 ${percent > 90 ? 'bg-red-500' : percent > 50 ? 'bg-amber-500' : 'bg-indigo-500'}`} style={{ width: `${percent}%` }}></div>
+                        <div className={`h-full transition-all duration-1000 ${percent > 90 ? 'bg-red-500' : percent > 50 ? 'bg-amber-500' : ''}`} style={percent <= 50 ? { background: 'var(--accent)', width: `${percent}%` } : { width: `${percent}%` }}></div>
                       </div>
                       <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] opacity-60">
                         <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> {data.tokens.total.toLocaleString()} tokens</span>
@@ -1849,11 +1853,64 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {activeTab === 'files' && activeChatId ? (
             <ChatFileHub messages={messages} onClose={() => setActiveTab('chat')} />
+          ) : activeTab === 'settings' ? (
+            <SettingsModal
+              inline={true}
+              initialTab={settingsTab}
+              onClose={() => setActiveTab('chat')}
+              theme={theme}
+              onSetTheme={setTheme}
+              chatMargin={chatMargin}
+              onSetChatMargin={(m) => {
+                setChatMargin(m);
+                localStorage.setItem('nemon_chat_margin', m.toString());
+              }}
+              enabledModelIds={enabledModelIds}
+              onSetEnabledModelIds={setEnabledModelIds}
+              paidApiKey={paidApiKey}
+              onUpdatePaidApiKey={(key) => {
+                setPaidApiKey(key);
+                setGlobalPaidApiKey(key);
+                saveConfig({ paidApiKey: key });
+              }}
+              personalities={personalities}
+              onSavePersonality={(p) => {
+                const exists = personalities.find(item => item.id === p.id);
+                if (exists) {
+                  setPersonalities((prev: Personality[]) => prev.map((item: Personality) => item.id === p.id ? p : item));
+                } else {
+                  setPersonalities((prev: Personality[]) => [...prev, p]);
+                }
+              }}
+              onDeletePersonality={(id) => {
+                setPersonalities((prev: Personality[]) => prev.filter((p: Personality) => p.id !== id));
+                if (selectedPersonalityId === id) setSelectedPersonalityId('default');
+              }}
+              memoryFacts={memoryFacts}
+              onDeleteMemoryFact={(id) => {
+                const next = memoryFacts.filter((m) => m.id !== id);
+                setMemoryFacts(next);
+                fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+              }}
+              onSaveMemoryFact={(fact) => {
+                let next;
+                if (fact.id) {
+                  next = memoryFacts.map(m => m.id === fact.id ? fact : m);
+                } else {
+                  next = [...memoryFacts, { ...fact, id: uuidv4(), timestamp: Date.now() }];
+                }
+                setMemoryFacts(next);
+                fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+              }}
+              onAutoCategorizeMemory={handleAutoCategorize}
+              isCategorizingMemory={isCategorizing}
+              categorizationProgress={categorizationProgress}
+            />
           ) : (
             <>
               <div className="flex-1 overflow-hidden flex flex-col relative">
                 {isLiveActive ? (
-                  <LiveView 
+                  <LiveView
                     status={liveStatus}
                     transcript={liveTranscript}
                     currentVoice={liveVoice}
@@ -1865,7 +1922,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onInterrupt={handleInterruptLive}
                     onVoiceChange={(v: string) => {
                       setLiveVoice(v);
-                      localStorage.setItem('gemoro_live_voice', v);
+                      localStorage.setItem('nemon_live_voice', v);
                       handleLiveStop();
                       setTimeout(handleLiveStart, 500);
                     }}
@@ -1874,7 +1931,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onClose={handleLiveStop}
                   />
                 ) : (
-                  <MessageList 
+                  <MessageList
                     messages={messages}
                     margin={chatMargin}
                     visibleMessagesCount={visibleMessagesCount}
@@ -1895,8 +1952,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onSetEditingMsgText={setEditingMsgText}
                     onCancelEdit={() => setEditingMsgId(null)}
                     onRegenerate={handleRegenerate}
-                    onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: Message) => m.id !== id)} : c))}
-                    onCopy={(text, id) => { 
+                    onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? { ...c, messages: c.messages.filter((m: Message) => m.id !== id) } : c))}
+                    onCopy={(text, id) => {
                       let finalOutput = text;
                       if (!id.endsWith('-md')) {
                         // Strip Markdown for plain text copy
@@ -1909,26 +1966,26 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                           .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Links
                           .replace(/^[*-]\s+/gm, ''); // List items
                       }
-                      navigator.clipboard.writeText(finalOutput); 
-                      setCopiedId(id); 
-                      setTimeout(() => setCopiedId(null), 2000); 
+                      navigator.clipboard.writeText(finalOutput);
+                      setCopiedId(id);
+                      setTimeout(() => setCopiedId(null), 2000);
                     }}
                     onToggleSources={setExpandedSourcesMsgId}
                     onSelectionChange={(text, pos, msgId) => setSelectionData({ text, pos, messageId: msgId })}
                   />
                 )}
-                
+
                 {activeChat && messages.length > 0 && !isLiveActive && (
-                  <MessageTimeline 
-                    messages={messages} 
-                    onJumpToMessage={handleJumpToMessage} 
+                  <MessageTimeline
+                    messages={messages}
+                    onJumpToMessage={handleJumpToMessage}
                     activeId={activeMessageId}
                   />
                 )}
               </div>
 
               {selectionData && (
-                <SelectionPopup 
+                <SelectionPopup
                   text={selectionData.text}
                   position={selectionData.pos}
                   theme={theme}
@@ -1939,7 +1996,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 />
               )}
 
-              <ChatInput 
+              <ChatInput
                 isLoading={isLoading}
                 isLiveSpeaking={isLiveSpeaking}
                 isLiveActive={isLiveActive}
@@ -1949,7 +2006,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 model={model}
                 imagenModel={imagenModel}
                 aspectRatio={aspectRatio}
-                canSearch={model.includes('gemma') || model.includes('gemini-2')}
+                canSearch={MODEL_OPTIONS.find(m => m.id === model)?.hasSearch ?? false}
                 showScrollButton={showScrollButton}
                 margin={chatMargin}
                 personalityName={personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
@@ -1970,84 +2027,19 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           )}
         </div>
 
-        {showPersonalitiesModal && (
-          <PersonalitiesModal 
-            personalities={personalities}
-            onClose={() => setShowPersonalitiesModal(false)}
-            onSave={(p: Personality) => {
-              const exists = personalities.find(item => item.id === p.id);
-              if (exists) {
-                setPersonalities((prev: Personality[]) => prev.map((item: Personality) => item.id === p.id ? p : item));
-              } else {
-                setPersonalities((prev: Personality[]) => [...prev, p]);
-              }
-            }}
-            onDelete={(id: string) => {
-              setPersonalities((prev: Personality[]) => prev.filter((p: Personality) => p.id !== id));
-              if (selectedPersonalityId === id) setSelectedPersonalityId('default');
-            }}
-          />
-        )}
-
-
       </main>
 
-        {showDnaModal && (
-        <DnaModal 
-          memoryFacts={memoryFacts}
-          isCategorizing={isCategorizing}
-          progress={categorizationProgress}
-          onAutoCategorize={handleAutoCategorize}
-          onClose={() => setShowDnaModal(false)}
-          onDelete={(id) => {
-            const next = memoryFacts.filter((m) => m.id !== id);
-            setMemoryFacts(next);
-            fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
-          }}
-          onSave={(fact: MemoryFact) => {
-            let next;
-            if (fact.id) {
-              next = memoryFacts.map(m => m.id === fact.id ? fact : m);
-            } else {
-              next = [...memoryFacts, { ...fact, id: uuidv4(), timestamp: Date.now() }];
-            }
-            setMemoryFacts(next);
-            fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
-          }}
-        />
-      )}
-
       {showLiveSetupModal && (
-        <LiveSetupModal 
+        <LiveSetupModal
           onClose={() => setShowLiveSetupModal(false)}
           onConfirm={confirmLiveStart}
           isConnecting={liveStatus === 'connecting' && isLiveActive}
         />
       )}
 
-      {showSettingsModal && (
-        <SettingsModal 
-          onClose={() => setShowSettingsModal(false)}
-          theme={theme}
-          onSetTheme={setTheme}
-          chatMargin={chatMargin}
-          onSetChatMargin={(m) => {
-            setChatMargin(m);
-            localStorage.setItem('gemoro_chat_margin', m.toString());
-          }}
-          enabledModelIds={enabledModelIds}
-          onSetEnabledModelIds={setEnabledModelIds}
-          paidApiKey={paidApiKey}
-          onUpdatePaidApiKey={(key) => {
-            setPaidApiKey(key);
-            saveConfig({ paidApiKey: key });
-          }}
-          onOpenPersonalities={() => setShowPersonalitiesModal(true)}
-          onOpenDna={() => setShowDnaModal(true)}
-        />
-      )}
+
       {isSidebarOpen && (
-        <div 
+        <div
           onClick={() => setIsSidebarOpen(false)}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] md:hidden animate-in fade-in duration-300"
         ></div>

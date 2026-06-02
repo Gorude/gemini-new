@@ -61,7 +61,7 @@ const BarVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser }
         const y = centerY - barHeight / 2;
 
         // Desenhar cápsula arredondada
-        ctx.fillStyle = `rgba(59, 130, 246, ${0.4 + percent * 0.6})`; // Azul neon Gemoro
+        ctx.fillStyle = `rgba(59, 130, 246, ${0.4 + percent * 0.6})`; // Azul neon Nemon
         ctx.beginPath();
         // Usando roundRect para cantos arredondados estilo cápsula
         (ctx as any).roundRect(x, y, barWidth, barHeight, barWidth / 2);

@@ -163,25 +163,27 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
       ref={rootRef}
       className={`bg-[var(--bg-main)] rounded-2xl overflow-hidden border border-[var(--border-light)] relative flex w-full h-full transition-all duration-300 ${isFullscreen ? 'rounded-none' : ''}`}
     >
-      <div ref={containerRef} className="flex-1 relative bg-[var(--bg-main)]/50 overflow-hidden">
-        <ForceGraph2D
-          ref={fgRef}
-          width={dimensions.width}
-          height={dimensions.height}
-          graphData={graphData}
-          nodeLabel={(node: any) => `[${node.category}] ${node.name}`}
-          nodeColor={(node: any) => (focusMode && hoverNode && !isRelated(node.id)) ? 'rgba(150, 150, 150, 0.1)' : (categoryColors[node.category] || '#4f46e5')}
-          linkColor={(link: any) => (focusMode && hoverNode && (link.source.id === hoverNode || link.target.id === hoverNode)) ? 'rgba(99, 102, 241, 0.8)' : 'rgba(150, 150, 150, 0.2)'}
-          linkWidth={(link: any) => (focusMode && hoverNode && (link.source.id === hoverNode || link.target.id === hoverNode)) ? 2 : 1}
-          nodeRelSize={nodeSize / 5} 
-          onNodeClick={(node: any) => {
-            const fact = facts.find(f => f.id === node.id);
-            if (fact) onNodeClick(fact);
-          }}
-          onNodeHover={(node: any) => setHoverNode(node ? node.id : null)}
-          backgroundColor="rgba(0,0,0,0)"
-          cooldownTicks={3000}
-        />
+      <div ref={containerRef} className="flex-1 min-w-0 relative bg-[var(--bg-main)]/50 overflow-hidden">
+        <div className="absolute inset-0">
+          <ForceGraph2D
+            ref={fgRef}
+            width={dimensions.width}
+            height={dimensions.height}
+            graphData={graphData}
+            nodeLabel={(node: any) => `[${node.category}] ${node.name}`}
+            nodeColor={(node: any) => (focusMode && hoverNode && !isRelated(node.id)) ? 'rgba(150, 150, 150, 0.1)' : (categoryColors[node.category] || '#4f46e5')}
+            linkColor={(link: any) => (focusMode && hoverNode && (link.source.id === hoverNode || link.target.id === hoverNode)) ? 'rgba(99, 102, 241, 0.8)' : 'rgba(150, 150, 150, 0.2)'}
+            linkWidth={(link: any) => (focusMode && hoverNode && (link.source.id === hoverNode || link.target.id === hoverNode)) ? 2 : 1}
+            nodeRelSize={nodeSize / 5} 
+            onNodeClick={(node: any) => {
+              const fact = facts.find(f => f.id === node.id);
+              if (fact) onNodeClick(fact);
+            }}
+            onNodeHover={(node: any) => setHoverNode(node ? node.id : null)}
+            backgroundColor="rgba(0,0,0,0)"
+            cooldownTicks={3000}
+          />
+        </div>
         
         {/* Legend */}
         <div className="absolute bottom-6 left-6 p-4 bg-[var(--bg-sidebar)]/80 backdrop-blur-md rounded-2xl border border-[var(--border-light)] text-[11px] space-y-3 pointer-events-auto z-50 select-none shadow-2xl" onWheel={e => e.stopPropagation()}>

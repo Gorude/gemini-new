@@ -148,7 +148,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   <img src={`data:${f.mimeType};base64,${f.data}`} className="object-cover w-full h-full" alt="pendente" />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-[9px] p-1 text-center bg-[var(--bg-sidebar)] text-[var(--text-secondary)]">
-                    <FileText className="w-4 h-4 mb-1 text-indigo-400" />
+                    <FileText className="w-4 h-4 mb-1" style={{ color: 'var(--accent-text)' }} />
                     <span className="truncate w-full">{f.name}</span>
                   </div>
                 )}
@@ -160,7 +160,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
         
-        <div className={`input-wrapper p-3 shadow-2xl relative bg-[var(--bg-input)] rounded-[24px] border transition-all duration-500 ${isLoading ? 'generating-glow border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : isLiveActive ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-[var(--border-light)]'}`}>
+        <div className={`input-wrapper p-3 shadow-2xl relative bg-[var(--bg-input)] rounded-[24px] border transition-all duration-500 ${isLoading ? 'generating-glow' : isLiveActive ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-[var(--border-light)]'}`} style={isLoading ? { borderColor: 'color-mix(in srgb, var(--accent) 50%, transparent)', boxShadow: '0 0 15px var(--accent-glow)' } : {}}>
           {showScrollButton && (
             <button 
               onClick={onScrollToBottom}
@@ -178,7 +178,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             rows={1} 
-            placeholder={`Pergunte ao Gemoro${personalityName !== 'Normal' ? ` - ${personalityName}` : ''}...`} 
+            placeholder={`Pergunte ao Nemon${personalityName !== 'Normal' ? ` - ${personalityName}` : ''}...`} 
             className="w-full bg-transparent border-none px-4 pt-2 pb-1 focus:outline-none resize-none text-[16px] text-[var(--text-primary)] placeholder-gray-500/70 overflow-hidden"
           />
           
@@ -196,11 +196,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <button 
                 onClick={onToggleWebSearch} 
                 disabled={!canSearch}
-                className={`w-10 h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${webSearchEnabled ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'} disabled:opacity-20 disabled:grayscale`}
+                className={`w-10 h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${webSearchEnabled ? 'border' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'} disabled:opacity-20 disabled:grayscale`}
+                style={webSearchEnabled ? { background: 'var(--accent-bg)', color: 'var(--accent-text)', borderColor: 'var(--accent-border)' } : {}}
                 title={canSearch ? "Pesquisa na Web" : "Modelo não suporta pesquisa"}
               >
                 <Globe className="w-5 h-5" />
-                {webSearchEnabled && <span className="absolute top-2 right-2 w-2 h-2 bg-blue-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(96,165,250,0.8)]"></span>}
+                {webSearchEnabled && <span className="absolute top-2 right-2 w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--accent-text)', boxShadow: '0 0 8px var(--accent-glow)' }}></span>}
               </button>
 
               <button 
@@ -284,10 +285,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 {isModelMenuOpen && (
                   <div className="absolute bottom-[115%] right-0 bg-[var(--bg-sidebar)]/95 backdrop-blur-2xl border border-[var(--border-light)] shadow-2xl rounded-2xl py-2 min-w-64 z-50 overflow-hidden flex flex-col items-start origin-bottom-right animate-in fade-in zoom-in-95 duration-200">
                     {MODEL_OPTIONS.filter(opt => enabledModelIds.includes(opt.id)).map(opt => (
-                      <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'bg-blue-500/10 text-blue-400 font-bold' : ''}`}>
+                      <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
                         <div className="flex items-center gap-2">
                           <span className="text-[13px] font-semibold text-[var(--text-primary)]">{opt.name}</span>
-                          {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-40 text-blue-400" />}
+                          {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-40" style={{ color: 'var(--accent-text)' }} />}
                         </div>
                         <span className="text-[11px] text-[var(--text-placeholder)]">{opt.desc}</span>
                       </button>
@@ -304,8 +305,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     ? 'bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)] cursor-not-allowed' 
                     : (isLoading || isLiveSpeaking)
                       ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/20' 
-                      : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-600/20'
+                      : 'text-white shadow-lg'
                 }`}
+                style={!isLoading && !isLiveSpeaking && (input.trim() || pendingFiles.length > 0) ? { background: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' } : {}}
               >
                 {isLoading || isLiveSpeaking ? <Square className="w-5 h-5 fill-current" /> : <Send className="w-5 h-5" />}
               </button>

@@ -67,7 +67,7 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
                 </div>
              ) : (
                 <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest text-blue-400">
-                  <Bot size={10} /> Resposta Gemoro
+                  <Bot size={10} /> Resposta Nemon
                 </div>
              )}
           </div>

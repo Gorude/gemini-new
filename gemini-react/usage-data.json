@@ -1,1 +1,1 @@
-{"date":"2026-05-19","models":{"gemma-4-31b-it":{"requests":10,"tokens":{"prompt":570427,"candidates":6992,"total":581142}}}}
+{"date":"2026-06-02","models":{"gemma-4-31b-it":{"requests":2,"tokens":{"prompt":116450,"candidates":401,"total":117099}},"gemini-3.1-flash-lite-preview":{"requests":7,"tokens":{"prompt":441992,"candidates":1593,"total":443585}}}}

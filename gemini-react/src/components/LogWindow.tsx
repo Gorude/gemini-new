@@ -10,7 +10,8 @@ import {
   Info,
   Maximize2,
   Minimize2,
-  ChevronDown
+  ChevronDown,
+  Code
 } from 'lucide-react';
 import { logger, type LogEntry } from '../services/logger';
 
@@ -144,10 +145,10 @@ const LogWindow: React.FC = () => {
       {/* Floating Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-4 right-4 z-[9998] p-3 rounded-full bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/30 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 group/btn"
+        className="fixed bottom-4 right-4 z-[9998] p-3 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 group/btn"
         title="Painel de Debug"
       >
-        <Terminal className="w-5 h-5 group-hover/btn:rotate-12 transition-transform" />
+        <Code className="w-5 h-5 text-white group-hover/btn:scale-110 transition-transform" />
         {logs.length > 0 && (
           <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black rounded-full h-5 w-5 flex items-center justify-center border border-zinc-950 animate-pulse">
             {logs.length}

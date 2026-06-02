@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
+import NemonIcon from './NemonIcon';
 
 interface MessageItemProps {
   msg: Message;
@@ -159,7 +160,9 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             ? `<a href="${res.sourceUrl}" target="_blank" class="fact-link" title="Ver fonte original">🔗</a>` 
             : '';
           
-          markers[markerId] = `<span class="${className}" title="${res.explanation || ''}">${res.segment}${sourceLink}</span>`;
+          // Render segment markdown and strip wrapping <p> tags so it stays inline
+          const renderedSegment = safeMarkdown(res.segment).replace(/^\s*<p>([\s\S]*?)<\/p>\s*$/, '$1').trim();
+          markers[markerId] = `<span class="${className}" title="${res.explanation || ''}">${renderedSegment}${sourceLink}</span>`;
           textWithMarkers = textWithMarkers.replace(flexibleRegex, markerId);
         }
       });
@@ -201,18 +204,11 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
       {msg.role === 'ai' ? (
         <div className="ai-msg w-full">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 flex items-center justify-center relative">
+            <div className="w-10 h-10 flex items-center justify-center relative">
               {!msg.text && (
-                <div className="gemini-spinner absolute inset-0" />
+                <div className="nemon-spinner absolute inset-0" />
               )}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M11.9961 24C12.3961 17.6 17.6039 12.4 24 12.0039C17.6039 11.6039 12.3961 6.4 11.9961 0C11.5961 6.4 6.39609 11.6039 0 12.0039C6.39609 12.4 11.5961 17.6 11.9961 24Z" fill="url(#geminiGrad)"/>
-                <defs>
-                  <linearGradient id="geminiGrad" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="#4285F4"/><stop offset="0.5" stopColor="#9B72CB"/><stop offset="1" stopColor="#D96570"/>
-                  </linearGradient>
-                </defs>
-              </svg>
+              <NemonIcon size={30} />
             </div>
 
             {/* Web Search Sources Icons */}
@@ -281,7 +277,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 )}
 
                 {expandedSourcesMsgId === msg.id && msg.sources && (
-                  <div onClick={(e) => e.stopPropagation()} className="absolute top-10 left-10 bg-[var(--bg-sidebar)] shadow-2xl rounded-2xl p-3 min-w-[320px] max-w-[400px] z-[60] border border-[var(--border-light)] animate-in fade-in zoom-in-95 duration-200">
+                  <div onClick={(e) => e.stopPropagation()} className="absolute top-10 left-10 bg-[var(--bg-main)] shadow-2xl rounded-2xl p-3 min-w-[320px] max-w-[400px] z-[60] border border-[var(--border-light)] animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex justify-between items-center mb-2 px-1">
                       <h5 className="text-[10px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest">Todas as Referências</h5>
                       <button onClick={() => onToggleSources(null)} className="text-[var(--text-placeholder)] hover:text-white"><X className="w-3.5 h-3.5" /></button>

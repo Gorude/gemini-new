@@ -252,6 +252,34 @@ export interface Message {
 }
 
 
+let globalPaidApiKey = '';
+
+export function setGlobalPaidApiKey(key: string) {
+  globalPaidApiKey = key;
+}
+
+export async function getApiKey(manualApiKey?: string): Promise<string> {
+  if (manualApiKey) return manualApiKey;
+  if (globalPaidApiKey) return globalPaidApiKey;
+  
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.paidApiKey) {
+        globalPaidApiKey = data.paidApiKey;
+        return data.paidApiKey;
+      }
+    }
+  } catch (e) {
+    // Ignore
+  }
+  
+  const envKey = import.meta.env.VITE_GEMINI_FREE_API_KEY;
+  if (!envKey) throw new Error("Chave de API não configurada.");
+  return envKey;
+}
+
 export async function* streamGeminiContent(
   text: string,
   model: string,
@@ -261,7 +289,8 @@ export async function* streamGeminiContent(
   webSearch: boolean = false,
   signal?: AbortSignal,
   thinking: boolean = false,
-  jsonMode: boolean = false
+  jsonMode: boolean = false,
+  manualApiKey?: string
 ): AsyncGenerator<{
   text?: string;
   thoughts?: string;
@@ -270,9 +299,7 @@ export async function* streamGeminiContent(
   sources?: { title: string; uri: string }[];
   usage?: { promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }
 }> {
-  const key = import.meta.env.VITE_GEMINI_FREE_API_KEY;
-  if (!key) throw new Error("Chave de API FREE não configurada no arquivo .env");
-
+  const key = await getApiKey(manualApiKey);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`;
 
   const currentParts: any[] = [];
@@ -504,9 +531,10 @@ export async function generateGeminiContent(
   webSearch: boolean = false,
   thinking: boolean = false,
   jsonMode: boolean = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  manualApiKey?: string
 ) {
-  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, signal, thinking, jsonMode);
+  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, signal, thinking, jsonMode, manualApiKey);
   let fullText = "", fullThoughts = "", isGrounded = false, usage: any = null;
 
   for await (const chunk of gen) {
@@ -525,7 +553,7 @@ export async function generateImagenContent(
   aspectRatio: '1:1' | '9:16' | '16:9',
   manualApiKey?: string
 ): Promise<{ data: string; mimeType: string }> {
-  const key = manualApiKey || import.meta.env.VITE_GEMINI_PAID_API_KEY;
+  const key = manualApiKey || globalPaidApiKey || import.meta.env.VITE_GEMINI_PAID_API_KEY;
   if (!key) throw new Error("Chave de API Imagen (Paga) não configurada.");
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${key}`;

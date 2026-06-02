@@ -2,6 +2,7 @@ import React, { useRef, useLayoutEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { type Message } from '../services/gemini';
 import MessageItem from './MessageItem';
+import NemonIcon from './NemonIcon';
 
 interface MessageListProps {
   messages: Message[];
@@ -96,18 +97,11 @@ const MessageList: React.FC<MessageListProps> = ({
       {messages.length === 0 && !isLoading ? (
         <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
           <div className="w-16 h-16 mb-8 relative">
-            <div className="gemini-spinner absolute inset-0 opacity-40" />
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" className="relative z-10">
-              <path d="M11.9961 24C12.3961 17.6 17.6039 12.4 24 12.0039C17.6039 11.6039 12.3961 6.4 11.9961 0C11.5961 6.4 6.39609 11.6039 0 12.0039C6.39609 12.4 11.5961 17.6 11.9961 24Z" fill="url(#welcomeGrad)"/>
-              <defs>
-                <linearGradient id="welcomeGrad" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#4285F4"/><stop offset="0.5" stopColor="#9B72CB"/><stop offset="1" stopColor="#D96570"/>
-                </linearGradient>
-              </defs>
-            </svg>
+            <div className="nemon-spinner absolute inset-0 opacity-40" />
+            <NemonIcon size={64} className="relative z-10" />
           </div>
           
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#4285F4] via-[#9B72CB] to-[#D96570]">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#0052d4] via-[#4364f7] to-[#6fb1fc]">
             Olá, Conselheiro
           </h1>
           <p className="text-lg text-[var(--text-secondary)] max-w-md mx-auto leading-relaxed opacity-80">

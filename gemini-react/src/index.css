@@ -2,57 +2,66 @@
 @import "tailwindcss";
 
 :root[data-theme="escuro"] {
-  --bg-main: #090a0f;
-  --bg-main-grad: linear-gradient(135deg, #090a0f 0%, #111319 100%);
-  --bg-sidebar: rgba(18, 20, 26, 0.65); 
+  --bg-main: #0d0d0d;
+  --bg-main-grad: linear-gradient(135deg, #0d0d0d 0%, #161616 100%);
+  --bg-sidebar: rgba(18, 18, 18, 0.65); 
   --bg-chat-hover: rgba(255, 255, 255, 0.05);
-  --bg-chat-active: rgba(99, 102, 241, 0.15);
-  --bg-nav-active: rgba(99, 102, 241, 0.2);
-  --text-nav-active: #a5b4fc;
-  --bg-user-bubble: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-  --bg-input: rgba(18, 20, 26, 0.55);
-  --bg-modal: rgba(22, 24, 30, 0.85);
+  --bg-chat-active: rgba(255, 255, 255, 0.08);
+  --bg-nav-active: rgba(255, 255, 255, 0.12);
+  --text-nav-active: #ffffff;
+  --bg-user-bubble: linear-gradient(135deg, #333333 0%, #222222 100%);
+  --bg-input: rgba(20, 20, 20, 0.55);
+  --bg-modal: rgba(20, 20, 20, 0.85);
   --border-main: rgba(255, 255, 255, 0.08);
   --border-light: rgba(255, 255, 255, 0.05);
-  --text-primary: #abb8c9;
-  --text-bold: #f8fafc;
-  --text-user-regular: rgba(241, 245, 249, 0.72);
-  --text-user-bold: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-placeholder: #64748b;
+  --text-primary: #cccccc;
+  --text-bold: #ffffff;
+  --text-user-regular: rgba(255, 255, 255, 0.85);
+  --text-user-bold: #ffffff;
+  --text-secondary: #999999;
+  --text-placeholder: #555555;
   --code-bg: #0f1115;
   --inline-code-bg: #1e222b;
   --code-border: rgba(255, 255, 255, 0.06);
   --scrollbar-track: transparent;
   --scrollbar-thumb: rgba(255, 255, 255, 0.12);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
-  --glass-bg: rgba(22, 24, 30, 0.65);
+  --glass-bg: rgba(20, 20, 20, 0.65);
   --glass-border: rgba(255, 255, 255, 0.045);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
-  --glow-primary: rgba(99, 102, 241, 0.15);
-  --glow-active: rgba(99, 102, 241, 0.4);
+  --glow-primary: rgba(255, 255, 255, 0.05);
+  --glow-active: rgba(255, 255, 255, 0.2);
   --message-bold-weight: 500;
+  --nemon-logo-fill: #ffffff;
+  --nemon-logo-stroke: #ffffff;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-text: #818cf8;
+  --accent-bg: rgba(99, 102, 241, 0.1);
+  --accent-bg-strong: rgba(99, 102, 241, 0.15);
+  --accent-border: rgba(99, 102, 241, 0.3);
+  --accent-glow: rgba(99, 102, 241, 0.25);
 }
 
 :root[data-theme="claro"] {
-  --bg-main: #f8f9fa;
-  --bg-main-grad: linear-gradient(135deg, #f8f9fa 0%, #eef1f6 100%);
+  --bg-main: #fcfcfc;
+  --bg-main-grad: linear-gradient(135deg, #fcfcfc 0%, #ebebeb 100%);
   --bg-sidebar: rgba(255, 255, 255, 0.65);
   --bg-chat-hover: rgba(0, 0, 0, 0.025);
-  --bg-chat-active: rgba(79, 70, 229, 0.08);
-  --bg-nav-active: rgba(79, 70, 229, 0.12);
-  --text-nav-active: #4f46e5;
-  --bg-user-bubble: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  --bg-chat-active: rgba(0, 0, 0, 0.05);
+  --bg-nav-active: rgba(0, 0, 0, 0.08);
+  --text-nav-active: #000000;
+  --bg-user-bubble: linear-gradient(135deg, #222222 0%, #111111 100%);
   --bg-input: rgba(255, 255, 255, 0.7);
   --bg-modal: rgba(255, 255, 255, 0.9);
   --border-main: rgba(0, 0, 0, 0.08);
   --border-light: rgba(0, 0, 0, 0.04);
-  --text-primary: #1e293b;
-  --text-bold: #0f172a;
+  --text-primary: #1f1f1f;
+  --text-bold: #000000;
   --text-user-regular: rgba(255, 255, 255, 0.92);
   --text-user-bold: #ffffff;
-  --text-secondary: #475569;
-  --text-placeholder: #94a3b8;
+  --text-secondary: #5a5a5a;
+  --text-placeholder: #8a8a8a;
   --code-bg: #f1f5f9;
   --inline-code-bg: #e2e8f0;
   --code-border: rgba(0, 0, 0, 0.06);
@@ -62,9 +71,18 @@
   --glass-bg: rgba(255, 255, 255, 0.6);
   --glass-border: rgba(0, 0, 0, 0.05);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
-  --glow-primary: rgba(79, 70, 229, 0.06);
-  --glow-active: rgba(79, 70, 229, 0.25);
+  --glow-primary: rgba(0, 0, 0, 0.02);
+  --glow-active: rgba(0, 0, 0, 0.12);
   --message-bold-weight: 600;
+  --nemon-logo-fill: #000000;
+  --nemon-logo-stroke: #000000;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-text: #4f46e5;
+  --accent-bg: rgba(79, 70, 229, 0.08);
+  --accent-bg-strong: rgba(79, 70, 229, 0.12);
+  --accent-border: rgba(79, 70, 229, 0.25);
+  --accent-glow: rgba(79, 70, 229, 0.2);
 }
 
 :root[data-theme="areia"] {
@@ -98,6 +116,15 @@
   --glow-primary: rgba(217, 119, 6, 0.08);
   --glow-active: rgba(217, 119, 6, 0.3);
   --message-bold-weight: 600;
+  --nemon-logo-fill: #b45309;
+  --nemon-logo-stroke: #b45309;
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-text: #d97706;
+  --accent-bg: rgba(180, 83, 9, 0.1);
+  --accent-bg-strong: rgba(180, 83, 9, 0.15);
+  --accent-border: rgba(180, 83, 9, 0.3);
+  --accent-glow: rgba(180, 83, 9, 0.25);
 }
 
 :root[data-theme="galaxia"] {
@@ -131,6 +158,15 @@
   --glow-primary: rgba(217, 70, 239, 0.15);
   --glow-active: rgba(217, 70, 239, 0.45);
   --message-bold-weight: 500;
+  --nemon-logo-fill: #ec4899;
+  --nemon-logo-stroke: #ec4899;
+  --accent: #a855f7;
+  --accent-hover: #9333ea;
+  --accent-text: #c084fc;
+  --accent-bg: rgba(168, 85, 247, 0.12);
+  --accent-bg-strong: rgba(168, 85, 247, 0.18);
+  --accent-border: rgba(168, 85, 247, 0.3);
+  --accent-glow: rgba(168, 85, 247, 0.3);
 }
 
 body { 
@@ -455,31 +491,31 @@ body {
   content: '';
   position: absolute;
   inset: 1px;
-  background: var(--bg-sidebar);
+  background: var(--bg-main);
   border-radius: inherit;
   z-index: -1;
 }
 
-/* Gemini spinning ring loader */
-@keyframes gemini-spin {
+/* Nemon spinning ring loader */
+@keyframes nemon-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-.gemini-spinner {
+.nemon-spinner {
   border-radius: 50%;
   padding: 2px;
   background: conic-gradient(
     from 0deg,
-    #4285F4,
-    #9B72CB,
-    #D96570,
-    #9B72CB,
-    #4285F4
+    #002b80,
+    #0070f3,
+    #00d2ff,
+    #0070f3,
+    #002b80
   );
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
-  animation: gemini-spin 1.2s linear infinite;
+  animation: nemon-spin 1.2s linear infinite;
 }
 
 @keyframes loading-bar {

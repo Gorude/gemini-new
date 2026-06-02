@@ -28,7 +28,19 @@ export class GeminiLiveSession {
 
   async start() {
     this.handlers.onStatusChange('connecting');
-    const key = import.meta.env.VITE_GEMINI_FREE_API_KEY;
+    let key = import.meta.env.VITE_GEMINI_FREE_API_KEY;
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.paidApiKey) {
+          key = data.paidApiKey;
+        }
+      }
+    } catch (e) {
+      // Fallback
+    }
+
     if (!key) {
       this.handlers.onError("API Key não configurada.");
       return;
@@ -109,7 +121,7 @@ export class GeminiLiveSession {
         ],
         systemInstruction: {
           role: "system",
-          parts: [{ text: `Você é o Gemoro no modo LIVE. ${this.personalityPrompt}. 
+          parts: [{ text: `Você é o Nemon no modo LIVE. ${this.personalityPrompt}. 
             HORA ATUAL: ${new Date().toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
             REGRAS OBRIGATÓRIAS:
             1. Responda SEMPRE ao usuário de forma audível. NUNCA fique em silêncio.

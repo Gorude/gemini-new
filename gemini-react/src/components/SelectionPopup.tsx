@@ -73,7 +73,7 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Perguntar ao Gemoro..."
+            placeholder="Perguntar ao Nemon..."
             className="bg-transparent border-none text-[11px] text-[var(--text-primary)] focus:ring-0 placeholder:text-[var(--text-placeholder)] py-1.5 w-full"
           />
           <div className="flex items-center gap-0.5">
