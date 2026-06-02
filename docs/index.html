@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./nemon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nemon</title>
+    <style>
+      html { background-color: #131314; } /* Default dark background to prevent white flash */
+    </style>
+    <script>
+      (function() {
+        try {
+          var theme = localStorage.getItem('nemon-theme');
+          if (theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+          } else {
+            document.documentElement.setAttribute('data-theme', 'escuro');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/index-CzyQm-f7.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-uAsJHEqm.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

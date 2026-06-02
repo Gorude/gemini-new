@@ -119,5 +119,9 @@ export default defineConfig({
     watch: {
       ignored: ['**/chat-history.json', '**/user-memory.json', '**/personalities.json', '**/usage-data.json', '**/app-config.json']
     }
+  },
+  build: {
+    outDir: '../docs',
+    emptyOutDir: true
   }
 })
