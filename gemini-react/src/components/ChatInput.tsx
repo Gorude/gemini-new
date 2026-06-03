@@ -185,7 +185,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           {showScrollButton && (
             <button 
               onClick={onScrollToBottom}
-              className="absolute -top-14 left-1/2 -translate-x-1/2 bg-[var(--bg-sidebar)] hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-light)] shadow-xl rounded-full px-5 py-1.5 text-xs font-semibold flex items-center gap-2 hover-glow scroll-to-bottom-btn animate-scroll-button whitespace-nowrap"
+              className="absolute -top-14 left-0 right-0 mx-auto w-fit bg-[var(--bg-sidebar-solid)] hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-light)] shadow-xl rounded-full px-5 py-1.5 text-xs font-semibold flex items-center gap-2 hover-glow scroll-to-bottom-btn animate-scroll-button whitespace-nowrap"
             >
                <ChevronDown className="w-4 h-4 animate-bounce" />
               Ir para o final
@@ -200,10 +200,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onPaste={handlePaste}
             rows={1} 
             placeholder={`Pergunte ao Nemon${personalityName !== 'Normal' ? ` - ${personalityName}` : ''}...`} 
-            className="w-full bg-transparent border-none px-4 pt-2 pb-1 focus:outline-none resize-none text-[16px] text-[var(--text-primary)] placeholder-gray-500/70 overflow-hidden"
+            className="w-full bg-transparent border-none px-4 pt-2 pb-1 focus:outline-none resize-none text-[16px] text-[var(--text-primary)] placeholder-gray-500/70 max-h-[50vh] overflow-y-auto custom-scrollbar"
           />
           
-          <div className="flex flex-wrap justify-between items-center px-1 sm:px-2 mt-2 gap-2">
+          <div className="flex flex-wrap justify-between items-center px-1 sm:px-2 mt-2 gap-2 max-sm:pr-12">
             <div className="flex gap-0.5 sm:gap-1 text-[var(--text-secondary)] items-center">
               <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*,application/pdf" onChange={handleFileUpload} />
               <button 
@@ -326,7 +326,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <button 
                 onClick={isLoading ? onStop : isLiveSpeaking ? onInterrupt : handleInternalSend} 
                 disabled={!isLoading && !isLiveSpeaking && !input.trim() && pendingFiles.length === 0} 
-                className={`p-2 sm:p-2.5 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-lg ${
+                className={`p-2 sm:p-2.5 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-lg max-sm:absolute max-sm:bottom-3 max-sm:right-3 max-sm:w-10 max-sm:h-10 max-sm:m-0 max-sm:flex max-sm:items-center max-sm:justify-center ${
                   !isLoading && !isLiveSpeaking && !input.trim() && pendingFiles.length === 0 
                     ? 'bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)] cursor-not-allowed' 
                     : (isLoading || isLiveSpeaking)

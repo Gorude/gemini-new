@@ -47,7 +47,7 @@ import {
 import {
   restrictToVerticalAxis
 } from '@dnd-kit/modifiers';
-import { Lock, Unlock, GripVertical } from 'lucide-react';
+import { Lock, Unlock, GripVertical, Code } from 'lucide-react';
 
 import {
   generateGeminiContent,
@@ -186,6 +186,8 @@ function App() {
   const [paidApiKey, setPaidApiKey] = useState('');
   const [defaultApiKey, setDefaultApiKey] = useState('');
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [isLogOpen, setIsLogOpen] = useState(false);
+  const [logsCount, setLogsCount] = useState(0);
 
 
 
@@ -238,6 +240,14 @@ function App() {
       window.removeEventListener('error', handleGlobalError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
+  }, []);
+
+  // Subscrever ao logger para obter a contagem de logs no mobile
+  useEffect(() => {
+    const unsubscribe = logger.subscribe((newLogs) => {
+      setLogsCount(newLogs.length);
+    });
+    return unsubscribe;
   }, []);
 
   const saveConfig = useCallback((config: { paidApiKey?: string; defaultApiKey?: string }) => {
@@ -1782,24 +1792,26 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             )}
           </div>
 
-          {/* Personality & Font Size Selector */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 sm:gap-3">
-            {/* Files Button (Only Icon, w-9 h-9) */}
-            {activeChatId && (
-              <button
-                onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
-                className={`flex items-center justify-center rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 w-9 h-9 ${activeTab === 'files'
-                    ? 'text-white shadow-lg'
-                    : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border-[var(--border-light)] hover:border-[var(--glow-active)]'
-                  }`}
-                style={activeTab === 'files' ? { background: 'var(--accent)', borderColor: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' } : {}}
-                title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
-              >
-                <Files className={`w-4 h-4 ${activeTab === 'files' ? 'text-white' : ''}`} style={activeTab !== 'files' ? { color: 'var(--accent-text)' } : {}} />
-              </button>
-            )}
+          {/* Centered Header Controls Wrapper */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[45] flex items-center gap-2 sm:gap-4">
+            {/* Left Side: Files Button */}
+            <div className="w-20 sm:w-24 flex justify-end">
+              {activeChatId && (
+                <button
+                  onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
+                  className={`flex items-center justify-center rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 w-9 h-9 ${activeTab === 'files'
+                      ? 'text-white shadow-lg'
+                      : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border-[var(--border-light)] hover:border-[var(--glow-active)]'
+                    }`}
+                  style={activeTab === 'files' ? { background: 'var(--accent)', borderColor: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' } : {}}
+                  title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
+                >
+                  <Files className={`w-4 h-4 ${activeTab === 'files' ? 'text-white' : ''}`} style={activeTab !== 'files' ? { color: 'var(--accent-text)' } : {}} />
+                </button>
+              )}
+            </div>
 
-            {/* Personality Selector */}
+            {/* Centered Personality Selector (the base) */}
             <div className="relative" ref={personalityRef}>
               <button
                 onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
@@ -1845,41 +1857,58 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               )}
             </div>
 
-            {/* Font Size Selector */}
-            <div className="relative" ref={fontSizeRef}>
-              <button
-                onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
-                className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
-                title="Tamanho da Fonte"
-              >
-                <Type className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
-              </button>
+            {/* Right Side: Font Size Selector & Log Window Trigger */}
+            <div className="w-20 sm:w-24 flex justify-start items-center gap-1.5 sm:gap-3" ref={fontSizeRef}>
+              {/* Font Size Selector */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
+                  className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
+                  title="Tamanho da Fonte"
+                >
+                  <Type className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
+                </button>
 
-              {showFontSizeSelector && (
-                <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl p-4 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
-                  <div className="text-[9px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest border-b border-[var(--border-light)] pb-1.5">
-                    Fonte do Chat
+                {showFontSizeSelector && (
+                  <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl p-4 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
+                    <div className="text-[9px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest border-b border-[var(--border-light)] pb-1.5">
+                      Fonte do Chat
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-semibold text-[var(--text-secondary)]">
+                      <span>Tamanho</span>
+                      <span className="px-2 py-0.5 rounded-md font-mono" style={{ color: 'var(--accent-text)', background: 'var(--accent-bg)' }}>{chatFontSize}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="12"
+                      max="24"
+                      step="0.5"
+                      value={chatFontSize}
+                      onChange={(e) => setChatFontSize(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-[var(--border-light)] rounded-lg appearance-none cursor-pointer focus:outline-none"
+                      style={{ accentColor: 'var(--accent)' }}
+                    />
+                    <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] font-medium">
+                      <span>12px</span>
+                      <span>24px</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center text-xs font-semibold text-[var(--text-secondary)]">
-                    <span>Tamanho</span>
-                    <span className="px-2 py-0.5 rounded-md font-mono" style={{ color: 'var(--accent-text)', background: 'var(--accent-bg)' }}>{chatFontSize}px</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="12"
-                    max="24"
-                    step="0.5"
-                    value={chatFontSize}
-                    onChange={(e) => setChatFontSize(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-[var(--border-light)] rounded-lg appearance-none cursor-pointer focus:outline-none"
-                    style={{ accentColor: 'var(--accent)' }}
-                  />
-                  <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] font-medium">
-                    <span>12px</span>
-                    <span>24px</span>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              {/* Log Window Trigger - Mobile only */}
+              <button
+                onClick={() => setIsLogOpen(!isLogOpen)}
+                className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9 relative sm:hidden"
+                title="Logs & Diagnósticos"
+              >
+                <Code className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
+                {logsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full h-4 w-4 flex items-center justify-center border border-zinc-950 animate-pulse">
+                    {logsCount}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -2088,7 +2117,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] md:hidden animate-in fade-in duration-300"
         ></div>
       )}
-      <LogWindow dailyUsage={dailyUsage} />
+      <LogWindow dailyUsage={dailyUsage} isOpen={isLogOpen} setIsOpen={setIsLogOpen} />
     </div>
   );
 }

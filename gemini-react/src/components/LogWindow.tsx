@@ -19,10 +19,11 @@ import { type DailyUsage } from '../types';
 
 interface LogWindowProps {
   dailyUsage?: DailyUsage;
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
 }
 
-const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activeTab, setActiveTab] = useState<'geral' | 'requisicoes' | 'uso'>('geral');
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,7 +153,7 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage }) => {
       {/* Floating Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-28 right-4 sm:bottom-4 sm:right-4 z-[9998] p-3 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 group/btn"
+        className="fixed bottom-4 right-4 z-[9998] p-3 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 group/btn max-sm:hidden"
         title="Painel de Debug"
       >
         <Code className="w-5 h-5 text-white group-hover/btn:scale-110 transition-transform" />

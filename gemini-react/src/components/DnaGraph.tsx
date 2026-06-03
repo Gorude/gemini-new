@@ -186,7 +186,10 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
         </div>
         
         {/* Legend */}
-        <div className="absolute bottom-6 left-6 p-4 bg-[var(--bg-sidebar)]/80 backdrop-blur-md rounded-2xl border border-[var(--border-light)] text-[11px] space-y-3 pointer-events-auto z-50 select-none shadow-2xl" onWheel={e => e.stopPropagation()}>
+        <div 
+          className={`absolute left-6 p-4 bg-[var(--bg-sidebar)]/80 backdrop-blur-md rounded-2xl border border-[var(--border-light)] text-[11px] space-y-3 pointer-events-auto z-50 select-none shadow-2xl transition-all duration-300 ${showControls ? 'bottom-[304px] sm:bottom-6' : 'bottom-6'}`}
+          onWheel={e => e.stopPropagation()}
+        >
           <div className="font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-1 pb-2 border-b border-[var(--border-light)]">Legenda</div>
           <div className="max-h-48 overflow-y-auto custom-scrollbar pr-2 space-y-2">
             {Object.entries(categoryColors).map(([cat, color]) => (
@@ -211,7 +214,7 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
 
       {/* Control Panel (Persistence & Range Compliant) */}
       {showControls && (
-        <div className="absolute sm:relative right-0 top-0 bottom-0 w-[280px] sm:w-80 flex-shrink-0 bg-[var(--bg-sidebar)]/95 backdrop-blur-3xl border-l border-[var(--border-light)] p-6 flex flex-col gap-6 z-[60] overflow-y-auto custom-scrollbar shadow-2xl animate-in slide-in-from-right-4 duration-300">
+        <div className="absolute sm:relative left-0 sm:left-auto right-0 bottom-0 sm:top-0 h-[280px] sm:h-auto w-full sm:w-80 flex-shrink-0 bg-[var(--bg-sidebar)]/95 backdrop-blur-3xl border-t sm:border-t-0 sm:border-l border-[var(--border-light)] p-4 sm:p-6 flex flex-col gap-4 sm:gap-6 z-[60] overflow-y-auto custom-scrollbar shadow-2xl animate-in slide-in-from-bottom-4 sm:slide-in-from-right-4 duration-300">
           <div className="flex items-center justify-between">
             <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--text-bold)]">Física do Grafo</h4>
             <div className="flex gap-2 items-center">
@@ -221,9 +224,9 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
             </div>
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-4 sm:space-y-8">
             {/* Range 10-50 per Study */}
-            <div className="space-y-3">
+            <div className="space-y-1.5 sm:space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[var(--text-secondary)] text-[10px] uppercase font-black tracking-tighter">Tamanho Módulos</span>
                 <span className="text-[var(--text-bold)] font-mono text-xs bg-[var(--bg-chat-hover)] px-2 py-0.5 rounded-md">{nodeSize}</span>
@@ -232,7 +235,7 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
             </div>
 
             {/* Range 10-2000 per Study */}
-            <div className="space-y-3">
+            <div className="space-y-1.5 sm:space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[var(--text-secondary)] text-[10px] uppercase font-black tracking-tighter flex items-center gap-2"><Link size={12} /> Comprimento Link</span>
                 <span className="text-[var(--text-bold)] font-mono text-xs bg-[var(--bg-chat-hover)] px-2 py-0.5 rounded-md">{linkDistance}</span>
@@ -241,7 +244,7 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
             </div>
 
             {/* Range 0-2000 per Study */}
-            <div className="space-y-3">
+            <div className="space-y-1.5 sm:space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[var(--text-secondary)] text-[10px] uppercase font-black tracking-tighter flex items-center gap-2"><Zap size={12} /> Repulsão</span>
                 <span className="text-[var(--text-bold)] font-mono text-xs bg-[var(--bg-chat-hover)] px-2 py-0.5 rounded-md">{repulsion}</span>
@@ -250,7 +253,7 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
             </div>
 
             {/* Range 0-0.5 per Study */}
-            <div className="space-y-3">
+            <div className="space-y-1.5 sm:space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[var(--text-secondary)] text-[10px] uppercase font-black tracking-tighter flex items-center gap-2"><Move size={12} /> Gravidade Central</span>
                 <span className="text-[var(--text-bold)] font-mono text-xs bg-[var(--bg-chat-hover)] px-2 py-0.5 rounded-md">{gravity.toFixed(2)}</span>
@@ -259,7 +262,7 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
             </div>
           </div>
 
-          <div className="mt-auto p-4 bg-[var(--bg-chat-hover)] rounded-2xl border border-[var(--border-light)] space-y-2">
+          <div className="mt-auto p-4 bg-[var(--bg-chat-hover)] rounded-2xl border border-[var(--border-light)] space-y-2 max-sm:hidden">
             <h5 className="text-[10px] font-bold text-[var(--text-bold)] uppercase tracking-widest">Estabilidade Confirmada</h5>
             <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed italic">
               O grafo utiliza a ponte de física estável da plataforma, garantindo equilíbrio entre gravidade e repulsão.
