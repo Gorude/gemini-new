@@ -1,4 +1,6 @@
 import { floatToPcm16, pcm16ToFloat } from './audioUtils';
+import { auth, db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 export interface LiveSessionHandlers {
   onAudioData: (float32Array: Float32Array) => void;
@@ -30,11 +32,14 @@ export class GeminiLiveSession {
     this.handlers.onStatusChange('connecting');
     let key = import.meta.env.VITE_GEMINI_FREE_API_KEY;
     try {
-      const res = await fetch('/api/config');
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.paidApiKey) {
-          key = data.paidApiKey;
+      if (auth.currentUser) {
+        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          const data = userDocSnap.data();
+          if (data.paidApiKey) {
+            key = data.paidApiKey;
+          }
         }
       }
     } catch (e) {

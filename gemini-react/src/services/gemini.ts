@@ -252,6 +252,9 @@ export interface Message {
 }
 
 
+import { auth, db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
 let globalPaidApiKey = '';
 
 export function setGlobalPaidApiKey(key: string) {
@@ -263,12 +266,15 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
   if (globalPaidApiKey) return globalPaidApiKey;
   
   try {
-    const res = await fetch('/api/config');
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.paidApiKey) {
-        globalPaidApiKey = data.paidApiKey;
-        return data.paidApiKey;
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data();
+        if (data.paidApiKey) {
+          globalPaidApiKey = data.paidApiKey;
+          return data.paidApiKey;
+        }
       }
     }
   } catch (e) {

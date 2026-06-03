@@ -15,8 +15,13 @@ import {
   Files,
   MessageSquare,
   RotateCcw,
-  Type
+  Type,
+  LogOut
 } from 'lucide-react';
+import { auth, db } from './services/firebase';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
+import LoginScreen from './components/LoginScreen';
 import ChatRuler from './components/ChatRuler';
 import MessageList from './components/MessageList';
 import ChatInput from './components/ChatInput';
@@ -99,6 +104,8 @@ const getPacificDate = () => {
 let isLoggerInitialized = false;
 
 function App() {
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [chats, setChats] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>('');
   const [memoryFacts, setMemoryFacts] = useState<MemoryFact[]>([]);
@@ -183,21 +190,7 @@ function App() {
   const [paidApiKey, setPaidApiKey] = useState('');
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
 
-  // Sincronizar Uso Local com o Servidor
-  useEffect(() => {
-    const fetchUsage = async () => {
-      try {
-        const res = await fetch('/api/usage');
-        const data = await res.json();
-        if (data && data.date === getPacificDate()) {
-          setDailyUsage(data);
-        }
-      } catch (e) {
-        console.error("Erro ao carregar uso do servidor:", e);
-      }
-    };
-    fetchUsage();
-  }, []);
+
 
   // INTERCEPTAR EVENTOS DO CONSOLE E EXCEÇÕES GLOBAIS
   useEffect(() => {
@@ -250,33 +243,21 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.paidApiKey) {
-          setPaidApiKey(data.paidApiKey);
-          setGlobalPaidApiKey(data.paidApiKey);
-        }
-      })
-      .catch(err => console.error("Erro ao carregar chave de API:", err));
-  }, []);
-
   const saveConfig = useCallback((config: { paidApiKey: string }) => {
-    fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config)
-    }).catch(err => console.error("Erro ao salvar configuração:", err));
+    setPaidApiKey(config.paidApiKey);
+    setGlobalPaidApiKey(config.paidApiKey);
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { paidApiKey: config.paidApiKey }).catch(err => console.error("Erro ao salvar configuração:", err));
+    }
   }, []);
 
   useEffect(() => {
     localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(dailyUsage));
-    fetch('/api/usage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dailyUsage)
-    }).catch(e => console.error("Erro ao salvar uso no servidor:", e));
+    if (auth.currentUser && dailyUsage.date) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { dailyUsage }).catch(e => console.error("Erro ao salvar uso no Firestore:", e));
+    }
   }, [dailyUsage]);
 
   // LIVE MODE STATE
@@ -332,7 +313,45 @@ function App() {
   const currentAiMsgIdRef = useRef<string | null>(null);
   const factCheckControllersRef = useRef<Record<string, AbortController>>({});
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const saveTimeoutRef = useRef<number | null>(null);
+
+  // Refs for closing popups when clicking outside
+  const personalityRef = useRef<HTMLDivElement>(null);
+  const fontSizeRef = useRef<HTMLDivElement>(null);
+  const analyticsButtonRef = useRef<HTMLButtonElement>(null);
+  const analyticsPopupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        showPersonalitySelector &&
+        personalityRef.current &&
+        !personalityRef.current.contains(target)
+      ) {
+        setShowPersonalitySelector(false);
+      }
+      if (
+        showFontSizeSelector &&
+        fontSizeRef.current &&
+        !fontSizeRef.current.contains(target)
+      ) {
+        setShowFontSizeSelector(false);
+      }
+      if (
+        showAnalytics &&
+        analyticsPopupRef.current &&
+        !analyticsPopupRef.current.contains(target) &&
+        analyticsButtonRef.current &&
+        !analyticsButtonRef.current.contains(target)
+      ) {
+        setShowAnalytics(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPersonalitySelector, showFontSizeSelector, showAnalytics]);
 
   useEffect(() => {
     if (!isLiveActive || !isLiveProactive) {
@@ -434,11 +453,7 @@ function App() {
             setCategorizationProgress(prev => ({ ...prev, current: i + 1 }));
 
             // Checkpoint no servidor
-            fetch('/api/memory', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(currentFacts)
-            });
+            saveMemoryFactsToFirestore(currentFacts);
           }
         } catch (batchError) {
           console.error(`Erro no lote ${i + 1}:`, batchError);
@@ -458,93 +473,188 @@ function App() {
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = useMemo(() => activeChat?.messages || [], [activeChat]);
 
-  // Load Initial Data
+  const previousChatsRef = useRef<ChatSession[]>([]);
+  const isInitialLoadRef = useRef(true);
+
+  // Load Initial Data from Firestore on Auth State Change
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [historyRes, memoryRes, personalitiesRes] = await Promise.all([
-          fetch('/api/history'),
-          fetch('/api/memory'),
-          fetch('/api/personalities')
-        ]);
-        if (historyRes.ok) {
-          const history = await historyRes.json();
-          if (Array.isArray(history)) {
-            setChats(history);
-            if (history.length > 0) setActiveChatId(history[0].id);
-          }
-        }
-        if (memoryRes.ok) {
-          const memoryData = (await memoryRes.json()) as Array<string | MemoryFact>;
-          if (Array.isArray(memoryData)) {
-            if (memoryData.length > 0 && typeof memoryData[0] === 'string') {
-              // Automatic Migration to DNA 2.0
-              console.log("Iniciando migração para DNA 2.0... Total de fatos: ", memoryData.length);
-              const migrationPrompt = `Você é um sistema de migração de dados. Converta a seguinte lista de fatos (strings) em um JSON estruturado com o formato: { id: string, text: string, category: string, connections: string[] (IDs de fatos relacionados), timestamp: number }.
-              As categorias devem ser geradas dinamicamente (ex: Pessoal, Profissional, Hardware, Preferências). 
-              LISTA DE FATOS:\n${(memoryData as string[]).join('\n')}`;
-
-              try {
-                const res = await generateGeminiContent(migrationPrompt, 'gemma-4-31b-it', [], "Responda APENAS com o JSON cru contendo um array de objetos.");
-                // Tentar extrair JSON do texto
-                const jsonMatch = res.text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-                const migrated = JSON.parse(jsonMatch ? jsonMatch[0] : res.text);
-
-                if (Array.isArray(migrated) && migrated.length > 0) {
-                  setMemoryFacts(migrated);
-                  fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migrated) });
-                  console.log("Migração inteligente concluída!");
-                } else {
-                  throw new Error("Resposta da IA inválida ou vazia");
-                }
-              } catch (e) {
-                console.error("Falha na migração com IA, executando fallback local para restaurar visibilidade:", e);
-                const fallback = (memoryData as string[]).map((f: string) => ({
-                  id: uuidv4(),
-                  text: f,
-                  category: 'Diversos',
-                  connections: [],
-                  timestamp: Date.now()
-                }));
-                setMemoryFacts(fallback);
-                fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fallback) });
-                console.log("Memórias restauradas em modo de compatibilidade (Diversos).");
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        setIsInitialLoading(true);
+        isInitialLoadRef.current = true;
+        try {
+          const uid = currentUser.uid;
+          const userDocRef = doc(db, 'users', uid);
+          const userDocSnap = await getDoc(userDocRef);
+          
+          let dbMemoryFacts: MemoryFact[] = [];
+          let dbPersonalities: Personality[] = [];
+          let dbDailyUsage: DailyUsage = { date: getPacificDate(), models: {} };
+          let dbPaidApiKey = '';
+          let dbSidebarOrder: string[] = [];
+          
+          if (userDocSnap.exists()) {
+            const data = userDocSnap.data();
+            dbMemoryFacts = data.memoryFacts || [];
+            dbPersonalities = data.personalities || [];
+            if (data.dailyUsage && data.dailyUsage.date === getPacificDate()) {
+              dbDailyUsage = data.dailyUsage;
+            }
+            dbPaidApiKey = data.paidApiKey || '';
+            dbSidebarOrder = data.sidebarOrder || [];
+            
+            // Sync settings to states
+            if (data.settings) {
+              if (data.settings.theme) {
+                setTheme(data.settings.theme);
+                document.documentElement.setAttribute('data-theme', data.settings.theme);
               }
-            } else {
-              setMemoryFacts(memoryData as MemoryFact[]);
+              if (data.settings.chatMargin !== undefined) setChatMargin(data.settings.chatMargin);
+              if (data.settings.selectedPersonalityId) setSelectedPersonalityId(data.settings.selectedPersonalityId);
+              if (data.settings.chatFontSize !== undefined) setChatFontSize(data.settings.chatFontSize);
+              if (data.settings.isOrderLocked !== undefined) setIsOrderLocked(data.settings.isOrderLocked);
+              if (data.settings.enabledModelIds) setEnabledModelIds(data.settings.enabledModelIds);
+              if (data.settings.isLiveProactive !== undefined) setIsLiveProactive(data.settings.isLiveProactive);
+              if (data.settings.liveVoice) setLiveVoice(data.settings.liveVoice);
             }
-          }
-        }
-
-        if (personalitiesRes.ok) {
-          const persData = await personalitiesRes.json();
-          if (Array.isArray(persData) && persData.length > 0) {
-            setPersonalities(persData);
           } else {
-            // Migration from localStorage
-            const saved = localStorage.getItem('nemon_personalities');
-            if (saved) {
-              try {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  setPersonalities(parsed);
-                  fetch('/api/personalities', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: saved
-                  });
-                }
-              } catch { /* ignore */ }
-            }
+            // First time: Create Firestore document
+            const initialData = {
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              memoryFacts: [],
+              personalities: [],
+              dailyUsage: { date: getPacificDate(), models: {} },
+              paidApiKey: '',
+              sidebarOrder: [],
+              settings: {
+                theme,
+                chatMargin,
+                selectedPersonalityId,
+                chatFontSize,
+                isOrderLocked,
+                enabledModelIds,
+                isLiveProactive,
+                liveVoice
+              }
+            };
+            await setDoc(userDocRef, initialData);
           }
+          
+          setMemoryFacts(dbMemoryFacts);
+          setPersonalities(dbPersonalities);
+          setDailyUsage(dbDailyUsage);
+          setPaidApiKey(dbPaidApiKey);
+          setGlobalPaidApiKey(dbPaidApiKey);
+          
+          // Load all chats
+          const chatsColRef = collection(db, 'users', uid, 'chats');
+          const chatsSnap = await getDocs(chatsColRef);
+          const loadedChats: ChatSession[] = [];
+          chatsSnap.forEach((d) => {
+            loadedChats.push(d.data() as ChatSession);
+          });
+          
+          const orderedChats = [...loadedChats];
+          if (dbSidebarOrder.length > 0) {
+            orderedChats.sort((a, b) => {
+              const indexA = dbSidebarOrder.indexOf(a.id);
+              const indexB = dbSidebarOrder.indexOf(b.id);
+              if (indexA === -1 && indexB === -1) return 0;
+              if (indexA === -1) return 1;
+              if (indexB === -1) return -1;
+              return indexA - indexB;
+            });
+          }
+          
+          setChats(orderedChats);
+          if (orderedChats.length > 0) {
+            setActiveChatId(orderedChats[0].id);
+          } else {
+            setActiveChatId('');
+          }
+        } catch (err) {
+          console.error("Erro ao carregar dados do Firestore:", err);
+        } finally {
+          setIsInitialLoading(false);
         }
-      } catch (e) {
-        console.error("Erro ao carregar dados iniciais:", e);
-      } finally {
-        setIsInitialLoading(false);
+      } else {
+        // Logged out
+        setChats([]);
+        setActiveChatId('');
+        setMemoryFacts([]);
+        setPersonalities([]);
+        setPaidApiKey('');
+        setGlobalPaidApiKey('');
       }
-    };
-    loadData();
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Save changes to chats subcollection & sidebarOrder in Firestore
+  useEffect(() => {
+    if (!auth.currentUser || isAuthLoading || isInitialLoading) return;
+    const uid = auth.currentUser.uid;
+
+    if (isInitialLoadRef.current) {
+      previousChatsRef.current = chats;
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    // 1. Detect deleted chats
+    const deletedChats = previousChatsRef.current.filter(prevChat => !chats.some(c => c.id === prevChat.id));
+    deletedChats.forEach(async (chat) => {
+      const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
+      await deleteDoc(chatDocRef).catch(e => console.error("Erro ao deletar chat no Firestore:", e));
+    });
+
+    // 2. Detect updated or new chats
+    chats.forEach(async (chat) => {
+      const prevChat = previousChatsRef.current.find(c => c.id === chat.id);
+      if (!prevChat || JSON.stringify(prevChat) !== JSON.stringify(chat)) {
+        const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
+        await setDoc(chatDocRef, chat).catch(e => console.error("Erro ao salvar chat no Firestore:", e));
+      }
+    });
+
+    // 3. Save sidebar order if changed
+    const currentOrder = chats.map(c => c.id);
+    const prevOrder = previousChatsRef.current.map(c => c.id);
+    if (JSON.stringify(currentOrder) !== JSON.stringify(prevOrder)) {
+      const userDocRef = doc(db, 'users', uid);
+      updateDoc(userDocRef, { sidebarOrder: currentOrder }).catch(e => console.error("Erro ao salvar ordem no Firestore:", e));
+    }
+
+    previousChatsRef.current = chats;
+  }, [chats, isAuthLoading, isInitialLoading]);
+
+  // Sync Preferences/Settings to Firestore
+  useEffect(() => {
+    if (auth.currentUser && !isAuthLoading && !isInitialLoading) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, {
+        settings: {
+          theme,
+          chatMargin,
+          selectedPersonalityId,
+          chatFontSize,
+          isOrderLocked,
+          enabledModelIds,
+          isLiveProactive,
+          liveVoice
+        }
+      }).catch(e => console.error("Erro ao salvar configurações no Firestore:", e));
+    }
+  }, [theme, chatMargin, selectedPersonalityId, chatFontSize, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, isAuthLoading, isInitialLoading]);
+
+  const saveMemoryFactsToFirestore = useCallback((facts: MemoryFact[]) => {
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { memoryFacts: facts }).catch(e => console.error("Erro ao salvar memórias:", e));
+    }
   }, []);
 
   useEffect(() => {
@@ -558,51 +668,12 @@ function App() {
 
   // Auto-Save Personalities
   useEffect(() => {
-    if (personalities.length > 0) {
-      fetch('/api/personalities', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(personalities)
-      });
+    if (auth.currentUser && personalities.length > 0) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { personalities }).catch(e => console.error("Erro ao salvar personalidades no Firestore:", e));
     }
     localStorage.setItem('nemon_selected_personality_id', selectedPersonalityId);
   }, [personalities, selectedPersonalityId]);
-
-  const saveChats = useCallback((chatsToSave: ChatSession[]) => {
-    if (chatsToSave.length > 0) {
-      fetch('/api/history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(chatsToSave)
-      }).catch(err => console.error("Erro ao salvar histórico:", err));
-    }
-  }, []);
-
-  // Auto-Save Chats (Debounced & Paused during AI loading/streaming)
-  useEffect(() => {
-    if (isLoading) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    if (chats.length > 0) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      saveTimeoutRef.current = window.setTimeout(() => {
-        saveChats(chats);
-      }, 3000); // 3 segundos de debounce
-    }
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [chats, isLoading, saveChats]);
 
   // Close menus on click outside
   useEffect(() => {
@@ -695,7 +766,7 @@ function App() {
 
     if (hasMemoryUpdates) {
       setMemoryFacts(newMemories);
-      fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newMemories) });
+      saveMemoryFactsToFirestore(newMemories);
     }
 
     return str
@@ -942,10 +1013,7 @@ function App() {
       setIsLoading(false);
       abortControllerRef.current = null;
       currentAiMsgIdRef.current = null;
-      setChats(prev => {
-        saveChats(prev);
-        return prev;
-      });
+      setChats(prev => prev);
     }
   }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, selectedPersonalityId, parseMemoryTags]);
 
@@ -978,12 +1046,9 @@ function App() {
 
       setIsLoading(false);
       currentAiMsgIdRef.current = null;
-      setChats(prev => {
-        saveChats(prev);
-        return prev;
-      });
+      setChats(prev => prev);
     }
-  }, [activeChatId, saveChats]);
+  }, [activeChatId]);
 
 
 
@@ -1383,9 +1448,6 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   const handleRestoreChat = useCallback((chatId: string) => {
     setChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, archived: false } : chat));
     setActiveChatId(chatId);
-
-    // Save to server
-    fetch(`/api/history/${chatId}/archive`, { method: 'POST' });
   }, []);
 
   const sensors = useSensors(
@@ -1518,6 +1580,18 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     return () => observer.disconnect();
   }, [activeChatId, messages, visibleMessagesCount, isLiveActive]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#09090b]">
+        <div className="w-10 h-10 rounded-full border-4 border-violet-600/30 border-t-violet-600 animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden text-[var(--text-primary)] relative bg-[var(--bg-main)]">
@@ -1659,7 +1733,30 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
         </div>
 
-        <div className="mt-auto p-4 border-t border-[var(--border-light)] relative">
+        <div className="mt-auto p-4 border-t border-[var(--border-light)] relative flex flex-col gap-2">
+          {user && (
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white/[0.02] border border-white/5 group">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt={user.displayName || "Avatar"} className="w-8 h-8 rounded-full border border-white/10" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[var(--accent-bg)] text-[var(--accent-text)] flex items-center justify-center font-bold text-xs">
+                  {user.displayName?.charAt(0) || "U"}
+                </div>
+              )}
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-xs font-semibold text-white truncate">{user.displayName}</div>
+                <div className="text-[10px] text-zinc-500 truncate">{user.email}</div>
+              </div>
+              <button 
+                onClick={() => signOut(auth)} 
+                className="p-1.5 hover:bg-red-500/10 hover:text-red-400 rounded-lg text-zinc-500 transition-all cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100"
+                title="Sair"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           <button
             onClick={() => {
               setActiveTab('settings');
@@ -1690,7 +1787,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           {/* Personality & Font Size Selector */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3">
             {/* Personality Selector */}
-            <div className="relative">
+            <div className="relative" ref={personalityRef}>
               <button
                 onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
                 className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
@@ -1736,7 +1833,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             </div>
 
             {/* Font Size Selector */}
-            <div className="relative">
+            <div className="relative" ref={fontSizeRef}>
               <button
                 onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
                 className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
@@ -1790,6 +1887,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             )}
 
             <button
+              ref={analyticsButtonRef}
               onClick={() => setShowAnalytics(!showAnalytics)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border border-[var(--border-light)] hover:border-[var(--glow-active)] transition-all duration-200 hover:scale-105 active:scale-95"
             >
@@ -1809,7 +1907,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         {/* Removida a fita de LED do topo */}
 
         {showAnalytics && (
-          <div className="absolute top-20 right-8 glass-modal rounded-3xl p-6 w-96 shadow-2xl z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div ref={analyticsPopupRef} className="absolute top-20 right-8 glass-modal rounded-3xl p-6 w-96 shadow-2xl z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)] flex items-center gap-2">
                 <BarChart2 className="w-4 h-4" style={{ color: 'var(--accent-text)' }} /> Analytics Hoje
@@ -1890,7 +1988,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               onDeleteMemoryFact={(id) => {
                 const next = memoryFacts.filter((m) => m.id !== id);
                 setMemoryFacts(next);
-                fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+                saveMemoryFactsToFirestore(next);
               }}
               onSaveMemoryFact={(fact) => {
                 let next;
@@ -1900,7 +1998,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                   next = [...memoryFacts, { ...fact, id: uuidv4(), timestamp: Date.now() }];
                 }
                 setMemoryFacts(next);
-                fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+                saveMemoryFactsToFirestore(next);
               }}
               onAutoCategorizeMemory={handleAutoCategorize}
               isCategorizingMemory={isCategorizing}
