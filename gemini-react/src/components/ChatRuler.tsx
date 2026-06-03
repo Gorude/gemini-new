@@ -71,8 +71,8 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
           className="absolute bottom-0 z-10 cursor-col-resize flex flex-col items-center transition-transform hover:scale-110 active:scale-95"
           style={{ left: `${margin}%`, transform: 'translateX(-50%)' }}
         >
-          <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[8px] border-b-indigo-500 mb-0.5 shadow-sm"></div>
-          <div className="w-[2px] h-3 bg-indigo-500/50"></div>
+          <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[8px] border-b-zinc-500 mb-0.5 shadow-sm"></div>
+          <div className="w-[2px] h-3 bg-zinc-500/50"></div>
         </div>
 
         {/* Right Handle */}
@@ -81,8 +81,8 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
           className="absolute bottom-0 z-10 cursor-col-resize flex flex-col items-center transition-transform hover:scale-110 active:scale-95"
           style={{ right: `${margin}%`, transform: 'translateX(50%)' }}
         >
-          <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[8px] border-b-indigo-500 mb-0.5 shadow-sm"></div>
-          <div className="w-[2px] h-3 bg-indigo-500/50"></div>
+          <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[8px] border-b-zinc-500 mb-0.5 shadow-sm"></div>
+          <div className="w-[2px] h-3 bg-zinc-500/50"></div>
         </div>
       </div>
     </div>

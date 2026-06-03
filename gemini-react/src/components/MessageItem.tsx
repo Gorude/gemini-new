@@ -198,7 +198,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
     <div ref={containerRef} id={`msg-${msg.id}`} className={`group/msg relative flex flex-col w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300 animate-message-entrance`}>
       {/* Context Indicator Line */}
       {isContext && (
-        <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-indigo-500/50 opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
+        <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-[var(--accent)] opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
       )}
 
       {msg.role === 'ai' ? (
@@ -299,7 +299,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                           <a key={idx} href={src.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group">
                             <img src={`https://www.google.com/s2/favicons?domain=${d}&sz=64`} className="w-4 h-4 rounded-sm shrink-0" alt="" />
                             <div className="flex flex-col min-w-0">
-                              <span className="text-xs text-[var(--text-primary)] font-medium truncate group-hover:text-blue-400 transition-colors">{src.title || 'Página da Web'}</span>
+                              <span className="text-xs text-[var(--text-primary)] font-medium truncate group-hover:text-[var(--accent-text)] transition-colors">{src.title || 'Página da Web'}</span>
                               <span className="text-[9px] text-[var(--text-placeholder)] truncate">{src.uri}</span>
                             </div>
                           </a>
@@ -312,7 +312,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             )}
 
             {(msg.isGrounded || (msg.sources && msg.sources.length > 0)) && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-bold text-blue-400 animate-in fade-in slide-in-from-left-2 duration-500">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--accent-bg)] border border-[var(--accent-border)] rounded-full text-[10px] font-bold text-[var(--accent-text)] animate-in fade-in slide-in-from-left-2 duration-500">
                 <Globe className="w-3 h-3" />
                 PESQUISADO NA WEB
               </div>
@@ -398,9 +398,9 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 disabled={isLoading && !msg.isVerifying} 
                 onMouseEnter={() => msg.isVerifying && setIsTimerHovered(true)}
                 onMouseLeave={() => setIsTimerHovered(false)}
-                className={`text-[var(--text-placeholder)] hover:text-blue-400 transition flex items-center gap-1.5 ${
+                className={`text-[var(--text-placeholder)] hover:text-[var(--accent-text)] transition flex items-center gap-1.5 ${
                   msg.isVerifying 
-                    ? (isTimerHovered ? 'text-red-500 hover:text-red-600 font-bold scale-105' : 'text-blue-500 font-semibold') 
+                    ? (isTimerHovered ? 'text-red-500 hover:text-red-600 font-bold scale-105' : 'text-[var(--accent-text)] font-semibold') 
                     : ''
                 }`}
                 title={msg.isVerifying ? "Cancelar checagem de fatos" : "Checar fatos na web"}
@@ -413,8 +413,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                     </>
                   ) : (
                     <>
-                      <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                      <span className="text-[10px] font-bold text-blue-400">{verifySeconds.toFixed(1)}s</span>
+                      <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] animate-pulse" />
+                      <span className="text-[10px] font-bold text-[var(--accent-text)]">{verifySeconds.toFixed(1)}s</span>
                     </>
                   )
                 ) : (
@@ -446,7 +446,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                      <img src={`data:${f.mimeType};base64,${f.data}`} className="object-cover w-full h-full" alt="upload" />
                    ) : (
                      <div className="flex flex-col items-center justify-center w-full h-full text-[10px] break-words p-2 text-center text-[var(--text-secondary)] bg-[var(--bg-sidebar)]">
-                       <FileText className="w-6 h-6 mb-2 text-indigo-400 opacity-80" />
+                       <FileText className="w-6 h-6 mb-2 text-[var(--accent-text)] opacity-80" />
                        <span className="truncate w-full">{f.name}</span>
                      </div>
                    )}
@@ -456,11 +456,11 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
            )}
            
            {isEditing ? (
-             <div className="w-full flex flex-col gap-2 bg-[var(--bg-sidebar)] p-4 rounded-3xl border border-indigo-500/50 shadow-2xl">
+             <div className="w-full flex flex-col gap-2 bg-[var(--bg-sidebar)] p-4 rounded-3xl border border-[var(--accent-border)] shadow-2xl">
                <textarea autoFocus className="w-full bg-transparent border-none outline-none text-[var(--text-primary)] resize-none" rows={3} value={editingMsgText} onChange={(e) => onSetEditingMsgText(e.target.value)} />
                <div className="flex justify-end gap-2">
                  <button onClick={onCancelEdit} className="px-4 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">Cancelar</button>
-                 <button onClick={() => onSaveEdit(msg.id)} className="px-4 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-full hover:bg-indigo-500 transition shadow-lg">Salvar e Enviar</button>
+                 <button onClick={() => onSaveEdit(msg.id)} className="px-4 py-1.5 text-xs font-medium bg-[var(--accent)] text-white rounded-full hover:bg-[var(--accent-hover)] transition shadow-lg">Salvar e Enviar</button>
                </div>
              </div>
            ) : (

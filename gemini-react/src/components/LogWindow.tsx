@@ -14,11 +14,17 @@ import {
   Code
 } from 'lucide-react';
 import { logger, type LogEntry } from '../services/logger';
+import { MODEL_LIMITS } from '../constants';
+import { type DailyUsage } from '../types';
 
-const LogWindow: React.FC = () => {
+interface LogWindowProps {
+  dailyUsage?: DailyUsage;
+}
+
+const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<'geral' | 'api'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'requisicoes' | 'uso'>('geral');
   const [searchQuery, setSearchQuery] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
   const [position, setPosition] = useState({ x: 20, y: 80 });
@@ -93,10 +99,11 @@ const LogWindow: React.FC = () => {
 
   // Filter logs
   const filteredLogs = logs.filter(log => {
-    // Filter by tab
+    // Filter logs
     const isApiLog = log.type.startsWith('api');
     if (activeTab === 'geral' && isApiLog) return false;
-    if (activeTab === 'api' && !isApiLog) return false;
+    if (activeTab === 'requisicoes' && !isApiLog) return false;
+    if (activeTab === 'uso') return false;
 
     // Filter by search query
     if (!searchQuery) return true;
@@ -116,7 +123,7 @@ const LogWindow: React.FC = () => {
       case 'warn':
         return <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-500 flex items-center gap-1 shrink-0"><AlertTriangle className="w-2.5 h-2.5" />AVISO</span>;
       case 'api-request':
-        return <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-bold text-blue-400 flex items-center gap-1 shrink-0"><Database className="w-2.5 h-2.5" />REQ</span>;
+        return <span className="px-1.5 py-0.5 rounded bg-zinc-500/10 border border-zinc-500/20 text-[9px] font-bold text-zinc-400 flex items-center gap-1 shrink-0"><Database className="w-2.5 h-2.5" />REQ</span>;
       case 'api-response':
         return <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold text-emerald-400 flex items-center gap-1 shrink-0"><CheckCircle2 className="w-2.5 h-2.5" />RESP</span>;
       default:
@@ -132,7 +139,7 @@ const LogWindow: React.FC = () => {
       case 'warn':
         return 'text-amber-400 border-amber-950/20 bg-amber-950/5';
       case 'api-request':
-        return 'text-blue-300 border-blue-950/20 bg-blue-950/5';
+        return 'text-zinc-300 border-zinc-900 bg-zinc-950/5';
       case 'api-response':
         return 'text-emerald-400 border-emerald-950/20 bg-emerald-950/5';
       default:
@@ -145,7 +152,7 @@ const LogWindow: React.FC = () => {
       {/* Floating Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-4 right-4 z-[9998] p-3 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 group/btn"
+        className="fixed bottom-28 right-4 sm:bottom-4 sm:right-4 z-[9998] p-3 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 group/btn"
         title="Painel de Debug"
       >
         <Code className="w-5 h-5 text-white group-hover/btn:scale-110 transition-transform" />
@@ -163,7 +170,7 @@ const LogWindow: React.FC = () => {
             left: `${position.x}px`, 
             top: `${position.y}px` 
           }}
-          className={`fixed z-[9999] w-[500px] rounded-2xl border border-zinc-800/80 bg-zinc-950/85 backdrop-blur-md shadow-2xl overflow-hidden select-none ${
+          className={`fixed z-[9999] w-[calc(100vw-32px)] sm:w-[500px] rounded-2xl border border-zinc-800/80 bg-zinc-950/85 backdrop-blur-md shadow-2xl overflow-hidden select-none ${
             isDragging ? '' : 'transition-all duration-300'
           } ${
             isMinimized ? 'h-[48px]' : 'h-[450px]'
@@ -177,7 +184,7 @@ const LogWindow: React.FC = () => {
             }`}
           >
             <div className="flex items-center gap-2 text-zinc-200">
-              <Terminal className="w-4 h-4 text-indigo-400" />
+              <Terminal className="w-4 h-4 text-zinc-400" />
               <span className="text-[11px] font-bold uppercase tracking-wider">Logs & Diagnósticos</span>
             </div>
             
@@ -209,24 +216,34 @@ const LogWindow: React.FC = () => {
                     onClick={() => setActiveTab('geral')}
                     className={`px-3 py-1 text-[10px] font-bold rounded-md uppercase tracking-wider transition ${
                       activeTab === 'geral' 
-                        ? 'bg-indigo-600/25 border border-indigo-500/25 text-indigo-400 shadow-sm' 
+                        ? 'bg-zinc-800 border border-zinc-700 text-zinc-200 shadow-sm' 
                         : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
                     }`}
                   >
                     Log Geral
                   </button>
                   <button 
-                    onClick={() => setActiveTab('api')}
+                    onClick={() => setActiveTab('requisicoes')}
                     className={`px-3 py-1 text-[10px] font-bold rounded-md uppercase tracking-wider transition flex items-center gap-1 ${
-                      activeTab === 'api' 
-                        ? 'bg-indigo-600/25 border border-indigo-500/25 text-indigo-400 shadow-sm' 
+                      activeTab === 'requisicoes' 
+                        ? 'bg-zinc-800 border border-zinc-700 text-zinc-200 shadow-sm' 
                         : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
                     }`}
                   >
-                    API Gemma
-                    <span className="px-1 py-0.2 bg-indigo-500/20 text-indigo-400 rounded-full text-[8px] font-bold">
+                    Requisições
+                    <span className="px-1 py-0.2 bg-zinc-800 text-zinc-300 rounded-full text-[8px] font-bold">
                       {logs.filter(l => l.type.startsWith('api')).length}
                     </span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('uso')}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-md uppercase tracking-wider transition flex items-center gap-1 ${
+                      activeTab === 'uso' 
+                        ? 'bg-zinc-800 border border-zinc-700 text-zinc-200 shadow-sm' 
+                        : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+                    }`}
+                  >
+                    Uso Local
                   </button>
                 </div>
 
@@ -239,7 +256,7 @@ const LogWindow: React.FC = () => {
                       placeholder="Filtrar logs..." 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="bg-black/40 border border-zinc-800/80 rounded-lg pl-7 pr-2.5 py-1 text-[10px] w-[140px] focus:outline-none focus:border-indigo-500/40 text-zinc-200 transition"
+                      className="bg-black/40 border border-zinc-800/80 rounded-lg pl-7 pr-2.5 py-1 text-[10px] w-[140px] focus:outline-none focus:border-zinc-700 text-zinc-200 transition"
                     />
                   </div>
                   <button 
@@ -251,80 +268,123 @@ const LogWindow: React.FC = () => {
                   </button>
                 </div>
               </div>
-
               {/* Log Streams */}
-              <div 
-                ref={scrollRef}
-                className="flex-1 overflow-y-auto p-3 space-y-1.5 font-mono text-[10.5px] custom-scrollbar bg-black/10 select-text"
-              >
-                {filteredLogs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-zinc-600 gap-2 animate-pulse">
-                    <Terminal className="w-8 h-8 opacity-40" />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Nenhum log encontrado</span>
-                  </div>
-                ) : (
-                  filteredLogs.map((log) => (
-                    <div 
-                      key={log.id} 
-                      className={`p-2 rounded-lg border flex flex-col gap-1 transition-all ${getLogColor(log.type)}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {getLogBadge(log.type)}
-                          <span className="font-semibold break-all leading-normal">{log.message}</span>
-                        </div>
-                        <span className="text-[9px] text-zinc-500 font-normal shrink-0">{log.timestamp}</span>
-                      </div>
-
-                      {/* Collapsible Details for API Requests */}
-                      {log.type.startsWith('api') && log.details && (
-                        <details className="mt-1 bg-zinc-950/50 rounded-md border border-zinc-900 p-2 cursor-default">
-                          <summary className="text-[9px] text-zinc-500 hover:text-indigo-400 cursor-pointer select-none font-bold uppercase tracking-wider flex items-center gap-1">
-                            Ver Payload / Resposta
-                            <ChevronDown className="w-2.5 h-2.5 transition-transform" />
-                          </summary>
-                          <div className="mt-2 text-[10px] font-mono whitespace-pre-wrap max-h-[180px] overflow-y-auto custom-scrollbar space-y-2 select-text">
-                            {log.details.url && (
-                              <div>
-                                <span className="text-zinc-600 font-bold">API Endpoint:</span>
-                                <div className="bg-black/30 p-1.5 rounded text-zinc-400 mt-1 max-w-full overflow-x-auto text-[9.5px]">
-                                  {log.details.url}
-                                </div>
-                              </div>
-                            )}
-                            {log.details.payload && (
-                              <div>
-                                <span className="text-indigo-400 font-bold">Request Payload:</span>
-                                <pre className="bg-black/30 p-1.5 rounded text-zinc-300 mt-1 max-w-full overflow-x-auto text-[9.5px]">
-                                  {JSON.stringify(log.details.payload, null, 2)}
-                                </pre>
-                              </div>
-                            )}
-                            {log.details.response && (
-                              <div>
-                                <span className="text-emerald-400 font-bold">Response Stream Summary:</span>
-                                <pre className="bg-black/30 p-1.5 rounded text-zinc-300 mt-1 max-w-full overflow-x-auto text-[9.5px]">
-                                  {typeof log.details.response === 'string' 
-                                    ? log.details.response 
-                                    : JSON.stringify(log.details.response, null, 2)}
-                                </pre>
-                              </div>
-                            )}
-                            {log.details.error && (
-                              <div>
-                                <span className="text-red-400 font-bold">Error Details:</span>
-                                <pre className="bg-red-950/20 border border-red-500/20 p-1.5 rounded text-red-300 mt-1 text-[9.5px]">
-                                  {log.details.error}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        </details>
-                      )}
+              {activeTab !== 'uso' ? (
+                <div 
+                  ref={scrollRef}
+                  className="flex-1 overflow-y-auto p-3 space-y-1.5 font-mono text-[10.5px] custom-scrollbar bg-black/10 select-text"
+                >
+                  {filteredLogs.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-zinc-600 gap-2 animate-pulse">
+                      <Terminal className="w-8 h-8 opacity-40" />
+                      <span className="text-[10px] uppercase font-bold tracking-wider">Nenhum log encontrado</span>
                     </div>
-                  ))
-                )}
-              </div>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <div 
+                        key={log.id} 
+                        className={`p-2 rounded-lg border flex flex-col gap-1 transition-all ${getLogColor(log.type)}`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {getLogBadge(log.type)}
+                            <span className="font-semibold break-all leading-normal">{log.message}</span>
+                          </div>
+                          <span className="text-[9px] text-zinc-500 font-normal shrink-0">{log.timestamp}</span>
+                        </div>
+
+                        {/* Collapsible Details for API Requests */}
+                        {log.type.startsWith('api') && log.details && (
+                          <details className="mt-1 bg-zinc-950/50 rounded-md border border-zinc-900 p-2 cursor-default">
+                            <summary className="text-[9px] text-zinc-500 hover:text-zinc-300 cursor-pointer select-none font-bold uppercase tracking-wider flex items-center gap-1">
+                              Ver Payload / Resposta
+                              <ChevronDown className="w-2.5 h-2.5 transition-transform" />
+                            </summary>
+                            <div className="mt-2 text-[10px] font-mono whitespace-pre-wrap max-h-[180px] overflow-y-auto custom-scrollbar space-y-2 select-text">
+                              {log.details.url && (
+                                <div>
+                                  <span className="text-zinc-600 font-bold">API Endpoint:</span>
+                                  <div className="bg-black/30 p-1.5 rounded text-zinc-400 mt-1 max-w-full overflow-x-auto text-[9.5px]">
+                                    {log.details.url}
+                                  </div>
+                                </div>
+                              )}
+                              {log.details.payload && (
+                                <div>
+                                  <span className="text-zinc-400 font-bold">Request Payload:</span>
+                                  <pre className="bg-black/30 p-1.5 rounded text-zinc-300 mt-1 max-w-full overflow-x-auto text-[9.5px]">
+                                    {JSON.stringify(log.details.payload, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                              {log.details.response && (
+                                <div>
+                                  <span className="text-emerald-400 font-bold">Response Stream Summary:</span>
+                                  <pre className="bg-black/30 p-1.5 rounded text-zinc-300 mt-1 max-w-full overflow-x-auto text-[9.5px]">
+                                    {typeof log.details.response === 'string' 
+                                      ? log.details.response 
+                                      : JSON.stringify(log.details.response, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                              {log.details.error && (
+                                <div>
+                                  <span className="text-red-400 font-bold">Error Details:</span>
+                                  <pre className="bg-red-950/20 border border-red-500/20 p-1.5 rounded text-red-300 mt-1 text-[9.5px]">
+                                    {log.details.error}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-black/10 select-text">
+                  <div className="space-y-4">
+                    {!dailyUsage || Object.entries(dailyUsage.models).length === 0 ? (
+                      <div className="text-center py-8 text-xs text-zinc-500 italic">
+                        Nenhum dado de uso registrado hoje.
+                      </div>
+                    ) : (
+                      Object.entries(dailyUsage.models).map(([modelId, data]) => {
+                        const limit = MODEL_LIMITS[modelId] || { name: modelId, rpd: 100 };
+                        const percent = Math.min(100, (data.requests / limit.rpd) * 100);
+                        return (
+                          <div key={modelId} className="space-y-2 bg-zinc-900/40 p-3.5 rounded-xl border border-zinc-800/40">
+                            <div className="flex justify-between text-xs font-semibold">
+                              <span className="text-zinc-200">{limit.name}</span>
+                              <span className="text-zinc-400">{data.requests} / {limit.rpd} reqs</span>
+                            </div>
+                            <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all duration-1000 ${percent > 90 ? 'bg-red-500' : percent > 50 ? 'bg-amber-500' : 'bg-zinc-500'}`} 
+                                style={{ width: `${percent}%` }}
+                              ></div>
+                            </div>
+                            <div className="flex justify-between text-[10px] text-zinc-500">
+                              <span className="flex items-center gap-1">
+                                <Database className="w-3 h-3 text-zinc-400" /> {data.tokens.total.toLocaleString()} tokens
+                              </span>
+                              <span>{percent.toFixed(1)}% da cota</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  
+                  {dailyUsage && (
+                    <div className="pt-4 border-t border-zinc-900 flex justify-between items-center text-[10px] text-zinc-500">
+                      <span>Data: {dailyUsage.date}</span>
+                      <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">API CONECTADA</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

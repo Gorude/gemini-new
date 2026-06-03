@@ -61,18 +61,23 @@ const BarVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser }
         const y = centerY - barHeight / 2;
 
         // Desenhar cápsula arredondada
-        ctx.fillStyle = `rgba(59, 130, 246, ${0.4 + percent * 0.6})`; // Azul neon Nemon
+        ctx.save();
+        ctx.globalAlpha = 0.4 + percent * 0.6;
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim() || '#a1a1aa';
         ctx.beginPath();
         // Usando roundRect para cantos arredondados estilo cápsula
         (ctx as any).roundRect(x, y, barWidth, barHeight, barWidth / 2);
         ctx.fill();
+        ctx.restore();
 
         // Brilho opcional para barras intensas
         if (percent > 0.5) {
+          ctx.save();
           ctx.shadowBlur = 15;
-          ctx.shadowColor = 'rgba(59, 130, 246, 0.5)';
+          ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-glow').trim() || 'rgba(161, 161, 170, 0.5)';
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim() || '#a1a1aa';
           ctx.fill();
-          ctx.shadowBlur = 0;
+          ctx.restore();
         }
       }
     };
@@ -119,8 +124,8 @@ const LiveView: React.FC<LiveViewProps> = ({
       
       {/* Dynamic Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
-        <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-blue-600 rounded-full blur-[120px] animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-indigo-600 rounded-full blur-[120px] animate-pulse delay-1000"></div>
+        <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full blur-[120px] animate-pulse" style={{ backgroundColor: 'var(--accent)' }}></div>
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full blur-[120px] animate-pulse delay-1000" style={{ backgroundColor: 'var(--glow-active)' }}></div>
       </div>
 
       {/* Live Controls (Floating) */}
@@ -128,7 +133,7 @@ const LiveView: React.FC<LiveViewProps> = ({
         <div className="relative">
           <button 
             onClick={() => setShowVoiceMenu(!showVoiceMenu)}
-            className={`p-3 rounded-2xl transition shadow-xl border ${showVoiceMenu ? 'bg-blue-600 border-blue-400 text-white' : 'bg-[var(--bg-sidebar)] border-[var(--border-light)] text-[var(--text-secondary)] hover:text-white'}`}
+            className={`p-3 rounded-2xl transition shadow-xl border ${showVoiceMenu ? 'bg-[var(--accent)] border-[var(--accent-border)] text-white' : 'bg-[var(--bg-sidebar)] border-[var(--border-light)] text-[var(--text-secondary)] hover:text-white'}`}
           >
             <Settings className="w-5 h-5" />
           </button>
@@ -140,7 +145,7 @@ const LiveView: React.FC<LiveViewProps> = ({
                 <button 
                   key={v}
                   onClick={() => { onVoiceChange(v); setShowVoiceMenu(false); }}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition ${currentVoice === v ? 'bg-blue-500/20 text-blue-400 font-bold' : 'hover:bg-white/5 text-[var(--text-secondary)] hover:text-white'}`}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition ${currentVoice === v ? 'bg-[var(--accent-bg)] text-[var(--accent-text)] font-bold' : 'hover:bg-white/5 text-[var(--text-secondary)] hover:text-white'}`}
                 >
                   {v}
                 </button>
@@ -156,7 +161,7 @@ const LiveView: React.FC<LiveViewProps> = ({
         >
           <Camera className="w-5 h-5" />
         </button>
-
+ 
         <button 
           onClick={onToggleScreen}
           className={`p-3 rounded-2xl transition shadow-xl border ${visionType === 'screen' ? 'bg-green-600 border-green-400 text-white shadow-green-500/20' : 'bg-[var(--bg-sidebar)] border-[var(--border-light)] text-[var(--text-secondary)] hover:text-white'}`}
@@ -167,7 +172,7 @@ const LiveView: React.FC<LiveViewProps> = ({
 
         <button 
           onClick={onToggleProactive}
-          className={`p-3 rounded-2xl transition shadow-xl border ${isProactiveEnabled ? 'bg-indigo-600 border-indigo-400 text-white shadow-indigo-500/40' : 'bg-[var(--bg-sidebar)] border-[var(--border-light)] text-[var(--text-secondary)] hover:text-white'}`}
+          className={`p-3 rounded-2xl transition shadow-xl border ${isProactiveEnabled ? 'bg-[var(--accent)] border-[var(--accent-border)] text-white shadow-[var(--accent-glow)]' : 'bg-[var(--bg-sidebar)] border-[var(--border-light)] text-[var(--text-secondary)] hover:text-white'}`}
           title={isProactiveEnabled ? "Desativar Proatividade" : "Ativar Proatividade"}
         >
           <Zap className={`w-5 h-5 ${isProactiveEnabled ? 'animate-pulse' : ''}`} />
@@ -192,12 +197,12 @@ const LiveView: React.FC<LiveViewProps> = ({
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-4xl relative z-10">
         {status === 'connecting' ? (
           <div className="flex flex-col items-center gap-8 w-full max-w-sm">
-            <div className="w-24 h-24 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 animate-pulse relative">
-                <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin"></div>
+            <div className="w-24 h-24 rounded-full bg-[var(--accent-bg)] flex items-center justify-center text-[var(--accent-text)] animate-pulse relative">
+                <div className="absolute inset-0 rounded-full border-4 border-[var(--accent-border)] animate-spin" style={{ borderTopColor: 'var(--accent-text)' }}></div>
                 <Volume2 className="w-8 h-8" />
             </div>
             <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 relative">
-                <div className="absolute inset-y-0 bg-gradient-to-r from-blue-600 to-indigo-600 animate-loading-bar shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+                <div className="absolute inset-y-0 bg-[var(--accent)] animate-loading-bar shadow-[0_0_15px_var(--accent-glow)]"></div>
             </div>
             <div className="flex flex-col items-center gap-2">
                 <p className="text-xl font-bold text-white tracking-tight">Sincronizando com DNA</p>
@@ -252,7 +257,7 @@ const LiveView: React.FC<LiveViewProps> = ({
               )}
               {transcript.map((line, i) => (
                 <div key={i} className={`flex ${line.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                  <div className={`max-w-[85%] px-5 py-3 rounded-2xl text-sm leading-relaxed shadow-lg ${line.role === 'user' ? 'bg-blue-600 text-white font-medium' : 'bg-white/10 text-[var(--text-primary)] border border-white/5'}`}>
+                  <div className={`max-w-[85%] px-5 py-3 rounded-2xl text-sm leading-relaxed shadow-lg ${line.role === 'user' ? 'bg-[var(--bg-user-bubble)] text-white font-medium' : 'bg-white/10 text-[var(--text-primary)] border border-white/5'}`}>
                     {line.text}
                   </div>
                 </div>

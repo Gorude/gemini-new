@@ -8,9 +8,6 @@ import {
   Menu,
   Search,
   SquarePen,
-  Activity,
-  Zap,
-  BarChart2,
   User,
   Files,
   MessageSquare,
@@ -89,7 +86,6 @@ import LogWindow from './components/LogWindow';
 
 import SettingsModal from './components/SettingsModal';
 import {
-  MODEL_LIMITS,
   MODEL_OPTIONS
 } from './constants';
 
@@ -119,7 +115,6 @@ function App() {
   const [imagenModel, setImagenModel] = useState('imagen-4.0-fast-generate-001');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9'>('1:1');
   const [expandedSourcesMsgId, setExpandedSourcesMsgId] = useState<string | null>(null);
-  const [showAnalytics, setShowAnalytics] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('nemon-theme') || 'escuro');
   const [enabledModelIds, setEnabledModelIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('nemon_enabled_models');
@@ -325,8 +320,6 @@ function App() {
   // Refs for closing popups when clicking outside
   const personalityRef = useRef<HTMLDivElement>(null);
   const fontSizeRef = useRef<HTMLDivElement>(null);
-  const analyticsButtonRef = useRef<HTMLButtonElement>(null);
-  const analyticsPopupRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -345,21 +338,12 @@ function App() {
       ) {
         setShowFontSizeSelector(false);
       }
-      if (
-        showAnalytics &&
-        analyticsPopupRef.current &&
-        !analyticsPopupRef.current.contains(target) &&
-        analyticsButtonRef.current &&
-        !analyticsButtonRef.current.contains(target)
-      ) {
-        setShowAnalytics(false);
-      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showPersonalitySelector, showFontSizeSelector, showAnalytics]);
+  }, [showPersonalitySelector, showFontSizeSelector]);
 
   useEffect(() => {
     if (!isLiveActive || !isLiveProactive) {
@@ -1598,7 +1582,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   if (isAuthLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#09090b]">
-        <div className="w-10 h-10 rounded-full border-4 border-violet-600/30 border-t-violet-600 animate-spin"></div>
+        <div className="w-10 h-10 rounded-full border-4 border-zinc-700/30 border-t-zinc-500 animate-spin"></div>
       </div>
     );
   }
@@ -1786,7 +1770,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       </aside>
 
       <main className="main-content flex flex-col h-full w-full bg-[var(--bg-main)]">
-        <header className="p-4 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
+        <header className="py-6 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
           <div className="flex-1 flex items-center gap-4">
             {!isSidebarOpen && (
               <button
@@ -1799,16 +1783,31 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
 
           {/* Personality & Font Size Selector */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1.5 sm:gap-3">
+            {/* Files Button (Only Icon, w-9 h-9) */}
+            {activeChatId && (
+              <button
+                onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
+                className={`flex items-center justify-center rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 w-9 h-9 ${activeTab === 'files'
+                    ? 'text-white shadow-lg'
+                    : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border-[var(--border-light)] hover:border-[var(--glow-active)]'
+                  }`}
+                style={activeTab === 'files' ? { background: 'var(--accent)', borderColor: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' } : {}}
+                title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
+              >
+                <Files className={`w-4 h-4 ${activeTab === 'files' ? 'text-white' : ''}`} style={activeTab !== 'files' ? { color: 'var(--accent-text)' } : {}} />
+              </button>
+            )}
+
             {/* Personality Selector */}
             <div className="relative" ref={personalityRef}>
               <button
                 onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
-                className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
+                className="flex items-center gap-1.5 sm:gap-2.5 px-3 py-1.5 sm:px-5 sm:py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[120px] sm:min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
               >
-                <div className="flex items-center gap-2 overflow-hidden">
+                <div className="flex items-center gap-1.5 sm:gap-2 overflow-hidden">
                   <User className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-text)' }} />
-                  <span className="text-xs font-bold tracking-tight text-[var(--text-primary)] truncate">
+                  <span className="text-xs font-bold tracking-tight text-[var(--text-primary)] truncate max-w-[70px] sm:max-w-none">
                     {personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
                   </span>
                 </div>
@@ -1885,82 +1884,13 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
 
           <div className="flex-1 flex justify-end items-center gap-2">
-            {activeChatId && (
-              <button
-                onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:scale-105 active:scale-95 ${activeTab === 'files'
-                    ? 'text-white shadow-lg'
-                    : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border-[var(--border-light)] hover:border-[var(--glow-active)]'
-                  }`}
-                style={activeTab === 'files' ? { background: 'var(--accent)', borderColor: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' } : {}}
-                title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
-              >
-                <Files className={`w-3.5 h-3.5 ${activeTab === 'files' ? 'text-white' : ''}`} style={activeTab !== 'files' ? { color: 'var(--accent-text)' } : {}} />
-                <span className="hidden sm:inline">{activeTab === 'chat' ? 'Arquivos' : 'Chat'}</span>
-              </button>
-            )}
-
-            <button
-              ref={analyticsButtonRef}
-              onClick={() => setShowAnalytics(!showAnalytics)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border border-[var(--border-light)] hover:border-[var(--glow-active)] transition-all duration-200 hover:scale-105 active:scale-95"
-            >
-              <Activity className="w-3.5 h-3.5 text-green-400" />
-              <span>Uso Local</span>
-              <div className="flex gap-0.5 ml-2">
-                <div className="w-1 h-3 bg-green-500 rounded-full opacity-40"></div>
-                <div className="w-1 h-3 bg-green-500 rounded-full opacity-70"></div>
-                <div className="w-1 h-3 bg-green-500 rounded-full"></div>
-              </div>
-            </button>
+            {/* Vazio ou outros controles de topo */}
           </div>
         </header>
 
         {activeTab === 'chat' && <ChatRuler margin={chatMargin} onMarginChange={setChatMargin} />}
 
         {/* Removida a fita de LED do topo */}
-
-        {showAnalytics && (
-          <div ref={analyticsPopupRef} className="absolute top-20 right-8 glass-modal rounded-3xl p-6 w-96 shadow-2xl z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)] flex items-center gap-2">
-                <BarChart2 className="w-4 h-4" style={{ color: 'var(--accent-text)' }} /> Analytics Hoje
-              </h3>
-              <button onClick={() => setShowAnalytics(false)} className="p-1.5 hover:bg-[var(--bg-chat-hover)] rounded-full text-[var(--text-placeholder)]"><X className="w-4 h-4" /></button>
-            </div>
-
-            <div className="space-y-6">
-              {Object.entries(dailyUsage.models).length === 0 ? (
-                <div className="text-center py-8 text-xs text-[var(--text-placeholder)] italic">Nenhum dado de uso registrado hoje.</div>
-              ) : (
-                Object.entries(dailyUsage.models).map(([modelId, data]) => {
-                  const limit = MODEL_LIMITS[modelId] || { name: modelId, rpd: 100 };
-                  const percent = Math.min(100, (data.requests / limit.rpd) * 100);
-                  return (
-                    <div key={modelId} className="space-y-2">
-                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-[var(--text-primary)]">{limit.name}</span>
-                        <span className="text-[var(--text-placeholder)]">{data.requests} / {limit.rpd} reqs</span>
-                      </div>
-                      <div className="h-1.5 bg-[var(--bg-chat-hover)] rounded-full overflow-hidden">
-                        <div className={`h-full transition-all duration-1000 ${percent > 90 ? 'bg-red-500' : percent > 50 ? 'bg-amber-500' : ''}`} style={percent <= 50 ? { background: 'var(--accent)', width: `${percent}%` } : { width: `${percent}%` }}></div>
-                      </div>
-                      <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] opacity-60">
-                        <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> {data.tokens.total.toLocaleString()} tokens</span>
-                        <span>{percent.toFixed(1)}% da cota</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="mt-8 pt-4 border-t border-[var(--border-light)] flex justify-between items-center text-[10px] text-[var(--text-placeholder)]">
-              <span>Data: {dailyUsage.date}</span>
-              <span className="bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-bold">API CONECTADA</span>
-            </div>
-          </div>
-        )}
 
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {activeTab === 'files' && activeChatId ? (
@@ -2158,7 +2088,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] md:hidden animate-in fade-in duration-300"
         ></div>
       )}
-      <LogWindow />
+      <LogWindow dailyUsage={dailyUsage} />
     </div>
   );
 }

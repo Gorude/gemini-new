@@ -55,7 +55,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
               className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl transition mr-1"
               type="button"
             >
-              <ArrowLeft className="w-5 h-5 text-indigo-400" />
+              <ArrowLeft className="w-5 h-5 text-[var(--accent-text)]" />
             </button>
           )}
           <div>
@@ -70,7 +70,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
         {!isEditing && (
           <button 
             onClick={handleAddNew}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-indigo-600/10"
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition shadow-lg shadow-[var(--accent-glow)]"
           >
             <Plus className="w-4 h-4" /> Novo Perfil
           </button>
@@ -88,7 +88,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Especialista em TypeScript"
-                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-indigo-500 transition"
+                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-border)] transition"
                 required
               />
             </div>
@@ -98,13 +98,13 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Ex: Você é um programador experiente que preza pela simplicidade e clareza no código..."
-                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition h-48 resize-none text-sm leading-relaxed text-[var(--text-primary)]"
+                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-4 py-3 outline-none focus:border-[var(--accent-border)] transition h-48 resize-none text-sm leading-relaxed text-[var(--text-primary)]"
                 required
               />
             </div>
             <button 
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
+              className="w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
             >
               <Save className="w-5 h-5" /> Salvar Personalidade
             </button>
@@ -120,9 +120,9 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
               </div>
             ) : (
               personalities.map((p) => (
-                <div key={p.id} className="group flex items-center gap-4 p-4 bg-[var(--bg-main)]/35 rounded-2xl border border-[var(--border-light)] hover:border-indigo-500/30 hover:bg-[var(--bg-chat-active)] transition duration-200">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
-                    <User className="w-5 h-5 text-indigo-400 opacity-60" />
+                <div key={p.id} className="group flex items-center gap-4 p-4 bg-[var(--bg-main)]/35 rounded-2xl border border-[var(--border-light)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-chat-active)] transition duration-200">
+                  <div className="w-10 h-10 rounded-xl bg-[var(--accent-bg)] flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5 text-[var(--accent-text)] opacity-60" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-[var(--text-primary)] text-sm">{p.name}</h4>
@@ -131,7 +131,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition duration-200">
                     <button 
                       onClick={() => handleEdit(p)}
-                      className="p-2 hover:bg-indigo-500/20 rounded-lg text-indigo-400 transition"
+                      className="p-2 hover:bg-[var(--accent-bg-strong)] rounded-lg text-[var(--accent-text)] transition"
                       title="Editar"
                     >
                       <Edit2 className="w-4 h-4" />

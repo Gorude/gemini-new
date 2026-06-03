@@ -38,7 +38,7 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
   });
 
   const getFileIcon = (mimeType: string) => {
-    if (mimeType.startsWith('image/')) return <ImageIcon className="w-6 h-6 text-blue-400" />;
+    if (mimeType.startsWith('image/')) return <ImageIcon className="w-6 h-6 text-[var(--accent-text)]" />;
     if (mimeType.includes('pdf') || mimeType.includes('word') || mimeType.includes('text')) return <FileText className="w-6 h-6 text-emerald-400" />;
     return <File className="w-6 h-6 text-amber-400" />;
   };
@@ -80,25 +80,25 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
               placeholder="Buscar pelo nome do arquivo..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl pl-11 pr-4 py-3 outline-none focus:border-blue-500/50 transition-all text-sm"
+              className="w-full bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl pl-11 pr-4 py-3 outline-none focus:border-[var(--accent-border)] transition-all text-sm"
             />
           </div>
           <div className="flex items-center gap-2 p-1 bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl w-full md:w-auto">
             <button 
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'all' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-[var(--text-placeholder)] hover:text-white'}`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'all' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-white'}`}
             >
               Todos
             </button>
             <button 
               onClick={() => setFilter('images')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'images' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-[var(--text-placeholder)] hover:text-white'}`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'images' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-white'}`}
             >
               Imagens
             </button>
             <button 
               onClick={() => setFilter('docs')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'docs' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-[var(--text-placeholder)] hover:text-white'}`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'docs' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-white'}`}
             >
               Documentos
             </button>
@@ -121,7 +121,7 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
             {filteredFiles.map((file, i) => (
               <div 
                 key={i} 
-                className="group relative bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl overflow-hidden hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-900/10 transition-all duration-300 flex flex-col"
+                className="group relative bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl overflow-hidden hover:border-[var(--accent-border)] hover:shadow-xl hover:shadow-black/10 transition-all duration-300 flex flex-col"
               >
                 {/* Preview Area */}
                 <div className="aspect-square w-full bg-black/20 flex items-center justify-center relative overflow-hidden">
@@ -142,7 +142,7 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
                   <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <button 
                       onClick={() => handleDownload(file)}
-                      className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-full transition-all transform scale-90 group-hover:scale-100 duration-300 shadow-xl"
+                      className="p-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-full transition-all transform scale-90 group-hover:scale-100 duration-300 shadow-xl"
                       title="Download"
                     >
                       <Download className="w-5 h-5" />
@@ -158,7 +158,7 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-1.5">
                       {(file as any).sender === 'ai' ? (
-                        <Bot className="w-3 h-3 text-blue-400" />
+                        <Bot className="w-3 h-3 text-[var(--accent-text)]" />
                       ) : (
                         <UserIcon className="w-3 h-3 text-[var(--text-placeholder)]" />
                       )}

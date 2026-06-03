@@ -62,11 +62,11 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
           </div>
           <div className="mt-3 flex items-center gap-2 pt-2 border-t border-white/5">
              {validMessages.find(m => m.id === hoveredId)?.role === 'user' ? (
-                <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest text-indigo-400">
+                <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest text-zinc-400">
                   <User size={10} /> Seu Prompt
                 </div>
              ) : (
-                <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest text-blue-400">
+                <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest text-zinc-400">
                   <Bot size={10} /> Resposta Nemon
                 </div>
              )}
@@ -108,8 +108,8 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
               {/* O Tick (Barra) */}
               <div 
                 className={`transition-all duration-300 rounded-full ${activeId === msg.id ? 'h-[4px] opacity-100' : 'h-[3px] opacity-40 group-hover:opacity-100'} ${isExpanded ? 'w-10 group-hover:w-16' : (activeId === msg.id ? 'w-6' : 'w-4 group-hover:w-6')} ${msg.role === 'user' 
-                  ? (activeId === msg.id ? 'bg-indigo-400 shadow-[0_0_15px_rgba(129,140,248,0.8)]' : 'bg-indigo-500/80 group-hover:bg-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.2)]') 
-                  : (activeId === msg.id ? 'bg-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.8)]' : 'bg-blue-500/80 group-hover:bg-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.2)]')
+                  ? (activeId === msg.id ? 'bg-[var(--accent-text)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-[var(--accent)] group-hover:bg-[var(--accent-hover)]') 
+                  : (activeId === msg.id ? 'bg-[var(--accent-text)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-[var(--accent-hover)] group-hover:bg-[var(--accent)]')
                 }`}
               />
             </div>

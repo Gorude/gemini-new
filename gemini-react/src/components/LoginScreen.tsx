@@ -30,8 +30,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = () => {
   return (
     <div className="flex items-center justify-center min-h-screen w-full relative bg-[#09090b] overflow-hidden font-sans">
       {/* Background Decorative Glow Elements */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-violet-600/10 blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-600/10 blur-[120px] pointer-events-none"></div>
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-zinc-800/10 blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-zinc-800/10 blur-[120px] pointer-events-none"></div>
       
       {/* Futuristic Grid Lines */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none"></div>
@@ -40,11 +40,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = () => {
       <div className="relative z-10 w-full max-w-[440px] mx-4 p-8 sm:p-10 rounded-[32px] border border-white/5 bg-[#0e0e11]/70 backdrop-blur-xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.7)] flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-700">
         
         {/* Pulsing Animated Icon Container */}
-        <div className="relative flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-tr from-violet-600 to-indigo-600 p-[1px] shadow-[0_0_30px_rgba(124,58,237,0.3)] mb-6 group hover:scale-105 transition-transform duration-300">
+        <div className="relative flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-tr from-zinc-700 to-zinc-400 p-[1px] shadow-[0_0_30px_rgba(255,255,255,0.1)] mb-6 group hover:scale-105 transition-transform duration-300">
           <div className="w-full h-full bg-[#0e0e11] rounded-[23px] flex items-center justify-center">
             <NemonIcon size={40} className="text-white" />
           </div>
-          <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-tr from-violet-600 to-indigo-600 opacity-20 blur-sm -z-10 group-hover:opacity-40 transition-opacity"></div>
+          <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-tr from-zinc-700 to-zinc-400 opacity-20 blur-sm -z-10 group-hover:opacity-40 transition-opacity"></div>
         </div>
 
         {/* Title & Subtitle */}
@@ -94,15 +94,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = () => {
         {/* Feature badges */}
         <div className="grid grid-cols-3 gap-3 w-full">
           <div className="flex flex-col items-center p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-            <Zap className="w-4 h-4 text-violet-400 mb-1" />
+            <Zap className="w-4 h-4 text-zinc-400 mb-1" />
             <span className="text-[10px] font-semibold text-zinc-400">Tempo Real</span>
           </div>
           <div className="flex flex-col items-center p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-            <Sparkles className="w-4 h-4 text-emerald-400 mb-1" />
+            <Sparkles className="w-4 h-4 text-zinc-400 mb-1" />
             <span className="text-[10px] font-semibold text-zinc-400">Multimodal</span>
           </div>
           <div className="flex flex-col items-center p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-            <Shield className="w-4 h-4 text-blue-400 mb-1" />
+            <Shield className="w-4 h-4 text-zinc-400 mb-1" />
             <span className="text-[10px] font-semibold text-zinc-400">Dados Cloud</span>
           </div>
         </div>

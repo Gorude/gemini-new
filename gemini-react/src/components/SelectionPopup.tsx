@@ -80,7 +80,7 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
             <button 
               type="button"
               onClick={() => { onFactCheck(text); handleClose(); }}
-              className="p-1.5 text-blue-400 hover:bg-blue-500/10 rounded-full transition-all group"
+              className="p-1.5 text-[var(--accent-text)] hover:bg-[var(--accent-bg)] rounded-full transition-all group"
               title="Checar Fato"
             >
               <ShieldCheck className="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -88,7 +88,7 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
             <button 
               type="submit"
               disabled={!question.trim() || isChecking}
-              className="p-1.5 text-blue-500 hover:bg-blue-500/10 rounded-full disabled:opacity-30 transition-all"
+              className="p-1.5 text-[var(--accent-text)] hover:bg-[var(--accent-bg)] rounded-full disabled:opacity-30 transition-all"
             >
               <Send className="w-3.5 h-3.5" />
             </button>

@@ -34,13 +34,14 @@
   --message-bold-weight: 500;
   --nemon-logo-fill: #ffffff;
   --nemon-logo-stroke: #ffffff;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --accent-text: #818cf8;
-  --accent-bg: rgba(99, 102, 241, 0.1);
-  --accent-bg-strong: rgba(99, 102, 241, 0.15);
-  --accent-border: rgba(99, 102, 241, 0.3);
-  --accent-glow: rgba(99, 102, 241, 0.25);
+  --accent: #27272a;
+  --accent-hover: #3f3f46;
+  --accent-text: #ffffff;
+  --accent-bg: rgba(255, 255, 255, 0.06);
+  --accent-bg-strong: rgba(255, 255, 255, 0.1);
+  --accent-border: rgba(255, 255, 255, 0.15);
+  --accent-glow: rgba(255, 255, 255, 0.08);
+  --bg-sidebar-solid: #121212;
 }
 
 :root[data-theme="claro"] {
@@ -76,13 +77,14 @@
   --message-bold-weight: 600;
   --nemon-logo-fill: #000000;
   --nemon-logo-stroke: #000000;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-text: #4f46e5;
-  --accent-bg: rgba(79, 70, 229, 0.08);
-  --accent-bg-strong: rgba(79, 70, 229, 0.12);
-  --accent-border: rgba(79, 70, 229, 0.25);
-  --accent-glow: rgba(79, 70, 229, 0.2);
+  --accent: #18181b;
+  --accent-hover: #27272a;
+  --accent-text: #18181b;
+  --accent-bg: rgba(0, 0, 0, 0.04);
+  --accent-bg-strong: rgba(0, 0, 0, 0.08);
+  --accent-border: rgba(0, 0, 0, 0.12);
+  --accent-glow: rgba(0, 0, 0, 0.05);
+  --bg-sidebar-solid: #ffffff;
 }
 
 :root[data-theme="areia"] {
@@ -125,6 +127,7 @@
   --accent-bg-strong: rgba(180, 83, 9, 0.15);
   --accent-border: rgba(180, 83, 9, 0.3);
   --accent-glow: rgba(180, 83, 9, 0.25);
+  --bg-sidebar-solid: #ebdcc9;
 }
 
 :root[data-theme="galaxia"] {
@@ -167,6 +170,7 @@
   --accent-bg-strong: rgba(168, 85, 247, 0.18);
   --accent-border: rgba(168, 85, 247, 0.3);
   --accent-glow: rgba(168, 85, 247, 0.3);
+  --bg-sidebar-solid: #12102a;
 }
 
 body { 
@@ -404,7 +408,7 @@ body {
   box-shadow: 0 4px 15px rgba(0,0,0,0.05);
   transition: background-color 0.3s ease; 
 }
-.gemini-gradient { background: linear-gradient(70deg, #4285f4, #9b72cb, #d96570); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.gemini-gradient { background: linear-gradient(70deg, #71717a, #a1a1aa, #f4f4f5); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .shimmer-line { height: 15px; background: linear-gradient(90deg, var(--bg-sidebar) 25%, var(--bg-chat-hover) 50%, var(--bg-sidebar) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite linear; border-radius: 4px; margin-bottom: 10px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
@@ -443,11 +447,11 @@ body {
 
 .aura-loader {
   background: linear-gradient(90deg, 
-    rgba(30, 31, 32, 0) 0%, 
-    rgba(155, 114, 203, 0.5) 25%, 
-    rgba(66, 133, 244, 0.7) 50%, 
-    rgba(155, 114, 203, 0.5) 75%, 
-    rgba(30, 31, 32, 0) 100%
+    rgba(128, 128, 128, 0) 0%, 
+    rgba(128, 128, 128, 0.25) 25%, 
+    rgba(128, 128, 128, 0.5) 50%, 
+    rgba(128, 128, 128, 0.25) 75%, 
+    rgba(128, 128, 128, 0) 100%
   );
   background-size: 200% 100%;
   animation: aura-sweep 2s infinite linear;
@@ -475,12 +479,12 @@ body {
   height: 400%;
   background: conic-gradient(
     transparent,
-    #6366f1 10%, /* indigo-500 */
-    #a5b4fc 20%, /* indigo-300 */
+    #52525b 10%, /* zinc-600 */
+    #e4e4e7 20%, /* zinc-200 */
     transparent 30%,
     transparent 60%,
-    #6366f1 70%,
-    #a5b4fc 80%,
+    #52525b 70%,
+    #e4e4e7 80%,
     transparent 90%
   );
   animation: rotate-border 4s linear infinite;
@@ -507,11 +511,11 @@ body {
   padding: 2px;
   background: conic-gradient(
     from 0deg,
-    #002b80,
-    #0070f3,
-    #00d2ff,
-    #0070f3,
-    #002b80
+    #27272a,
+    #71717a,
+    #e4e4e7,
+    #71717a,
+    #27272a
   );
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
@@ -623,5 +627,5 @@ body {
   border-left: 4px solid #d97706;
 }
 :root[data-theme="claro"] .thought-panel {
-  border-left: 4px solid #4f46e5;
+  border-left: 4px solid #27272a;
 }
