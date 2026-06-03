@@ -255,7 +255,12 @@ export interface Message {
 import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
+let globalDefaultApiKey = '';
 let globalPaidApiKey = '';
+
+export function setGlobalDefaultApiKey(key: string) {
+  globalDefaultApiKey = key;
+}
 
 export function setGlobalPaidApiKey(key: string) {
   globalPaidApiKey = key;
@@ -263,7 +268,7 @@ export function setGlobalPaidApiKey(key: string) {
 
 export async function getApiKey(manualApiKey?: string): Promise<string> {
   if (manualApiKey) return manualApiKey;
-  if (globalPaidApiKey) return globalPaidApiKey;
+  if (globalDefaultApiKey) return globalDefaultApiKey;
   
   try {
     if (auth.currentUser) {
@@ -271,9 +276,9 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists()) {
         const data = userDocSnap.data();
-        if (data.paidApiKey) {
-          globalPaidApiKey = data.paidApiKey;
-          return data.paidApiKey;
+        if (data.defaultApiKey) {
+          globalDefaultApiKey = data.defaultApiKey;
+          return data.defaultApiKey;
         }
       }
     }
@@ -281,9 +286,7 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
     // Ignore
   }
   
-  const envKey = import.meta.env.VITE_GEMINI_FREE_API_KEY;
-  if (!envKey) throw new Error("Chave de API não configurada.");
-  return envKey;
+  throw new Error("Chave de API do Google AI Studio padrão não configurada. Vá em Configurações > API para configurar.");
 }
 
 export async function* streamGeminiContent(
@@ -559,8 +562,8 @@ export async function generateImagenContent(
   aspectRatio: '1:1' | '9:16' | '16:9',
   manualApiKey?: string
 ): Promise<{ data: string; mimeType: string }> {
-  const key = manualApiKey || globalPaidApiKey || import.meta.env.VITE_GEMINI_PAID_API_KEY;
-  if (!key) throw new Error("Chave de API Imagen (Paga) não configurada.");
+  const key = manualApiKey || globalPaidApiKey || globalDefaultApiKey;
+  if (!key) throw new Error("Nenhuma chave de API configurada para o Imagen. Configure-a em Configurações > API.");
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${key}`;
 

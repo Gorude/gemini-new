@@ -59,6 +59,7 @@ import {
   performFactCheck,
   extractAndParseJson,
   setGlobalPaidApiKey,
+  setGlobalDefaultApiKey,
   type Message
 } from './services/gemini';
 
@@ -164,7 +165,7 @@ function App() {
   const [selectedPersonalityId, setSelectedPersonalityId] = useState(() => {
     return localStorage.getItem('nemon_selected_personality_id') || 'default';
   });
-  const [settingsTab, setSettingsTab] = useState<'geral' | 'modelos' | 'avancado' | 'personalidades' | 'dna'>('geral');
+  const [settingsTab, setSettingsTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'dna'>('geral');
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
   const [chatFontSize, setChatFontSize] = useState<number>(() => {
     const saved = localStorage.getItem('nemon_chat_font_size');
@@ -188,6 +189,7 @@ function App() {
   const [isLiveProactive, setIsLiveProactive] = useState(() => localStorage.getItem('nemon_live_proactive') === 'true');
   const [proactiveIdleCount, setProactiveIdleCount] = useState(0); // 0: Idle, 1: Probed, 2: Retried (Stopped)
   const [paidApiKey, setPaidApiKey] = useState('');
+  const [defaultApiKey, setDefaultApiKey] = useState('');
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
 
 
@@ -243,12 +245,18 @@ function App() {
     };
   }, []);
 
-  const saveConfig = useCallback((config: { paidApiKey: string }) => {
-    setPaidApiKey(config.paidApiKey);
-    setGlobalPaidApiKey(config.paidApiKey);
+  const saveConfig = useCallback((config: { paidApiKey?: string; defaultApiKey?: string }) => {
+    if (config.paidApiKey !== undefined) {
+      setPaidApiKey(config.paidApiKey);
+      setGlobalPaidApiKey(config.paidApiKey);
+    }
+    if (config.defaultApiKey !== undefined) {
+      setDefaultApiKey(config.defaultApiKey);
+      setGlobalDefaultApiKey(config.defaultApiKey);
+    }
     if (auth.currentUser) {
       const userDocRef = doc(db, 'users', auth.currentUser.uid);
-      updateDoc(userDocRef, { paidApiKey: config.paidApiKey }).catch(err => console.error("Erro ao salvar configuração:", err));
+      updateDoc(userDocRef, config).catch(err => console.error("Erro ao salvar configuração:", err));
     }
   }, []);
 
@@ -492,6 +500,7 @@ function App() {
           let dbPersonalities: Personality[] = [];
           let dbDailyUsage: DailyUsage = { date: getPacificDate(), models: {} };
           let dbPaidApiKey = '';
+          let dbDefaultApiKey = '';
           let dbSidebarOrder: string[] = [];
           
           if (userDocSnap.exists()) {
@@ -502,6 +511,7 @@ function App() {
               dbDailyUsage = data.dailyUsage;
             }
             dbPaidApiKey = data.paidApiKey || '';
+            dbDefaultApiKey = data.defaultApiKey || '';
             dbSidebarOrder = data.sidebarOrder || [];
             
             // Sync settings to states
@@ -527,6 +537,7 @@ function App() {
               personalities: [],
               dailyUsage: { date: getPacificDate(), models: {} },
               paidApiKey: '',
+              defaultApiKey: '',
               sidebarOrder: [],
               settings: {
                 theme,
@@ -547,6 +558,8 @@ function App() {
           setDailyUsage(dbDailyUsage);
           setPaidApiKey(dbPaidApiKey);
           setGlobalPaidApiKey(dbPaidApiKey);
+          setDefaultApiKey(dbDefaultApiKey);
+          setGlobalDefaultApiKey(dbDefaultApiKey);
           
           // Load all chats
           const chatsColRef = collection(db, 'users', uid, 'chats');
@@ -587,6 +600,7 @@ function App() {
         setPersonalities([]);
         setPaidApiKey('');
         setGlobalPaidApiKey('');
+        setDefaultApiKey('');
       }
       setIsAuthLoading(false);
     });
@@ -1967,9 +1981,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               onSetEnabledModelIds={setEnabledModelIds}
               paidApiKey={paidApiKey}
               onUpdatePaidApiKey={(key) => {
-                setPaidApiKey(key);
-                setGlobalPaidApiKey(key);
                 saveConfig({ paidApiKey: key });
+              }}
+              defaultApiKey={defaultApiKey}
+              onUpdateDefaultApiKey={(key) => {
+                saveConfig({ defaultApiKey: key });
               }}
               personalities={personalities}
               onSavePersonality={(p) => {

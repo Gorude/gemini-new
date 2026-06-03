@@ -28,8 +28,10 @@ interface SettingsModalProps {
   onSetEnabledModelIds: (ids: string[]) => void;
   paidApiKey: string;
   onUpdatePaidApiKey: (key: string) => void;
+  defaultApiKey: string;
+  onUpdateDefaultApiKey: (key: string) => void;
   inline?: boolean;
-  initialTab?: 'geral' | 'modelos' | 'avancado' | 'personalidades' | 'dna';
+  initialTab?: 'geral' | 'modelos' | 'api' | 'personalidades' | 'dna';
   personalities: Personality[];
   onSavePersonality: (p: Personality) => void;
   onDeletePersonality: (id: string) => void;
@@ -49,6 +51,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetEnabledModelIds,
   paidApiKey,
   onUpdatePaidApiKey,
+  defaultApiKey,
+  onUpdateDefaultApiKey,
   inline = false,
   initialTab = 'geral',
   personalities,
@@ -61,31 +65,59 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   isCategorizingMemory,
   categorizationProgress
 }) => {
-  const [activeTab, setActiveTab] = useState<'geral' | 'modelos' | 'avancado' | 'personalidades' | 'dna'>(initialTab);
-  const [valStatus, setValStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [tempKey, setTempKey] = useState(paidApiKey);
+  const [activeTab, setActiveTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'dna'>(initialTab);
+  const [valDefaultStatus, setValDefaultStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [valPaidStatus, setValPaidStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [tempDefaultKey, setTempDefaultKey] = useState(defaultApiKey);
+  const [tempPaidKey, setTempPaidKey] = useState(paidApiKey);
 
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
 
-  const validateKey = async (key: string) => {
+  useEffect(() => {
+    setTempDefaultKey(defaultApiKey);
+  }, [defaultApiKey]);
+
+  useEffect(() => {
+    setTempPaidKey(paidApiKey);
+  }, [paidApiKey]);
+
+  const validateDefaultKey = async (key: string) => {
     if (!key) {
-      setValStatus('idle');
+      setValDefaultStatus('idle');
       return;
     }
-    setValStatus('loading');
+    setValDefaultStatus('loading');
     try {
-      // Test the key with a simple models list fetch (low cost, official way to test)
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
       if (res.ok) {
-        setValStatus('success');
-        onUpdatePaidApiKey(key);
+        setValDefaultStatus('success');
+        onUpdateDefaultApiKey(key);
       } else {
-        setValStatus('error');
+        setValDefaultStatus('error');
       }
     } catch (e) {
-      setValStatus('error');
+      setValDefaultStatus('error');
+    }
+  };
+
+  const validatePaidKey = async (key: string) => {
+    if (!key) {
+      setValPaidStatus('idle');
+      return;
+    }
+    setValPaidStatus('loading');
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      if (res.ok) {
+        setValPaidStatus('success');
+        onUpdatePaidApiKey(key);
+      } else {
+        setValPaidStatus('error');
+      }
+    } catch (e) {
+      setValPaidStatus('error');
     }
   };
 
@@ -135,11 +167,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <Bot size={18} /> Modelos
           </button>
           <button 
-            onClick={() => setActiveTab('avancado')}
-            className={`flex items-center gap-3 px-4 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'avancado' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
-            style={activeTab === 'avancado' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
+            onClick={() => setActiveTab('api')}
+            className={`flex items-center gap-3 px-4 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'api' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
+            style={activeTab === 'api' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
-            <Shield size={18} /> Avançado
+            <Shield size={18} /> API
           </button>
 
           <div className="hidden md:block h-px bg-[var(--border-light)] my-2 opacity-50"></div>
@@ -166,10 +198,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <header className="p-6 md:p-8 flex justify-between items-center bg-[var(--bg-sidebar)]/30 border-b border-[var(--border-light)] backdrop-blur-md">
           <div>
             <h3 className="text-xs md:text-sm font-black uppercase tracking-[0.2em]" style={{ color: 'var(--accent-text)' }}>
-              {activeTab === 'geral' ? 'Preferências de Interface' : activeTab === 'modelos' ? 'Gerenciamento de IA' : activeTab === 'avancado' ? 'Configurações Avançadas' : activeTab === 'personalidades' ? 'Comportamento da IA' : 'Inteligência Coletiva Persistente'}
+              {activeTab === 'geral' ? 'Preferências de Interface' : activeTab === 'modelos' ? 'Gerenciamento de IA' : activeTab === 'api' ? 'Configurações de API' : activeTab === 'personalidades' ? 'Comportamento da IA' : 'Inteligência Coletiva Persistente'}
             </h3>
             <p className="text-[10px] md:text-xs text-[var(--text-secondary)] mt-1">
-              {activeTab === 'geral' ? 'Ajuste o visual e o layout do sistema.' : activeTab === 'modelos' ? 'Escolha quais modelos estarão disponíveis no chat.' : activeTab === 'avancado' ? 'Configurações de API e Chaves de Acesso.' : activeTab === 'personalidades' ? 'Defina diretrizes de instrução e perfis do sistema.' : 'DNA de Memória - Visualização e Edição de Fatos.'}
+              {activeTab === 'geral' ? 'Ajuste o visual e o layout do sistema.' : activeTab === 'modelos' ? 'Escolha quais modelos estarão disponíveis no chat.' : activeTab === 'api' ? 'Configurações de API e Chaves de Acesso.' : activeTab === 'personalidades' ? 'Defina diretrizes de instrução e perfis do sistema.' : 'DNA de Memória - Visualização e Edição de Fatos.'}
             </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl text-[var(--text-placeholder)] transition-colors hover:scale-105 active:scale-95 duration-200">
@@ -245,7 +277,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {activeTab === 'avancado' && (
+          {activeTab === 'api' && (
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <section className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -255,15 +287,56 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
-                <div className="bg-[var(--bg-main)] p-6 rounded-2xl border border-[var(--border-light)] space-y-6">
+                <div className="bg-[var(--bg-main)] p-6 rounded-2xl border border-[var(--border-light)] space-y-8">
+                  {/* Default API Key */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Chave de API Imagen (Paga)</label>
+                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Chave de API Padrão (AI Studio)</label>
                       <div className="flex items-center gap-2">
-                        {valStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
-                        {valStatus === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> TRABALHANDO</div>}
-                        {valStatus === 'error' && <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> ERRO</div>}
-                        {valStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-[var(--text-placeholder)] font-bold bg-[var(--bg-sidebar)] px-2 py-0.5 rounded-md">IDLE</div>}
+                        {valDefaultStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
+                        {valDefaultStatus === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> ATIVA</div>}
+                        {valDefaultStatus === 'error' && <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> ERRO</div>}
+                        {valDefaultStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-[var(--text-placeholder)] font-bold bg-[var(--bg-sidebar)] px-2 py-0.5 rounded-md">Padrão</div>}
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type="password"
+                        placeholder="Cole sua chave padrão do Google AI Studio..."
+                        className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] outline-none transition-all pr-24"
+                        style={{ '--tw-ring-color': 'var(--accent)' } as React.CSSProperties}
+                        onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = ''}
+                        value={tempDefaultKey}
+                        onChange={(e) => setTempDefaultKey(e.target.value)}
+                      />
+                      <button 
+                        onClick={() => validateDefaultKey(tempDefaultKey)}
+                        disabled={valDefaultStatus === 'loading' || !tempDefaultKey}
+                        className="absolute right-2 top-2 bottom-2 px-4 disabled:bg-gray-600 text-white text-[10px] font-bold rounded-lg transition-all cursor-pointer"
+                        style={{ background: 'var(--accent)' }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--accent)'}
+                      >
+                        SALVAR
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-placeholder)] mt-2">
+                       Esta chave padrão é usada para todos os modelos de texto, bate-papo, processamento de áudio e ferramentas da aplicação.
+                    </p>
+                  </div>
+
+                  <div className="h-px bg-[var(--border-light)] opacity-35"></div>
+
+                  {/* Premium / Imagen API Key */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Chave de API Imagen (Premium)</label>
+                      <div className="flex items-center gap-2">
+                        {valPaidStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
+                        {valPaidStatus === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> ATIVA</div>}
+                        {valPaidStatus === 'error' && <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> ERRO</div>}
+                        {valPaidStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-[var(--text-placeholder)] font-bold bg-[var(--bg-sidebar)] px-2 py-0.5 rounded-md">Opcional</div>}
                       </div>
                     </div>
                     <div className="relative">
@@ -274,31 +347,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         style={{ '--tw-ring-color': 'var(--accent)' } as React.CSSProperties}
                         onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
                         onBlur={(e) => e.currentTarget.style.borderColor = ''}
-                        value={tempKey}
-                        onChange={(e) => setTempKey(e.target.value)}
+                        value={tempPaidKey}
+                        onChange={(e) => setTempPaidKey(e.target.value)}
                       />
                       <button 
-                        onClick={() => validateKey(tempKey)}
-                        disabled={valStatus === 'loading' || !tempKey}
-                        className="absolute right-2 top-2 bottom-2 px-4 disabled:bg-gray-600 text-white text-[10px] font-bold rounded-lg transition-all"
+                        onClick={() => validatePaidKey(tempPaidKey)}
+                        disabled={valPaidStatus === 'loading' || !tempPaidKey}
+                        className="absolute right-2 top-2 bottom-2 px-4 disabled:bg-gray-600 text-white text-[10px] font-bold rounded-lg transition-all cursor-pointer"
                         style={{ background: 'var(--accent)' }}
                         onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-hover)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'var(--accent)'}
                       >
-                        VALIDAR
+                        SALVAR
                       </button>
                     </div>
                     <p className="text-[10px] text-[var(--text-placeholder)] mt-2">
-                       Esta chave será usada exclusivamente para serviços premium (Imagen 3). Os demais serviços continuam usando a chave do arquivo .env.
+                       Esta chave é usada exclusivamente para geração de imagens (modelo Imagen 3/4). Se não fornecida, a geração de imagens usará a chave padrão.
                     </p>
                   </div>
                 </div>
               </section>
 
               <div className="mt-8 p-4 rounded-2xl space-y-2" style={{ background: 'var(--accent-bg)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'color-mix(in srgb, var(--accent) 10%, transparent)' }}>
-                <h5 className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent-text)' }}>Armazenamento Seguro</h5>
+                <h5 className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent-text)' }}>Armazenamento Seguro na Nuvem</h5>
                 <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed italic">
-                  Sua chave é salva localmente no arquivo app-config.json e nunca é compartilhada ou enviada para outros servidores além da Google AI.
+                  Suas chaves são salvas com segurança no Cloud Firestore sob sua conta autenticada, nunca sendo compartilhadas ou enviadas a servidores de terceiros além das APIs da Google AI.
                 </p>
               </div>
             </div>
