@@ -80,7 +80,7 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
         {editingChatId === chat.id ? (
           <input 
             autoFocus 
-            className="bg-transparent border-none outline-none text-white w-full text-[14px]" 
+            className="bg-transparent border-none outline-none text-[var(--text-primary)] w-full text-[14px]" 
             value={editTitle} 
             onChange={(e) => onEditTitleChange(e.target.value)} 
             onBlur={() => onRenameConfirm(chat.id)} 

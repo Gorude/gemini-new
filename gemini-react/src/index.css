@@ -629,3 +629,53 @@ body {
 :root[data-theme="claro"] .thought-panel {
   border-left: 4px solid #27272a;
 }
+
+/* Custom 4-dot breathing spinner */
+@keyframes breathing-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes dot-breathe {
+  0%, 100% {
+    transform: translate(var(--dx), var(--dy));
+  }
+  50% {
+    transform: translate(calc(var(--dx) * 0.3), calc(var(--dy) * 0.3));
+  }
+}
+
+.breathing-dots-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  position: relative;
+  animation: breathing-spin 2.2s linear infinite;
+}
+
+.breathing-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  animation: dot-breathe 1.8s ease-in-out infinite;
+}
+
+.breathing-dot:nth-child(1) {
+  --dx: 0px;
+  --dy: -9px;
+}
+.breathing-dot:nth-child(2) {
+  --dx: 9px;
+  --dy: 0px;
+}
+.breathing-dot:nth-child(3) {
+  --dx: 0px;
+  --dy: 9px;
+}
+.breathing-dot:nth-child(4) {
+  --dx: -9px;
+  --dy: 0px;
+}

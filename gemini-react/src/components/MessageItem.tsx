@@ -15,15 +15,15 @@ import {
   ChevronRight,
   Edit2,
   ShieldCheck,
-  Clock
+  Clock,
+  Brain
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
-import NemonIcon from './NemonIcon';
-
 interface MessageItemProps {
   msg: Message;
   isLoading: boolean;
+  isGenerating: boolean;
   editingMsgId: string | null;
   editingMsgText: string;
   copiedId: string | null;
@@ -41,11 +41,13 @@ interface MessageItemProps {
   onFactCheck: (id: string) => void;
   onCancelFactCheck?: (id: string) => void;
   onSelectionChange?: (text: string, pos: { x: number, y: number }, messageId: string) => void;
+  onResolveMemoryUpdate?: (messageId: string, updateId: string, action: 'accepted' | 'ignored') => void;
 }
 
 const MessageItem: React.FC<MessageItemProps> = React.memo(({
   msg,
   isLoading,
+  isGenerating,
   editingMsgId,
   editingMsgText,
   copiedId,
@@ -62,7 +64,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   onToggleSources,
   onFactCheck,
   onCancelFactCheck,
-  onSelectionChange
+  onSelectionChange,
+  onResolveMemoryUpdate
 }) => {
   const [verifySeconds, setVerifySeconds] = React.useState(0);
   const [isTimerHovered, setIsTimerHovered] = React.useState(false);
@@ -179,6 +182,11 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
     return safeMarkdown(msg.text);
   }, [msg.text, msg.factCheckResults]);
 
+  const parsedContinuationHtml = React.useMemo(() => {
+    if (!msg.continuationText) return "";
+    return safeMarkdown(msg.continuationText);
+  }, [msg.continuationText]);
+
   const isEditing = editingMsgId === msg.id;
 
   const forceRender = !msg.text || msg.isSearching || msg.isVerifying || (msg.role === 'ai' && isLoading);
@@ -204,12 +212,16 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
       {msg.role === 'ai' ? (
         <div className="ai-msg w-full">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-10 h-10 flex items-center justify-center relative">
-              {!msg.text && (
-                <div className="nemon-spinner absolute inset-0" />
-              )}
-              <NemonIcon size={30} />
-            </div>
+            {isGenerating && (
+              <div className="w-10 h-10 flex items-center justify-center relative shrink-0">
+                <div className="breathing-dots-container">
+                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                </div>
+              </div>
+            )}
 
             {/* Web Search Sources Icons */}
             {(msg.sources && msg.sources.length > 0 || msg.isSearching) && (
@@ -312,8 +324,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             )}
 
             {(msg.isGrounded || (msg.sources && msg.sources.length > 0)) && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--accent-bg)] border border-[var(--accent-border)] rounded-full text-[10px] font-bold text-[var(--accent-text)] animate-in fade-in slide-in-from-left-2 duration-500">
-                <Globe className="w-3 h-3" />
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-bold text-blue-400 animate-in fade-in slide-in-from-left-2 duration-500">
+                <Globe className="w-3 h-3 text-blue-400" />
                 PESQUISADO NA WEB
               </div>
             )}
@@ -349,6 +361,91 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
               onMouseUp={handleMouseUp}
               className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em]"
               dangerouslySetInnerHTML={{ __html: parsedHtml }}
+            />
+          ) : null}
+
+          {msg.pendingMemoryUpdates && msg.pendingMemoryUpdates.length > 0 && (
+            <div className="mt-4 bg-[var(--bg-sidebar)]/30 border border-[var(--border-light)] rounded-[1.5rem] p-4.5 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex items-start gap-2.5 mb-2.5">
+                <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400 shrink-0">
+                  <Brain className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: 'var(--accent-text)' }}>
+                    Atualizar DNA de Memória?
+                  </h4>
+                  <p className="text-[9.5px] text-[var(--text-secondary)] mt-0.5 leading-normal">
+                    Identifiquei uma contradição ou nova informação sobre você. Deseja atualizar seu DNA?
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-3">
+                {msg.pendingMemoryUpdates.map((upd, idx) => {
+                  const isResolved = !!upd.resolved;
+                  return (
+                    <div key={idx} className="bg-[var(--bg-main)]/40 border border-[var(--border-light)]/50 rounded-xl p-3 text-[10.5px]">
+                      <div className="font-bold text-[8px] uppercase tracking-wider opacity-50 mb-1">
+                        Categoria: {upd.category}
+                      </div>
+                      <div className="line-through text-red-400/80 mb-1.5 break-words">
+                        Antigo: "{upd.oldText}"
+                      </div>
+                      <div className="text-green-400 font-semibold break-words">
+                        Novo: "{upd.newText}"
+                      </div>
+                      {isResolved && (
+                        <div className="mt-2.5 pt-2 border-t border-[var(--border-light)]/30 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider">
+                          {upd.resolved === 'accepted' ? (
+                            <span className="text-green-400 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" /> DNA Atualizado
+                            </span>
+                          ) : (
+                            <span className="text-[var(--text-placeholder)] flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5" /> Ignorado
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Show action buttons ONLY if not resolved yet */}
+              {!msg.pendingMemoryUpdates.some(upd => upd.resolved) && (
+                <div className="flex justify-end gap-2 text-[10.5px]">
+                  <button 
+                    onClick={() => {
+                      msg.pendingMemoryUpdates?.forEach(upd => {
+                        onResolveMemoryUpdate?.(msg.id, upd.id, 'ignored');
+                      });
+                    }}
+                    className="px-3 py-1.5 rounded-xl font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] transition-all cursor-pointer"
+                  >
+                    Ignorar
+                  </button>
+                  <button 
+                    onClick={() => {
+                      msg.pendingMemoryUpdates?.forEach(upd => {
+                        onResolveMemoryUpdate?.(msg.id, upd.id, 'accepted');
+                      });
+                    }}
+                    className="px-3 py-1.5 rounded-xl font-bold text-white shadow-lg transition-all cursor-pointer"
+                    style={{ background: 'var(--accent)', boxShadow: '0 4px 12px var(--accent-glow)' }}
+                  >
+                    Atualizar DNA
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {msg.continuationText ? (
+            <div 
+              onMouseUp={handleMouseUp}
+              className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em] mt-4"
+              dangerouslySetInnerHTML={{ __html: parsedContinuationHtml }}
             />
           ) : null}
 

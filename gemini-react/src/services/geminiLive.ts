@@ -22,23 +22,48 @@ export class GeminiLiveSession {
   private personalityPrompt: string;
   private voice: string;
 
-  constructor(handlers: LiveSessionHandlers, personalityPrompt: string = "", voice: string = "Charon") {
+  private apiKey: string;
+  private modelName: string;
+  private micEnabled = true;
+
+  private active = false;
+  private reconnectTimeout: any = null;
+  private attemptCount = 0;
+
+  constructor(
+    handlers: LiveSessionHandlers,
+    personalityPrompt: string = "",
+    voice: string = "Charon",
+    apiKey: string = "",
+    modelName: string = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+  ) {
     this.handlers = handlers;
     this.personalityPrompt = personalityPrompt;
     this.voice = voice;
+    this.apiKey = apiKey;
+    this.modelName = modelName;
   }
 
   async start() {
+    this.active = true;
+    this.attemptCount = 0;
+    this.connect();
+  }
+
+  private async connect() {
+    if (!this.active) return;
     this.handlers.onStatusChange('connecting');
-    let key = import.meta.env.VITE_GEMINI_FREE_API_KEY;
+    let key = this.apiKey || import.meta.env.VITE_GEMINI_FREE_API_KEY;
     try {
-      if (auth.currentUser) {
+      if (!key && auth.currentUser) {
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
           if (data.paidApiKey) {
             key = data.paidApiKey;
+          } else if (data.defaultApiKey) {
+            key = data.defaultApiKey;
           }
         }
       }
@@ -51,13 +76,15 @@ export class GeminiLiveSession {
       return;
     }
 
-    const modelName = "models/gemini-2.5-flash-native-audio-preview-12-2025"; 
+    const modelName = this.modelName; 
     const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
 
     try {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        console.log(`[LIVE] Conectado com sucesso (tentativa ${this.attemptCount + 1})`);
+        this.attemptCount = 0;
         this.handlers.onStatusChange('connected');
         this.sendSetup(modelName);
       };
@@ -79,19 +106,43 @@ export class GeminiLiveSession {
 
       this.ws.onerror = (err) => {
         console.error("WebSocket Error:", err);
-        this.handlers.onStatusChange('error');
-        this.handlers.onError("Erro na conexão WebSocket.");
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
+        console.log(`[LIVE] Conexão fechada. Código: ${event.code}. Ativo: ${this.active}`);
         this.handlers.onStatusChange('disconnected');
-        this.stop();
+        this.cleanupConnection();
+        
+        if (this.active) {
+          if (event.code === 1008) {
+            console.error("[LIVE] Conexão rejeitada pelo servidor (1008 Policy Violation). Chave de API ou modelo inválido.");
+            this.handlers.onError("Conexão rejeitada pelo servidor. Verifique se a sua chave de API é válida e se o modelo selecionado é suportado.");
+            this.stop();
+            return;
+          }
+          
+          this.attemptCount++;
+          const delay = Math.min(1000 * Math.pow(1.5, this.attemptCount), 8000);
+          console.log(`[LIVE] Reconectando em ${delay}ms... (Tentativa ${this.attemptCount})`);
+          this.reconnectTimeout = window.setTimeout(() => {
+            this.connect();
+          }, delay);
+        }
       };
 
       await this.initAudio();
     } catch (err: any) {
-      this.handlers.onError(err.message);
-      this.stop();
+      console.error("[LIVE] Falha ao iniciar WebSocket:", err);
+      if (this.active) {
+        this.attemptCount++;
+        const delay = Math.min(1000 * Math.pow(1.5, this.attemptCount), 8000);
+        this.reconnectTimeout = window.setTimeout(() => {
+          this.connect();
+        }, delay);
+      } else {
+        this.handlers.onError(err.message);
+        this.stop();
+      }
     }
   }
 
@@ -110,6 +161,8 @@ export class GeminiLiveSession {
             }
           }
         },
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
         tools: [
           {
             functionDeclarations: [
@@ -145,11 +198,17 @@ export class GeminiLiveSession {
       await this.audioContext.audioWorklet.addModule('/audio-processor.js');
 
       this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Aplicar o estado atual do microfone imediatamente
+      this.micStream.getAudioTracks().forEach(track => {
+        track.enabled = this.micEnabled;
+      });
+
       const source = this.audioContext.createMediaStreamSource(this.micStream);
       this.workletNode = new AudioWorkletNode(this.audioContext, 'audio-processor');
 
       this.workletNode.port.onmessage = (event) => {
-        if (this.ws?.readyState === WebSocket.OPEN) {
+        if (this.ws?.readyState === WebSocket.OPEN && this.micEnabled) {
           const pcm64 = floatToPcm16(event.data);
           this.ws.send(JSON.stringify({
             realtimeInput: {
@@ -166,6 +225,16 @@ export class GeminiLiveSession {
     } catch (err) {
       console.warn("Nenhum microfone detectado ou permissão negada. Modo Live funcionará apenas via texto.");
     }
+  }
+
+  setMicEnabled(enabled: boolean) {
+    this.micEnabled = enabled;
+    if (this.micStream) {
+      this.micStream.getAudioTracks().forEach(track => {
+        track.enabled = enabled;
+      });
+    }
+    console.log(`[LIVE] Estado do microfone alterado para: ${enabled ? 'ativado' : 'desativado'}`);
   }
 
   sendText(text: string) {
@@ -325,11 +394,25 @@ export class GeminiLiveSession {
   }
 
   stop() {
-    this.ws?.close();
+    this.active = false;
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    this.attemptCount = 0;
+    this.cleanupConnection();
+  }
+
+  private cleanupConnection() {
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+    }
     this.micStream?.getTracks().forEach(t => t.stop());
     this.stopVideo();
     this.audioContext?.close();
-    this.ws = null;
     this.audioContext = null;
   }
 }

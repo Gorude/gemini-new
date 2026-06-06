@@ -60,7 +60,7 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
               onClick={onClose}
               className="p-2.5 hover:bg-[var(--bg-chat-hover)] rounded-xl transition-all border border-transparent hover:border-[var(--border-light)] group"
             >
-              <ArrowLeft className="w-5 h-5 text-[var(--text-secondary)] group-hover:text-white" />
+              <ArrowLeft className="w-5 h-5 text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]" />
             </button>
             <div>
               <h2 className="text-2xl font-bold tracking-tight">Arquivos do Chat</h2>
@@ -86,19 +86,19 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
           <div className="flex items-center gap-2 p-1 bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl w-full md:w-auto">
             <button 
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'all' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-white'}`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'all' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
             >
               Todos
             </button>
             <button 
               onClick={() => setFilter('images')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'images' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-white'}`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'images' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
             >
               Imagens
             </button>
             <button 
               onClick={() => setFilter('docs')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'docs' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-white'}`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'docs' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
             >
               Documentos
             </button>

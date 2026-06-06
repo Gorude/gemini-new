@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Settings, 
-  Bot, 
-  Layout, 
-  Palette, 
-  Check, 
+import {
+  X,
+  Settings,
+  Bot,
+  Layout,
+  Palette,
+  Check,
   Globe,
   User,
   Zap,
@@ -13,7 +13,7 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
-import { MODEL_OPTIONS } from '../constants';
+import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS } from '../constants';
 import PersonalitiesPanel from './PersonalitiesPanel';
 import DnaPanel from './DnaPanel';
 import { type Personality, type MemoryFact } from '../types';
@@ -30,6 +30,8 @@ interface SettingsModalProps {
   onUpdatePaidApiKey: (key: string) => void;
   defaultApiKey: string;
   onUpdateDefaultApiKey: (key: string) => void;
+  liveModel: string;
+  onSetLiveModel: (model: string) => void;
   inline?: boolean;
   initialTab?: 'geral' | 'modelos' | 'api' | 'personalidades' | 'dna';
   personalities: Personality[];
@@ -53,6 +55,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdatePaidApiKey,
   defaultApiKey,
   onUpdateDefaultApiKey,
+  liveModel,
+  onSetLiveModel,
   inline = false,
   initialTab = 'geral',
   personalities,
@@ -141,7 +145,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const renderContent = () => (
     <div className={`w-full h-full flex flex-col md:flex-row overflow-hidden ${inline ? 'bg-[var(--bg-main)]' : 'relative w-full max-w-2xl glass-modal rounded-[2rem] shadow-2xl h-[600px] animate-in zoom-in-95 duration-300'}`}>
-      
+
       {/* Sidebar Tabs */}
       <div className="w-full md:w-64 bg-[var(--bg-sidebar)]/30 border-b md:border-b-0 md:border-r border-[var(--border-light)] p-4 md:p-8 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible gap-2 md:gap-8 shrink-0 scrollbar-hidden">
         <div className="hidden md:flex items-center gap-3 px-2">
@@ -152,21 +156,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <nav className="flex flex-row md:flex-col gap-2 shrink-0 md:shrink">
-          <button 
+          <button
             onClick={() => setActiveTab('geral')}
             className={`flex items-center gap-3 px-4 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'geral' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
             style={activeTab === 'geral' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
             <Layout size={18} /> Geral
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('modelos')}
             className={`flex items-center gap-3 px-4 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'modelos' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
             style={activeTab === 'modelos' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
             <Bot size={18} /> Modelos
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('api')}
             className={`flex items-center gap-3 px-4 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'api' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
             style={activeTab === 'api' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
@@ -176,14 +180,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <div className="hidden md:block h-px bg-[var(--border-light)] my-2 opacity-50"></div>
 
-          <button 
+          <button
             onClick={() => setActiveTab('personalidades')}
             className={`flex items-center gap-3 px-4 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'personalidades' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
             style={activeTab === 'personalidades' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
             <User size={18} style={{ color: activeTab === 'personalidades' ? 'white' : 'var(--accent-text)' }} /> Personalidades
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('dna')}
             className={`flex items-center gap-3 px-4 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'dna' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
             style={activeTab === 'dna' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
@@ -212,7 +216,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className={`flex-1 ${activeTab === 'dna' ? 'overflow-hidden flex flex-col bg-[var(--bg-sidebar)]/10' : 'overflow-y-auto p-6 md:p-8 custom-scrollbar bg-[var(--bg-sidebar)]/10'}`}>
           {activeTab === 'geral' && (
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              
+
               {/* Theme Selector */}
               <section className="space-y-4">
                 <div className="flex items-center gap-3 text-[var(--text-primary)]">
@@ -222,9 +226,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   {themes.map(t => {
                     const isSelected = theme === t.id;
-                    
+
                     return (
-                      <button 
+                      <button
                         key={t.id}
                         onClick={() => onSetTheme(t.id)}
                         className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-300 active:scale-95 ${isSelected ? '' : 'bg-[var(--bg-main)]/50 border-[var(--border-light)] text-[var(--text-secondary)] hover:border-[var(--border-main)] hover:scale-105'}`}
@@ -247,7 +251,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="text-[10px] font-bold uppercase tracking-widest mb-4 px-2" style={{ color: 'var(--accent-text)' }}>Motores de Inteligência Ativos</div>
               {MODEL_OPTIONS.map(opt => (
-                <div 
+                <div
                   key={opt.id}
                   className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${enabledModelIds.includes(opt.id) ? '' : 'bg-[var(--bg-main)]/30 border-[var(--border-light)] opacity-60 grayscale-[0.5]'}`}
                   style={enabledModelIds.includes(opt.id) ? { background: 'var(--accent-bg)', borderColor: 'var(--accent-border)' } : {}}
@@ -259,13 +263,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-[var(--text-primary)] truncate">{opt.name}</span>
-                        {opt.hasSearch && <Globe size={12} className="shrink-0" style={{ color: 'var(--accent-text)' }} />}
+                        {opt.hasSearch && <Globe size={12} className="shrink-0 text-blue-400" />}
                       </div>
                       <p className="text-xs text-[var(--text-secondary)] truncate">{opt.desc}</p>
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     onClick={() => toggleModel(opt.id)}
                     className={`relative w-12 h-6 rounded-full transition-all duration-300 flex items-center shrink-0 ${enabledModelIds.includes(opt.id) ? '' : 'bg-gray-600'}`}
                     style={enabledModelIds.includes(opt.id) ? { background: 'var(--accent-hover)' } : {}}
@@ -300,7 +304,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                     </div>
                     <div className="relative">
-                      <input 
+                      <input
                         type="password"
                         placeholder="Cole sua chave padrão do Google AI Studio..."
                         className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] outline-none transition-all pr-24"
@@ -310,7 +314,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         value={tempDefaultKey}
                         onChange={(e) => setTempDefaultKey(e.target.value)}
                       />
-                      <button 
+                      <button
                         onClick={() => validateDefaultKey(tempDefaultKey)}
                         disabled={valDefaultStatus === 'loading' || !tempDefaultKey}
                         className="absolute right-2 top-2 bottom-2 px-4 disabled:bg-gray-600 text-white text-[10px] font-bold rounded-lg transition-all cursor-pointer"
@@ -322,7 +326,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     </div>
                     <p className="text-[10px] text-[var(--text-placeholder)] mt-2">
-                       Esta chave padrão é usada para todos os modelos de texto, bate-papo, processamento de áudio e ferramentas da aplicação.
+                      Esta chave padrão é usada para todos os modelos de texto, bate-papo, processamento de áudio e ferramentas da aplicação.
                     </p>
                   </div>
 
@@ -340,7 +344,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                     </div>
                     <div className="relative">
-                      <input 
+                      <input
                         type="password"
                         placeholder="Cole sua chave Imagen paga aqui..."
                         className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-3 px-4 text-sm text-[var(--text-primary)] outline-none transition-all pr-24"
@@ -350,7 +354,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         value={tempPaidKey}
                         onChange={(e) => setTempPaidKey(e.target.value)}
                       />
-                      <button 
+                      <button
                         onClick={() => validatePaidKey(tempPaidKey)}
                         disabled={valPaidStatus === 'loading' || !tempPaidKey}
                         className="absolute right-2 top-2 bottom-2 px-4 disabled:bg-gray-600 text-white text-[10px] font-bold rounded-lg transition-all cursor-pointer"
@@ -362,23 +366,39 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     </div>
                     <p className="text-[10px] text-[var(--text-placeholder)] mt-2">
-                       Esta chave é usada exclusivamente para geração de imagens (modelo Imagen 3/4). Se não fornecida, a geração de imagens usará a chave padrão.
+                      Esta chave é usada exclusivamente para geração de imagens (modelo Imagen 3/4). Se não fornecida, a geração de imagens usará a chave padrão.
                     </p>
+                  </div>
+
+                  <div className="h-px bg-[var(--border-light)] opacity-35"></div>
+
+                  {/* Seção de Modelos LIVE */}
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest block">Modelo LIVE Ativo</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {LIVE_MODEL_OPTIONS.map(opt => {
+                        const isSelected = liveModel === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            onClick={() => onSetLiveModel(opt.id)}
+                            className={`flex flex-col items-start p-4 rounded-2xl border text-left transition-all duration-300 active:scale-95 w-full ${isSelected ? '' : 'bg-[var(--bg-main)]/50 border-[var(--border-light)] text-[var(--text-secondary)] hover:border-[var(--border-main)] hover:scale-[1.02]'}`}
+                            style={isSelected ? { boxShadow: `0 0 20px var(--accent-glow)`, borderColor: 'var(--accent)', background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
+                          >
+                            <span className="text-xs font-bold uppercase tracking-widest text-[var(--text-primary)]">{opt.name}</span>
+                            <span className="text-[10px] text-[var(--text-placeholder)] mt-1">{opt.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </section>
-
-              <div className="mt-8 p-4 rounded-2xl space-y-2" style={{ background: 'var(--accent-bg)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'color-mix(in srgb, var(--accent) 10%, transparent)' }}>
-                <h5 className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent-text)' }}>Armazenamento Seguro na Nuvem</h5>
-                <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed italic">
-                  Suas chaves são salvas com segurança no Cloud Firestore sob sua conta autenticada, nunca sendo compartilhadas ou enviadas a servidores de terceiros além das APIs da Google AI.
-                </p>
-              </div>
             </div>
           )}
 
           {activeTab === 'personalidades' && (
-            <PersonalitiesPanel 
+            <PersonalitiesPanel
               personalities={personalities}
               onSave={onSavePersonality}
               onDelete={onDeletePersonality}
@@ -386,7 +406,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {activeTab === 'dna' && (
-            <DnaPanel 
+            <DnaPanel
               memoryFacts={memoryFacts}
               onDelete={onDeleteMemoryFact}
               onSave={onSaveMemoryFact}

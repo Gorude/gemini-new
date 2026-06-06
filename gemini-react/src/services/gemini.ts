@@ -7,25 +7,30 @@ import 'katex/dist/katex.min.css';
 
 const renderer = new marked.Renderer();
 
-// Override paragraph: suppress empty paragraphs that create whitespace
-renderer.paragraph = ({ tokens }) => {
-  const body = (renderer as any).__proto__.paragraph.call(renderer, { tokens });
-  const text = body.replace(/<p>(\s|<br>)*<\/p>/gi, '');
-  return text;
+// Custom code renderer supporting both positional and token object formats for Marked compatibility
+renderer.code = (codeOrToken: any, langOrUndefined?: any) => {
+  let text = '';
+  let lang = 'plaintext';
+  
+  if (codeOrToken && typeof codeOrToken === 'object') {
+    text = codeOrToken.text || '';
+    lang = codeOrToken.lang || 'plaintext';
+  } else {
+    text = codeOrToken || '';
+    lang = langOrUndefined || 'plaintext';
+  }
+  
+  const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+  const highlighted = hljs.highlight(text, { language }).value;
+  return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
 };
 
-// Configuração segura do Marked.js
-const markedOptions: any = {
+// Configuração segura do Marked.js usando marked.use
+marked.use({
   renderer: renderer,
-  highlight: function (code: string, lang: string) {
-    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-    return hljs.highlight(code, { language }).value;
-  },
-  langPrefix: 'hljs language-',
   breaks: false,
   gfm: true
-};
-marked.setOptions(markedOptions);
+});
 
 // Adicionar suporte nativo à matemática
 marked.use(markedKatex({
@@ -249,6 +254,14 @@ export interface Message {
   duration?: number;
   factCheckResults?: FactCheckResult[];
   isVerifying?: boolean;
+  pendingMemoryUpdates?: Array<{
+    id: string;
+    category: string;
+    oldText: string;
+    newText: string;
+    resolved?: 'accepted' | 'ignored';
+  }>;
+  continuationText?: string;
 }
 
 
@@ -268,6 +281,7 @@ export function setGlobalPaidApiKey(key: string) {
 
 export async function getApiKey(manualApiKey?: string): Promise<string> {
   if (manualApiKey) return manualApiKey;
+  if (globalPaidApiKey) return globalPaidApiKey;
   if (globalDefaultApiKey) return globalDefaultApiKey;
   
   try {
@@ -276,6 +290,10 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists()) {
         const data = userDocSnap.data();
+        if (data.paidApiKey) {
+          globalPaidApiKey = data.paidApiKey;
+          return data.paidApiKey;
+        }
         if (data.defaultApiKey) {
           globalDefaultApiKey = data.defaultApiKey;
           return data.defaultApiKey;

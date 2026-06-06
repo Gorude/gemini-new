@@ -11,7 +11,7 @@ import {
   Headphones,
   Square
 } from 'lucide-react';
-import { MODEL_OPTIONS, IMAGEN_OPTIONS } from '../constants';
+import { MODEL_OPTIONS, IMAGEN_OPTIONS, LIVE_MODEL_OPTIONS } from '../constants';
 import { type PendingFile } from '../types';
 
 interface ChatInputProps {
@@ -30,6 +30,8 @@ interface ChatInputProps {
   onSend: (text: string, files: PendingFile[]) => void;
   onStartLive: () => void;
   isLiveActive: boolean;
+  liveModel: string;
+  onSetLiveModel: (model: string) => void;
   onToggleWebSearch: () => void;
   onToggleThinking: () => void;
   onToggleImageGen: () => void;
@@ -58,6 +60,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
   onStartLive,
   isLiveActive,
+  liveModel,
+  onSetLiveModel,
   onToggleWebSearch,
   onToggleThinking,
   onToggleImageGen,
@@ -154,7 +158,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <footer 
-      className="p-4 bg-[var(--bg-main)] relative chat-container-responsive"
+      className="p-4 bg-[var(--bg-main)] relative z-10 chat-container-responsive"
       style={{ 
         paddingLeft: `calc(${margin}% + 1rem)`, 
         paddingRight: `calc(${margin}% + 1rem)` 
@@ -217,12 +221,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <button 
                 onClick={onToggleWebSearch} 
                 disabled={!canSearch}
-                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${webSearchEnabled ? 'border' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'} disabled:opacity-20 disabled:grayscale`}
-                style={webSearchEnabled ? { background: 'var(--accent-bg)', color: 'var(--accent-text)', borderColor: 'var(--accent-border)' } : {}}
+                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${webSearchEnabled ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'} disabled:opacity-20 disabled:grayscale`}
                 title={canSearch ? "Pesquisa na Web" : "Modelo não suporta pesquisa"}
               >
                 <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
-                {webSearchEnabled && <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full animate-pulse" style={{ background: 'var(--accent-text)', boxShadow: '0 0 8px var(--accent-glow)' }}></span>}
+                {webSearchEnabled && <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]"></span>}
               </button>
 
               <button 
@@ -300,7 +303,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   className="flex items-center gap-1 sm:gap-1.5 bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-user-bubble)] hover:scale-105 active:scale-95 text-[10px] sm:text-xs text-[var(--text-primary)] transition-all rounded-xl px-2.5 py-2 sm:px-4 sm:py-2.5 font-medium border border-[var(--border-light)] shadow-sm whitespace-nowrap"
                 >
                   <span className="truncate max-w-[65px] xs:max-w-[100px] sm:max-w-none">
-                    {MODEL_OPTIONS.find(o => o.id === model)?.name || 'Padrão'} 
+                    {isLiveActive 
+                      ? (LIVE_MODEL_OPTIONS.find(o => o.id === liveModel)?.name || 'Gemini 2.5 Flash Live')
+                      : (MODEL_OPTIONS.find(o => o.id === model)?.name || 'Padrão')}
                   </span>
                   <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 ml-0.5 opacity-60 shrink-0" />
                 </button>
@@ -310,15 +315,26 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     ref={modelMenuRef}
                     className="absolute bottom-[115%] right-0 bg-[var(--bg-sidebar-solid)] border border-[var(--border-light)] shadow-2xl rounded-2xl py-2 min-w-64 z-50 overflow-hidden flex flex-col items-start origin-bottom-right animate-in fade-in zoom-in-95 duration-200 max-sm:fixed max-sm:bottom-28 max-sm:left-4 max-sm:right-4 max-sm:w-[calc(100vw-32px)] max-sm:min-w-0"
                   >
-                    {MODEL_OPTIONS.filter(opt => enabledModelIds.includes(opt.id)).map(opt => (
-                      <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] font-semibold text-[var(--text-primary)]">{opt.name}</span>
-                          {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-40" style={{ color: 'var(--accent-text)' }} />}
-                        </div>
-                        <span className="text-[11px] text-[var(--text-placeholder)]">{opt.desc}</span>
-                      </button>
-                    ))}
+                    {isLiveActive ? (
+                      LIVE_MODEL_OPTIONS.map(opt => (
+                        <button key={opt.id} onClick={() => { onSetLiveModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-5 py-3 hover:bg-white/5 transition text-left ${liveModel === opt.id ? 'font-bold' : ''}`} style={liveModel === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-semibold text-[var(--text-primary)]">{opt.name}</span>
+                          </div>
+                          <span className="text-[11px] text-[var(--text-placeholder)]">{opt.desc}</span>
+                        </button>
+                      ))
+                    ) : (
+                      MODEL_OPTIONS.filter(opt => enabledModelIds.includes(opt.id)).map(opt => (
+                        <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-semibold text-[var(--text-primary)]">{opt.name}</span>
+                            {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-60 text-blue-400" />}
+                          </div>
+                          <span className="text-[11px] text-[var(--text-placeholder)]">{opt.desc}</span>
+                        </button>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
