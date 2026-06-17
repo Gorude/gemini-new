@@ -37,14 +37,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = () => {
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none"></div>
 
       {/* Main Glassmorphic Login Card */}
-      <div className="relative z-10 w-full max-w-[440px] mx-4 p-8 sm:p-10 rounded-[32px] border border-white/5 bg-[#0e0e11]/70 backdrop-blur-xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.7)] flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-700">
+      <div className="relative z-10 w-full max-w-[440px] mx-4 p-5 sm:p-10 rounded-[16px] border border-white/5 bg-[#0e0e11]/70 backdrop-blur-xl shadow-[0_24px_50px_-12px_rgba(0,0,0,0.7)] flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-700">
         
         {/* Pulsing Animated Icon Container */}
         <div className="relative flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-tr from-zinc-700 to-zinc-400 p-[1px] shadow-[0_0_30px_rgba(255,255,255,0.1)] mb-6 group hover:scale-105 transition-transform duration-300">
-          <div className="w-full h-full bg-[#0e0e11] rounded-[23px] flex items-center justify-center">
+          <div className="w-full h-full bg-[#0e0e11] rounded-[12px] flex items-center justify-center">
             <NemonIcon size={40} className="text-white" />
           </div>
-          <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-tr from-zinc-700 to-zinc-400 opacity-20 blur-sm -z-10 group-hover:opacity-40 transition-opacity"></div>
+          <div className="absolute -inset-1 rounded-[14px] bg-gradient-to-tr from-zinc-700 to-zinc-400 opacity-20 blur-sm -z-10 group-hover:opacity-40 transition-opacity"></div>
         </div>
 
         {/* Title & Subtitle */}
@@ -67,7 +67,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = () => {
         <button
           disabled={loading}
           onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-3.5 px-6 py-4 rounded-2xl border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 active:bg-white/5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer mb-8"
+          className="w-full flex items-center justify-center gap-3.5 px-4 py-3 rounded-2xl border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 active:bg-white/5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none cursor-pointer mb-8"
         >
           {loading ? (
             <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>

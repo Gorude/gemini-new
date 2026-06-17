@@ -1,27 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&family=Inter:wght@400;500;600&family=Roboto:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap');
 @import "tailwindcss";
 
+/* Escala de arredondamento global — reduzida para um visual menos circular.
+   Todas as utilidades rounded-* (exceto rounded-full) herdam destes valores. */
+@theme {
+  --radius-xs: 0.0625rem;  /* 1px  (era 2px)  */
+  --radius-sm: 0.125rem;   /* 2px  (era 4px)  */
+  --radius-md: 0.25rem;    /* 4px  (era 6px)  */
+  --radius-lg: 0.3125rem;  /* 5px  (era 8px)  */
+  --radius-xl: 0.4375rem;  /* 7px  (era 12px) */
+  --radius-2xl: 0.5rem;    /* 8px  (era 16px) */
+  --radius-3xl: 0.75rem;   /* 12px (era 24px) */
+  --radius-4xl: 1rem;      /* 16px (era 32px) */
+
+  /* Escala de espaçamento global — reduzida a 75% do padrão (0.25rem).
+     Afeta proporcionalmente padding, gaps, margens, larguras e alturas
+     de TODAS as utilidades (p-*, gap-*, w-*, h-*, ...), encolhendo a
+     proporção geral das divs do programa sem mexer no texto. */
+  --spacing: 0.1875rem;    /* era 0.25rem */
+}
+
 :root[data-theme="escuro"] {
-<<<<<<< HEAD
-  --bg-main: #090a0f;
-  --bg-main-grad: linear-gradient(135deg, #090a0f 0%, #111319 100%);
-  --bg-sidebar: rgba(18, 20, 26, 0.65); 
-  --bg-chat-hover: rgba(255, 255, 255, 0.05);
-  --bg-chat-active: rgba(99, 102, 241, 0.15);
-  --bg-nav-active: rgba(99, 102, 241, 0.2);
-  --text-nav-active: #a5b4fc;
-  --bg-user-bubble: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-  --bg-input: rgba(18, 20, 26, 0.55);
-  --bg-modal: rgba(22, 24, 30, 0.85);
-  --border-main: rgba(255, 255, 255, 0.08);
-  --border-light: rgba(255, 255, 255, 0.05);
-  --text-primary: #abb8c9;
-  --text-bold: #f8fafc;
-  --text-user-regular: rgba(241, 245, 249, 0.72);
-  --text-user-bold: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-placeholder: #64748b;
-=======
   --bg-main: #0d0d0d;
   --bg-main-grad: linear-gradient(135deg, #0d0d0d 0%, #161616 100%);
   --bg-sidebar: rgba(18, 18, 18, 0.65); 
@@ -40,32 +39,12 @@
   --text-user-bold: #ffffff;
   --text-secondary: #999999;
   --text-placeholder: #555555;
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   --code-bg: #0f1115;
   --inline-code-bg: #1e222b;
   --code-border: rgba(255, 255, 255, 0.06);
   --scrollbar-track: transparent;
   --scrollbar-thumb: rgba(255, 255, 255, 0.12);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
-<<<<<<< HEAD
-  --glass-bg: rgba(22, 24, 30, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.045);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
-  --glow-primary: rgba(99, 102, 241, 0.15);
-  --glow-active: rgba(99, 102, 241, 0.4);
-  --message-bold-weight: 500;
-}
-
-:root[data-theme="claro"] {
-  --bg-main: #f8f9fa;
-  --bg-main-grad: linear-gradient(135deg, #f8f9fa 0%, #eef1f6 100%);
-  --bg-sidebar: rgba(255, 255, 255, 0.65);
-  --bg-chat-hover: rgba(0, 0, 0, 0.025);
-  --bg-chat-active: rgba(79, 70, 229, 0.08);
-  --bg-nav-active: rgba(79, 70, 229, 0.12);
-  --text-nav-active: #4f46e5;
-  --bg-user-bubble: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-=======
   --glass-bg: rgba(20, 20, 20, 0.65);
   --glass-border: rgba(255, 255, 255, 0.045);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
@@ -84,6 +63,51 @@
   --bg-sidebar-solid: #121212;
 }
 
+/* Tema "Claude" — réplica das cores do Claude.ai (modo escuro):
+   fundo quente escuro + acento terracota (#d97757). */
+:root[data-theme="claude"] {
+  --bg-main: #262624;
+  --bg-main-grad: linear-gradient(135deg, #262624 0%, #1f1e1d 100%);
+  --bg-sidebar: rgba(31, 30, 29, 0.65);
+  --bg-chat-hover: rgba(255, 255, 255, 0.05);
+  --bg-chat-active: rgba(217, 119, 87, 0.12);
+  --bg-nav-active: rgba(217, 119, 87, 0.16);
+  --text-nav-active: #f0eee6;
+  --bg-user-bubble: linear-gradient(135deg, #3a3936 0%, #30302e 100%);
+  --bg-input: rgba(48, 48, 46, 0.6);
+  --bg-modal: rgba(38, 38, 36, 0.9);
+  --border-main: rgba(255, 255, 255, 0.1);
+  --border-light: rgba(255, 255, 255, 0.06);
+  --text-primary: #e8e6dc;
+  --text-bold: #faf9f5;
+  --text-user-regular: rgba(240, 238, 230, 0.9);
+  --text-user-bold: #faf9f5;
+  --text-secondary: #b7b5a9;
+  --text-placeholder: #6f6d63;
+  --code-bg: #1f1e1d;
+  --inline-code-bg: #30302e;
+  --code-border: rgba(255, 255, 255, 0.08);
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+  --glass-bg: rgba(38, 38, 36, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --glow-primary: rgba(217, 119, 87, 0.08);
+  --glow-active: rgba(217, 119, 87, 0.35);
+  --message-bold-weight: 500;
+  --nemon-logo-fill: #d97757;
+  --nemon-logo-stroke: #d97757;
+  --accent: #d97757;
+  --accent-hover: #c15f3c;
+  --accent-text: #e0855f;
+  --accent-bg: rgba(217, 119, 87, 0.12);
+  --accent-bg-strong: rgba(217, 119, 87, 0.18);
+  --accent-border: rgba(217, 119, 87, 0.3);
+  --accent-glow: rgba(217, 119, 87, 0.25);
+  --bg-sidebar-solid: #1f1e1d;
+}
+
 :root[data-theme="claro"] {
   --bg-main: #fcfcfc;
   --bg-main-grad: linear-gradient(135deg, #fcfcfc 0%, #ebebeb 100%);
@@ -93,26 +117,16 @@
   --bg-nav-active: rgba(0, 0, 0, 0.08);
   --text-nav-active: #000000;
   --bg-user-bubble: linear-gradient(135deg, #222222 0%, #111111 100%);
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   --bg-input: rgba(255, 255, 255, 0.7);
   --bg-modal: rgba(255, 255, 255, 0.9);
   --border-main: rgba(0, 0, 0, 0.08);
   --border-light: rgba(0, 0, 0, 0.04);
-<<<<<<< HEAD
-  --text-primary: #1e293b;
-  --text-bold: #0f172a;
-  --text-user-regular: rgba(255, 255, 255, 0.92);
-  --text-user-bold: #ffffff;
-  --text-secondary: #475569;
-  --text-placeholder: #94a3b8;
-=======
   --text-primary: #1f1f1f;
   --text-bold: #000000;
   --text-user-regular: rgba(255, 255, 255, 0.92);
   --text-user-bold: #ffffff;
   --text-secondary: #5a5a5a;
   --text-placeholder: #8a8a8a;
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   --code-bg: #f1f5f9;
   --inline-code-bg: #e2e8f0;
   --code-border: rgba(0, 0, 0, 0.06);
@@ -122,11 +136,6 @@
   --glass-bg: rgba(255, 255, 255, 0.6);
   --glass-border: rgba(0, 0, 0, 0.05);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
-<<<<<<< HEAD
-  --glow-primary: rgba(79, 70, 229, 0.06);
-  --glow-active: rgba(79, 70, 229, 0.25);
-  --message-bold-weight: 600;
-=======
   --glow-primary: rgba(0, 0, 0, 0.02);
   --glow-active: rgba(0, 0, 0, 0.12);
   --message-bold-weight: 600;
@@ -140,7 +149,6 @@
   --accent-border: rgba(0, 0, 0, 0.12);
   --accent-glow: rgba(0, 0, 0, 0.05);
   --bg-sidebar-solid: #ffffff;
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }
 
 :root[data-theme="areia"] {
@@ -174,8 +182,6 @@
   --glow-primary: rgba(217, 119, 6, 0.08);
   --glow-active: rgba(217, 119, 6, 0.3);
   --message-bold-weight: 600;
-<<<<<<< HEAD
-=======
   --nemon-logo-fill: #b45309;
   --nemon-logo-stroke: #b45309;
   --accent: #b45309;
@@ -186,7 +192,6 @@
   --accent-border: rgba(180, 83, 9, 0.3);
   --accent-glow: rgba(180, 83, 9, 0.25);
   --bg-sidebar-solid: #ebdcc9;
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }
 
 :root[data-theme="galaxia"] {
@@ -220,8 +225,6 @@
   --glow-primary: rgba(217, 70, 239, 0.15);
   --glow-active: rgba(217, 70, 239, 0.45);
   --message-bold-weight: 500;
-<<<<<<< HEAD
-=======
   --nemon-logo-fill: #ec4899;
   --nemon-logo-stroke: #ec4899;
   --accent: #a855f7;
@@ -232,12 +235,14 @@
   --accent-border: rgba(168, 85, 247, 0.3);
   --accent-glow: rgba(168, 85, 247, 0.3);
   --bg-sidebar-solid: #12102a;
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }
 
-body { 
-  font-family: 'Google Sans', sans-serif; 
-  background: var(--bg-main-grad); 
+body {
+  font-family: var(--app-font, 'Google Sans', sans-serif);
+  /* Base para textos sem classe de tamanho explícita (ex.: abas das configurações),
+     que antes herdavam os 16px padrão do navegador e ficavam grandes demais. */
+  font-size: 13px;
+  background: var(--bg-main-grad);
   background-attachment: fixed;
   color: var(--text-primary); 
   transition: background 0.3s ease, color 0.3s ease; 
@@ -337,7 +342,7 @@ body {
   background: var(--bg-input); 
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-radius: 24px; 
+  border-radius: 12px; 
   border: 1px solid var(--border-light); 
   transition: background 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
 }
@@ -349,8 +354,8 @@ body {
 
 .user-msg { 
   background: var(--bg-user-bubble); 
-  border-radius: 20px 20px 4px 20px; 
-  padding: 14px 22px; 
+  border-radius: 12px 12px 3px 12px; 
+  padding: 11px 17px; 
   margin-left: auto; 
   max-width: 85%; 
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
@@ -380,8 +385,8 @@ body {
 .response-body li { margin-bottom: 7px !important; padding-left: 0.25rem; }
 .response-body li:last-child { margin-bottom: 0 !important; }
 .response-body li > ul, .response-body li > ol { margin-top: 6px !important; margin-bottom: 0 !important; }
-.response-body code { background: var(--inline-code-bg); padding: 2px 6px !important; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 0.88em; color: var(--text-bold); border: 1px solid var(--code-border); transition: background 0.3s ease; }
-.response-body pre { background: var(--code-bg); padding: 18px !important; border-radius: 16px; margin: 16px 0 !important; overflow-x: auto; border: 1px solid var(--code-border); box-shadow: 0 4px 20px rgba(0,0,0,0.15); transition: background 0.3s ease, border-color 0.3s ease; }
+.response-body code { background: var(--inline-code-bg); padding: 2px 6px !important; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.88em; color: var(--text-bold); border: 1px solid var(--code-border); transition: background 0.3s ease; }
+.response-body pre { background: var(--code-bg); padding: 14px !important; border-radius: 10px; margin: 16px 0 !important; overflow-x: auto; border: 1px solid var(--code-border); box-shadow: 0 4px 20px rgba(0,0,0,0.15); transition: background 0.3s ease, border-color 0.3s ease; }
 .response-body pre code { background: transparent !important; padding: 0 !important; border: none !important; }
 
 .table-wrapper {
@@ -390,7 +395,7 @@ body {
   overflow-x: auto;
   margin: 20px 0;
   border: 1px solid var(--border-main);
-  border-radius: 16px;
+  border-radius: 10px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
 
@@ -403,7 +408,7 @@ body {
 }
 
 .response-body table th, .response-body table td {
-  padding: 14px 20px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-light);
   border-right: 1px solid var(--border-light);
   text-align: left;
@@ -463,25 +468,21 @@ body {
   background: var(--bg-sidebar); 
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-radius: 16px; 
-  padding: 16px; 
+  border-radius: 10px; 
+  padding: 12px; 
   margin-bottom: 20px; 
   border-left: 4px solid var(--glow-active); 
   box-shadow: 0 4px 15px rgba(0,0,0,0.05);
   transition: background-color 0.3s ease; 
 }
-<<<<<<< HEAD
-.gemini-gradient { background: linear-gradient(70deg, #4285f4, #9b72cb, #d96570); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-=======
 .gemini-gradient { background: linear-gradient(70deg, #71717a, #a1a1aa, #f4f4f5); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 .shimmer-line { height: 15px; background: linear-gradient(90deg, var(--bg-sidebar) 25%, var(--bg-chat-hover) 50%, var(--bg-sidebar) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite linear; border-radius: 4px; margin-bottom: 10px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* Scrollbar Customization */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 /* Custom Dark Select */
@@ -560,8 +561,6 @@ body {
     transparent 90%
   );
   animation: rotate-border 4s linear infinite;
-<<<<<<< HEAD
-=======
   z-index: -1;
 }
 
@@ -572,7 +571,6 @@ body {
   background: var(--bg-main);
   border-radius: inherit;
   z-index: -1;
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }
 
 /* Nemon spinning ring loader */
@@ -683,8 +681,8 @@ body {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-radius: 16px;
-  padding: 18px;
+  border-radius: 10px;
+  padding: 14px;
   margin-top: 8px;
   margin-bottom: 8px;
   border: 1px solid var(--glass-border);
@@ -702,10 +700,10 @@ body {
   border-left: 4px solid #d97706;
 }
 :root[data-theme="claro"] .thought-panel {
-<<<<<<< HEAD
-  border-left: 4px solid #4f46e5;
-=======
   border-left: 4px solid #27272a;
+}
+:root[data-theme="claude"] .thought-panel {
+  border-left: 4px solid #d97757;
 }
 
 /* Custom 4-dot breathing spinner */
@@ -756,5 +754,4 @@ body {
 .breathing-dot:nth-child(4) {
   --dx: -9px;
   --dy: 0px;
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }

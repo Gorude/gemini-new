@@ -267,9 +267,11 @@ export interface Message {
 
 import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { LOCAL_MODEL_ID } from '../constants';
 
 let globalDefaultApiKey = '';
 let globalPaidApiKey = '';
+let globalLocalEndpoint = '';
 
 export function setGlobalDefaultApiKey(key: string) {
   globalDefaultApiKey = key;
@@ -277,6 +279,22 @@ export function setGlobalDefaultApiKey(key: string) {
 
 export function setGlobalPaidApiKey(key: string) {
   globalPaidApiKey = key;
+}
+
+/**
+ * URL base do servidor local (llama.cpp) exposto via ngrok.
+ * A barra final é removida para podermos concatenar "/v1/chat/completions".
+ */
+export function setGlobalLocalEndpoint(url: string) {
+  globalLocalEndpoint = (url || '').trim().replace(/\/+$/, '');
+}
+
+export function getGlobalLocalEndpoint(): string {
+  return globalLocalEndpoint;
+}
+
+export function isLocalModel(model: string): boolean {
+  return model === LOCAL_MODEL_ID;
 }
 
 export async function getApiKey(manualApiKey?: string): Promise<string> {
@@ -307,6 +325,218 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
   throw new Error("Chave de API do Google AI Studio padrão não configurada. Vá em Configurações > API para configurar.");
 }
 
+/**
+ * Retorna o tamanho do sufixo de `s` que é um prefixo (parcial) de `tag`.
+ * Usado para "segurar" uma tag <think> que foi quebrada entre dois chunks do stream.
+ */
+function partialTagSuffix(s: string, tag: string): number {
+  const max = Math.min(s.length, tag.length - 1);
+  for (let len = max; len > 0; len--) {
+    if (tag.startsWith(s.slice(s.length - len))) return len;
+  }
+  return 0;
+}
+
+/**
+ * Streaming para o modelo local servido via llama.cpp (endpoint compatível com OpenAI).
+ * Converte o histórico no formato Gemini para o formato `messages` do OpenAI e
+ * separa blocos de raciocínio (`reasoning_content` ou tags <think>...</think>) dos thoughts.
+ */
+async function* streamLocalContent(
+  text: string,
+  history: { role: string, parts: any[] }[],
+  systemInstruction: string | undefined,
+  files: { mimeType: string; data: string }[],
+  signal: AbortSignal | undefined,
+  thinking: boolean
+): AsyncGenerator<{
+  text?: string;
+  thoughts?: string;
+  isGrounded?: boolean;
+  isSearching?: boolean;
+  sources?: { title: string; uri: string }[];
+  usage?: { promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }
+}> {
+  const base = globalLocalEndpoint;
+  if (!base) {
+    throw new Error("Endpoint do modelo local não configurado. Vá em Configurações > API e cole a URL pública do seu ngrok.");
+  }
+
+  const url = `${base}/v1/chat/completions`;
+
+  // Monta as mensagens no formato OpenAI a partir do histórico Gemini.
+  const messages: any[] = [];
+  if (systemInstruction) {
+    messages.push({ role: 'system', content: systemInstruction });
+  }
+  for (const h of history) {
+    const role = h.role === 'model' || h.role === 'assistant' ? 'assistant' : 'user';
+    const content = (h.parts || []).map((p: any) => p.text || '').join('');
+    if (content) messages.push({ role, content });
+  }
+
+  // Mensagem atual do usuário (com imagens opcionais para modelos multimodais como llava).
+  if (files && files.length > 0) {
+    const parts: any[] = [];
+    if (text) parts.push({ type: 'text', text });
+    files.forEach(f => parts.push({ type: 'image_url', image_url: { url: `data:${f.mimeType};base64,${f.data}` } }));
+    messages.push({ role: 'user', content: parts });
+  } else {
+    messages.push({ role: 'user', content: text });
+  }
+
+  const payload = {
+    model: LOCAL_MODEL_ID,
+    messages,
+    stream: true,
+    stream_options: { include_usage: true },
+    temperature: 0.7,
+    max_tokens: 4096
+  };
+
+  logger.addLog('api-request', `Request: ${LOCAL_MODEL_ID} (local)`, { url, payload });
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Evita a página de aviso do ngrok (free) em requisições não-navegador.
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: JSON.stringify(payload),
+      signal
+    });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    logger.addLog('api-error', `Falha ao conectar no modelo local: ${err?.message}`, { error: err?.message, url });
+    throw new Error(`Não foi possível conectar ao modelo local (${base}). Verifique se o llama.cpp e o ngrok estão ativos. Detalhe: ${err?.message || err}`);
+  }
+
+  if (!response.ok) {
+    const errBody = await response.text().catch(() => '');
+    let errMsg = `Erro do servidor local (${response.status})`;
+    try {
+      const parsed = JSON.parse(errBody);
+      errMsg = parsed?.error?.message || parsed?.message || errMsg;
+    } catch { if (errBody) errMsg = errBody.slice(0, 300); }
+    logger.addLog('api-error', `Erro definitivo do modelo local (${response.status})`, { error: errMsg });
+    throw new Error(errMsg);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Falha ao abrir stream de leitura do modelo local.");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let accumulatedText = "";
+  let accumulatedThoughts = "";
+  let finalUsage: any = null;
+
+  // Estado do separador de blocos <think>...</think> entre chunks.
+  let thinkMode = false;
+  let carry = "";
+
+  const splitThinking = (raw: string): { text: string; thoughts: string } => {
+    let s = carry + raw;
+    carry = "";
+    let outText = "";
+    let outThoughts = "";
+    while (s.length) {
+      if (!thinkMode) {
+        const idx = s.indexOf('<think>');
+        if (idx === -1) {
+          const partial = partialTagSuffix(s, '<think>');
+          outText += s.slice(0, s.length - partial);
+          carry = s.slice(s.length - partial);
+          s = "";
+        } else {
+          outText += s.slice(0, idx);
+          s = s.slice(idx + '<think>'.length);
+          thinkMode = true;
+        }
+      } else {
+        const idx = s.indexOf('</think>');
+        if (idx === -1) {
+          const partial = partialTagSuffix(s, '</think>');
+          outThoughts += s.slice(0, s.length - partial);
+          carry = s.slice(s.length - partial);
+          s = "";
+        } else {
+          outThoughts += s.slice(0, idx);
+          s = s.slice(idx + '</think>'.length);
+          thinkMode = false;
+        }
+      }
+    }
+    return { text: outText, thoughts: outThoughts };
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const data = trimmed.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+
+        try {
+          const json = JSON.parse(data);
+          const delta = json.choices?.[0]?.delta || {};
+
+          let chunkText = "";
+          let chunkThoughts = "";
+
+          // Canal de raciocínio nativo (llama.cpp com --reasoning-format).
+          if (delta.reasoning_content) {
+            chunkThoughts += delta.reasoning_content;
+          }
+
+          // Conteúdo normal — pode conter tags <think> embutidas.
+          if (typeof delta.content === 'string' && delta.content) {
+            const split = splitThinking(delta.content);
+            chunkText += split.text;
+            chunkThoughts += split.thoughts;
+          }
+
+          if (json.usage) {
+            finalUsage = {
+              promptTokenCount: json.usage.prompt_tokens || 0,
+              candidatesTokenCount: json.usage.completion_tokens || 0,
+              totalTokenCount: json.usage.total_tokens || 0
+            };
+          }
+
+          if (chunkText || chunkThoughts) {
+            accumulatedText += chunkText;
+            accumulatedThoughts += chunkThoughts;
+            yield {
+              text: chunkText,
+              thoughts: thinking ? chunkThoughts : "",
+              usage: finalUsage || undefined
+            };
+          }
+        } catch (e) {
+          console.warn("Erro ao processar chunk do modelo local:", e);
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+    logger.addLog('api-response', `Response: ${LOCAL_MODEL_ID} (local) completed`, {
+      response: { text: accumulatedText, thoughts: accumulatedThoughts, usage: finalUsage }
+    });
+  }
+}
+
 export async function* streamGeminiContent(
   text: string,
   model: string,
@@ -326,6 +556,12 @@ export async function* streamGeminiContent(
   sources?: { title: string; uri: string }[];
   usage?: { promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }
 }> {
+  // Modelo local (llama.cpp + ngrok): roteamos para a API compatível com OpenAI.
+  if (isLocalModel(model)) {
+    yield* streamLocalContent(text, history, systemInstruction, files, signal, thinking);
+    return;
+  }
+
   const key = await getApiKey(manualApiKey);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`;
 

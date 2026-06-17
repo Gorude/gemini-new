@@ -3,9 +3,19 @@ import React from 'react';
 interface NemonIconProps {
   className?: string;
   size?: number | string;
+  /**
+   * Quando true (padrão), usa as cores de marca do tema (--nemon-logo-*).
+   * Quando false, herda a cor do contexto (currentColor) — ideal para os
+   * ícones pequenos espalhados pela interface, que acompanham a cor do texto.
+   */
+  themed?: boolean;
 }
 
-const NemonIcon: React.FC<NemonIconProps> = ({ className = '', size = 24 }) => {
+const NemonIcon: React.FC<NemonIconProps> = ({ className = '', size = 24, themed = true }) => {
+  const fill = themed ? 'var(--nemon-logo-fill, currentColor)' : 'currentColor';
+  const stroke = themed ? 'var(--nemon-logo-stroke, currentColor)' : 'currentColor';
+  const headFill = themed ? 'var(--nemon-logo-bg, transparent)' : 'transparent';
+
   return (
     <svg
       width={size}
@@ -15,47 +25,30 @@ const NemonIcon: React.FC<NemonIconProps> = ({ className = '', size = 24 }) => {
       xmlns="http://www.w3.org/2000/svg"
       className={`nemon-icon ${className}`}
     >
-      {/* Antenna Bulb */}
-      <circle
-        cx="50"
-        cy="18"
-        r="11"
-        fill="var(--nemon-logo-fill, currentColor)"
-      />
+      {/* Antena */}
+      <circle cx="50" cy="12" r="7" fill={fill} />
+      <rect x="46.5" y="17" width="7" height="15" rx="3.5" fill={fill} />
 
-      {/* Antenna Shaft */}
+      {/* Cabeça arredondada */}
       <rect
-        x="46"
-        y="24"
-        width="8"
-        height="20"
-        fill="var(--nemon-logo-fill, currentColor)"
+        x="17"
+        y="30"
+        width="66"
+        height="57"
+        rx="17"
+        ry="17"
+        stroke={stroke}
+        strokeWidth="7"
+        strokeLinejoin="round"
+        fill={headFill}
       />
 
-      {/* Head Rect */}
-      <rect
-        x="18"
-        y="42"
-        width="64"
-        height="50"
-        stroke="var(--nemon-logo-stroke, currentColor)"
-        strokeWidth="6"
-        fill="var(--nemon-logo-bg, transparent)"
-      />
+      {/* Olhos */}
+      <circle cx="37" cy="55" r="8.5" fill={fill} />
+      <circle cx="63" cy="55" r="8.5" fill={fill} />
 
-      {/* Eyes */}
-      <circle
-        cx="36"
-        cy="67"
-        r="14"
-        fill="var(--nemon-logo-fill, currentColor)"
-      />
-      <circle
-        cx="64"
-        cy="67"
-        r="14"
-        fill="var(--nemon-logo-fill, currentColor)"
-      />
+      {/* Boca / visor */}
+      <rect x="38" y="71" width="24" height="6" rx="3" fill={fill} />
     </svg>
   );
 };

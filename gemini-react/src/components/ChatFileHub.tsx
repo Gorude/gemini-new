@@ -6,9 +6,9 @@ import {
   Download, 
   Search,
   ArrowLeft,
-  User as UserIcon,
-  Bot
+  User as UserIcon
 } from 'lucide-react';
+import NemonIcon from './NemonIcon';
 import { type Message } from '../services/gemini';
 import { type PendingFile } from '../types';
 
@@ -53,7 +53,7 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
   return (
     <div className="flex flex-col h-full bg-[var(--bg-main)] animate-in fade-in duration-300">
       {/* Header interno do Hub */}
-      <div className="p-6 md:p-8 flex flex-col gap-6">
+      <div className="p-4 md:p-5 flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
@@ -80,25 +80,25 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
               placeholder="Buscar pelo nome do arquivo..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl pl-11 pr-4 py-3 outline-none focus:border-[var(--accent-border)] transition-all text-sm"
+              className="w-full bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl pl-11 pr-3 py-3 outline-none focus:border-[var(--accent-border)] transition-all text-sm"
             />
           </div>
           <div className="flex items-center gap-2 p-1 bg-[var(--bg-chat-hover)] border border-[var(--border-light)] rounded-2xl w-full md:w-auto">
             <button 
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'all' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'all' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
             >
               Todos
             </button>
             <button 
               onClick={() => setFilter('images')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'images' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'images' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
             >
               Imagens
             </button>
             <button 
               onClick={() => setFilter('docs')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'docs' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${filter === 'docs' ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent-glow)]' : 'text-[var(--text-placeholder)] hover:text-[var(--text-primary)]'}`}
             >
               Documentos
             </button>
@@ -107,7 +107,7 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
       </div>
 
       {/* Grid de Arquivos */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-8 pb-8 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto px-4 md:px-5 pb-5 custom-scrollbar">
         {filteredFiles.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center opacity-40 py-20">
             <div className="w-20 h-20 bg-[var(--bg-chat-hover)] rounded-full flex items-center justify-center mb-6">
@@ -158,7 +158,7 @@ const ChatFileHub: React.FC<ChatFileHubProps> = ({ messages, onClose }) => {
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-1.5">
                       {(file as any).sender === 'ai' ? (
-                        <Bot className="w-3 h-3 text-[var(--accent-text)]" />
+                        <NemonIcon themed={false} className="w-3 h-3 text-[var(--accent-text)]" />
                       ) : (
                         <UserIcon className="w-3 h-3 text-[var(--text-placeholder)]" />
                       )}

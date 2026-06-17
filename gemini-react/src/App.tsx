@@ -12,12 +12,8 @@ import {
   Files,
   MessageSquare,
   RotateCcw,
-<<<<<<< HEAD
-  Type
-=======
   Type,
   LogOut
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 } from 'lucide-react';
 import { auth, db } from './services/firebase';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
@@ -62,6 +58,7 @@ import {
   extractAndParseJson,
   setGlobalPaidApiKey,
   setGlobalDefaultApiKey,
+  setGlobalLocalEndpoint,
   type Message
 } from './services/gemini';
 
@@ -93,7 +90,9 @@ import LogWindow from './components/LogWindow';
 import SettingsModal from './components/SettingsModal';
 import {
   MODEL_OPTIONS,
-  LIVE_MODEL_MAP
+  LIVE_MODEL_MAP,
+  FONT_OPTIONS,
+  DEFAULT_FONT_ID
 } from './constants';
 
 const getPacificDate = () => {
@@ -170,11 +169,7 @@ function App() {
   const [settingsTab, setSettingsTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'dna'>('geral');
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
   const [chatFontSize, setChatFontSize] = useState<number>(() => {
-<<<<<<< HEAD
-    const saved = localStorage.getItem('gemoro_chat_font_size');
-=======
     const saved = localStorage.getItem('nemon_chat_font_size');
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
     if (saved === 'sm') return 13;
     if (saved === 'md') return 15.5;
     if (saved === 'lg') return 18;
@@ -182,6 +177,7 @@ function App() {
     return saved ? parseFloat(saved) : 15.5;
   });
   const [showFontSizeSelector, setShowFontSizeSelector] = useState(false);
+  const [appFont, setAppFont] = useState<string>(() => localStorage.getItem('nemon_app_font') || DEFAULT_FONT_ID);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'settings'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -196,6 +192,7 @@ function App() {
   const [proactiveIdleCount, setProactiveIdleCount] = useState(0); // 0: Idle, 1: Probed, 2: Retried (Stopped)
   const [paidApiKey, setPaidApiKey] = useState('');
   const [defaultApiKey, setDefaultApiKey] = useState('');
+  const [localEndpoint, setLocalEndpoint] = useState(() => localStorage.getItem('nemon_local_endpoint') || '');
   const [liveModel, setLiveModel] = useState(() => localStorage.getItem('nemon_live_model') || 'gemini-2.5-flash-live');
   const [useMemoryLive, setUseMemoryLive] = useState(true);
   const [isLiveDetached, setIsLiveDetached] = useState(false);
@@ -290,6 +287,13 @@ function App() {
     }
   }, []);
 
+  // Mantém o endpoint do modelo local (llama.cpp via ngrok) sincronizado com o serviço e o localStorage.
+  // É guardado localmente (não no Firestore) por ser específico do dispositivo/sessão de ngrok.
+  useEffect(() => {
+    setGlobalLocalEndpoint(localEndpoint);
+    localStorage.setItem('nemon_local_endpoint', localEndpoint);
+  }, [localEndpoint]);
+
   useEffect(() => {
     localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(dailyUsage));
     if (auth.currentUser && dailyUsage.date) {
@@ -341,12 +345,15 @@ function App() {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--chat-font-size', `${chatFontSize}px`);
-<<<<<<< HEAD
-    localStorage.setItem('gemoro_chat_font_size', chatFontSize.toString());
-=======
     localStorage.setItem('nemon_chat_font_size', chatFontSize.toString());
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   }, [chatFontSize]);
+
+  // Aplica a fonte de texto do sistema (variável CSS --app-font usada pelo body).
+  useEffect(() => {
+    const font = FONT_OPTIONS.find(f => f.id === appFont) || FONT_OPTIONS[0];
+    document.documentElement.style.setProperty('--app-font', font.stack);
+    localStorage.setItem('nemon_app_font', appFont);
+  }, [appFont]);
 
   const previousScrollHeightRef = useRef<number>(0);
   const isLazyLoadingRef = useRef<boolean>(false);
@@ -355,7 +362,6 @@ function App() {
   const currentAiMsgIdRef = useRef<string | null>(null);
   const factCheckControllersRef = useRef<Record<string, AbortController>>({});
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const saveTimeoutRef = useRef<number | null>(null);
 
   // Refs for closing popups when clicking outside
   const personalityRef = useRef<HTMLDivElement>(null);
@@ -547,6 +553,7 @@ function App() {
               if (data.settings.chatMargin !== undefined) setChatMargin(data.settings.chatMargin);
               if (data.settings.selectedPersonalityId) setSelectedPersonalityId(data.settings.selectedPersonalityId);
               if (data.settings.chatFontSize !== undefined) setChatFontSize(data.settings.chatFontSize);
+              if (data.settings.appFont) setAppFont(data.settings.appFont);
               if (data.settings.isOrderLocked !== undefined) setIsOrderLocked(data.settings.isOrderLocked);
               if (data.settings.enabledModelIds) setEnabledModelIds(data.settings.enabledModelIds);
               if (data.settings.isLiveProactive !== undefined) setIsLiveProactive(data.settings.isLiveProactive);
@@ -569,6 +576,7 @@ function App() {
                 chatMargin,
                 selectedPersonalityId,
                 chatFontSize,
+                appFont,
                 isOrderLocked,
                 enabledModelIds,
                 isLiveProactive,
@@ -681,6 +689,7 @@ function App() {
           chatMargin,
           selectedPersonalityId,
           chatFontSize,
+          appFont,
           isOrderLocked,
           enabledModelIds,
           isLiveProactive,
@@ -689,7 +698,7 @@ function App() {
         }
       }).catch(e => console.error("Erro ao salvar configurações no Firestore:", e));
     }
-  }, [theme, chatMargin, selectedPersonalityId, chatFontSize, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, liveModel, isAuthLoading, isInitialLoading]);
+  }, [theme, chatMargin, selectedPersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, liveModel, isAuthLoading, isInitialLoading]);
 
   useEffect(() => {
     localStorage.setItem('nemon_sidebar_locked', JSON.stringify(isOrderLocked));
@@ -709,45 +718,6 @@ function App() {
     localStorage.setItem('nemon_selected_personality_id', selectedPersonalityId);
   }, [personalities, selectedPersonalityId]);
 
-<<<<<<< HEAD
-  const saveChats = useCallback((chatsToSave: ChatSession[]) => {
-    if (chatsToSave.length > 0) {
-      fetch('/api/history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(chatsToSave)
-      }).catch(err => console.error("Erro ao salvar histórico:", err));
-    }
-  }, []);
-
-  // Auto-Save Chats (Debounced & Paused during AI loading/streaming)
-  useEffect(() => {
-    if (isLoading) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    if (chats.length > 0) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      saveTimeoutRef.current = window.setTimeout(() => {
-        saveChats(chats);
-      }, 3000); // 3 segundos de debounce
-    }
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [chats, isLoading, saveChats]);
-
-=======
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   // Close menus on click outside
   useEffect(() => {
     const handleGlobalClick = () => setMenuOpenId(null);
@@ -1131,14 +1101,7 @@ function App() {
       setIsLoading(false);
       abortControllerRef.current = null;
       currentAiMsgIdRef.current = null;
-<<<<<<< HEAD
-      setChats(prev => {
-        saveChats(prev);
-        return prev;
-      });
-=======
       setChats(prev => prev);
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
     }
   }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, selectedPersonalityId, parseMemoryTags]);
 
@@ -1171,16 +1134,9 @@ function App() {
 
       setIsLoading(false);
       currentAiMsgIdRef.current = null;
-<<<<<<< HEAD
-      setChats(prev => {
-        saveChats(prev);
-        return prev;
-      });
-=======
       setChats(prev => prev);
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
     }
-  }, [activeChatId, saveChats]);
+  }, [activeChatId]);
 
 
 
@@ -1846,7 +1802,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   return (
     <div className="flex h-screen overflow-hidden text-[var(--text-primary)] relative bg-[var(--bg-main)]">
       <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'} flex flex-col glass-sidebar shadow-2xl`}>
-        <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 lg:hidden">
+        <div className="p-3 flex items-center justify-between text-[var(--text-secondary)] mb-4 lg:hidden">
           <div className="flex items-center gap-2">
             <NemonIcon size={24} />
             <span className="font-bold text-[var(--text-bold)] tracking-tighter">Nemon</span>
@@ -1868,15 +1824,15 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
         </div>
 
-        <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 hidden lg:flex">
+        <div className="p-3 flex items-center justify-between text-[var(--text-secondary)] mb-4 hidden lg:flex">
           <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition hover:rotate-90 transition-transform duration-300 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Menu className="w-5 h-5" /></button>
           <button onClick={() => setIsGlobalSearchOpen(true)} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition ml-auto text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Search className="w-5 h-5" /></button>
         </div>
 
-        <div className="px-4 mb-8">
+        <div className="px-3 mb-8">
           <button
             onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); setActiveTab('chat'); }}
-            className="flex items-center gap-3 px-4 py-3 w-full rounded-full hover:bg-[var(--bg-chat-hover)] transition text-[var(--text-primary)] font-medium"
+            className="flex items-center gap-3 px-3 py-3 w-full rounded-full hover:bg-[var(--bg-chat-hover)] transition text-[var(--text-primary)] font-medium"
           >
             <SquarePen className="w-5 h-5 opacity-70" />
             <span>Nova conversa</span>
@@ -1884,7 +1840,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
           <button
             onClick={() => setIsArchiveExpanded(!isArchiveExpanded)}
-            className={`flex items-center gap-3 px-4 py-2.5 mt-2 w-full rounded-full transition text-sm font-medium border border-transparent ${isArchiveExpanded ? 'bg-[var(--bg-chat-active)] text-[var(--text-primary)] border-[var(--border-light)]' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+            className={`flex items-center gap-3 px-3 py-2.5 mt-2 w-full rounded-full transition text-sm font-medium border border-transparent ${isArchiveExpanded ? 'bg-[var(--bg-chat-active)] text-[var(--text-primary)] border-[var(--border-light)]' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
           >
             <Archive className={`w-4 h-4 transition-transform duration-300 ${isArchiveExpanded ? '' : 'opacity-50'}`} style={isArchiveExpanded ? { color: 'var(--accent-text)' } : {}} />
             <span>Arquivadas</span>
@@ -1902,7 +1858,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           {isArchiveExpanded && (
             <div className="mt-1 ml-4 border-l border-[var(--border-light)] pl-2 space-y-1 animate-in slide-in-from-top-2 duration-300">
               {chats.filter(c => c.archived).length === 0 ? (
-                <div className="text-[10px] text-[var(--text-secondary)] opacity-40 py-2 px-4 italic">Sem arquivados</div>
+                <div className="text-[10px] text-[var(--text-secondary)] opacity-40 py-2 px-3 italic">Sem arquivados</div>
               ) : (
                 chats.filter(c => c.archived).map(chat => (
                   <div
@@ -1937,7 +1893,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
-          <div className="flex items-center justify-between px-4 mb-4 mt-6">
+          <div className="flex items-center justify-between px-3 mb-4 mt-6">
             <div className="text-[14px] font-medium text-[var(--text-primary)]">Conversas</div>
             <button
               onClick={() => setIsOrderLocked(!isOrderLocked)}
@@ -1985,7 +1941,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
               <DragOverlay adjustScale={false}>
                 {activeDragId ? (
-                  <div className="bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] py-2.5 px-4 rounded-full opacity-80 shadow-2xl border border-white/10 flex items-center gap-3">
+                  <div className="bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] py-2.5 px-3 rounded-full opacity-80 shadow-2xl border border-white/10 flex items-center gap-3">
                     <GripVertical className="w-4 h-4 opacity-50" />
                     <span className="text-sm font-medium truncate">
                       {chats.find(c => c.id === activeDragId)?.title}
@@ -1997,9 +1953,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
         </div>
 
-        <div className="mt-auto p-4 border-t border-[var(--border-light)] relative flex flex-col gap-2">
+        <div className="mt-auto p-3 border-t border-[var(--border-light)] relative flex flex-col gap-2">
           {user && (
-            <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-[var(--bg-chat-hover)]/30 border border-[var(--border-light)] group">
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-[var(--bg-chat-hover)]/30 border border-[var(--border-light)] group">
               {user.photoURL ? (
                 <img src={user.photoURL} alt={user.displayName || "Avatar"} className="w-8 h-8 rounded-full border border-[var(--border-light)]" />
               ) : (
@@ -2027,7 +1983,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               setSettingsTab('geral');
               if (window.innerWidth < 768) setIsSidebarOpen(false);
             }}
-            className={`flex items-center gap-3 px-4 py-3 w-full rounded-full transition font-medium transition-all duration-300 ${activeTab === 'settings' ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] shadow-lg shadow-black/10' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]'}`}
+            className={`flex items-center gap-3 px-3 py-3 w-full rounded-full transition font-medium transition-all duration-300 ${activeTab === 'settings' ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] shadow-lg shadow-black/10' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]'}`}
           >
             <Settings className={`w-5 h-5 transition-transform duration-300 ${activeTab === 'settings' ? 'rotate-90 opacity-100' : 'opacity-70'}`} style={activeTab === 'settings' ? { color: 'var(--accent-text)' } : {}} />
             <span className="text-[14px]">Configurações</span>
@@ -2036,11 +1992,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       </aside>
 
       <main className="main-content flex flex-col h-full w-full bg-[var(--bg-main)]">
-<<<<<<< HEAD
-        <header className="p-4 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
-=======
-        <header className="py-6 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
+        <header className="py-4 flex justify-between items-center px-3 md:px-5 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
           <div className="flex-1 flex items-center gap-4">
             {!isSidebarOpen && (
               <button
@@ -2052,15 +2004,6 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             )}
           </div>
 
-<<<<<<< HEAD
-          {/* Personality & Font Size Selector */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3">
-            {/* Personality Selector */}
-            <div className="relative">
-              <button 
-                onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
-                className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
-=======
           {/* Centered Header Controls Wrapper */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[45] flex items-center gap-2 sm:gap-4">
             {/* Left Side: Files Button */}
@@ -2084,8 +2027,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             <div className="relative" ref={personalityRef}>
               <button
                 onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
-                className="flex items-center gap-1.5 sm:gap-2.5 px-3 py-1.5 sm:px-5 sm:py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[120px] sm:min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
+                className="flex items-center gap-1.5 sm:gap-2.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[120px] sm:min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
               >
                 <div className="flex items-center gap-1.5 sm:gap-2 overflow-hidden">
                   <User className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-text)' }} />
@@ -2098,13 +2040,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
               {showPersonalitySelector && (
                 <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl py-2 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
-<<<<<<< HEAD
-                  <button 
-=======
                   <button
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
                     onClick={() => { setSelectedPersonalityId('default'); setShowPersonalitySelector(false); }}
-                    className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
+                    className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
                     style={selectedPersonalityId === 'default' ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                   >
                     <User className="w-3.5 h-3.5" /> Normal (Padrão)
@@ -2113,7 +2051,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     <button
                       key={p.id}
                       onClick={() => { setSelectedPersonalityId(p.id); setShowPersonalitySelector(false); }}
-                      className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
+                      className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
                       style={selectedPersonalityId === p.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                     >
                       <User className="w-3.5 h-3.5" /> {p.name}
@@ -2122,7 +2060,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                   <div className="h-px bg-[var(--border-light)] my-2"></div>
                   <button
                     onClick={() => { setActiveTab('settings'); setSettingsTab('personalidades'); setShowPersonalitySelector(false); }}
-                    className="w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 font-medium"
+                    className="w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 font-medium"
                     style={{ color: 'var(--accent-text)' }}
                   >
                     <Settings className="w-3.5 h-3.5" /> Gerenciar Personalidades
@@ -2131,42 +2069,6 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               )}
             </div>
 
-<<<<<<< HEAD
-            {/* Font Size Selector */}
-            <div className="relative">
-              <button 
-                onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
-                className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
-                title="Tamanho da Fonte"
-              >
-                <Type className="w-4 h-4 text-blue-400" />
-              </button>
-
-              {showFontSizeSelector && (
-                <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl p-4 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
-                  <div className="text-[9px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest border-b border-[var(--border-light)] pb-1.5">
-                    Fonte do Chat
-                  </div>
-                  <div className="flex justify-between items-center text-xs font-semibold text-[var(--text-secondary)]">
-                    <span>Tamanho</span>
-                    <span className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md font-mono">{chatFontSize}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="12" 
-                    max="24" 
-                    step="0.5" 
-                    value={chatFontSize} 
-                    onChange={(e) => setChatFontSize(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-[var(--border-light)] rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
-                  />
-                  <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] font-medium">
-                    <span>12px</span>
-                    <span>24px</span>
-                  </div>
-                </div>
-              )}
-=======
             {/* Right Side: Font Size Selector & Log Window Trigger */}
             <div className="w-20 sm:w-24 flex justify-start items-center gap-1.5 sm:gap-3" ref={fontSizeRef}>
               {/* Font Size Selector */}
@@ -2180,7 +2082,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 </button>
 
                 {showFontSizeSelector && (
-                  <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl p-4 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
+                  <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl p-3 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
                     <div className="text-[9px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest border-b border-[var(--border-light)] pb-1.5">
                       Fonte do Chat
                     </div>
@@ -2219,42 +2121,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                   </span>
                 )}
               </button>
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
             </div>
           </div>
 
           <div className="flex-1 flex justify-end items-center gap-2">
-<<<<<<< HEAD
-            {activeChatId && (
-              <button 
-                onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:scale-105 active:scale-95 ${
-                  activeTab === 'files' 
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' 
-                    : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border-[var(--border-light)] hover:border-[var(--glow-active)]'
-                }`}
-                title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
-              >
-                <Files className={`w-3.5 h-3.5 ${activeTab === 'files' ? 'text-white' : 'text-blue-400'}`} />
-                <span className="hidden sm:inline">{activeTab === 'chat' ? 'Arquivos' : 'Chat'}</span>
-              </button>
-            )}
-
-            <button 
-              onClick={() => setShowAnalytics(!showAnalytics)} 
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border border-[var(--border-light)] hover:border-[var(--glow-active)] transition-all duration-200 hover:scale-105 active:scale-95"
-            >
-              <Activity className="w-3.5 h-3.5 text-green-400" />
-              <span>Uso Local</span>
-              <div className="flex gap-0.5 ml-2">
-                <div className="w-1 h-3 bg-green-500 rounded-full opacity-40"></div>
-                <div className="w-1 h-3 bg-green-500 rounded-full opacity-70"></div>
-                <div className="w-1 h-3 bg-green-500 rounded-full"></div>
-              </div>
-            </button>
-=======
             {/* Vazio ou outros controles de topo */}
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
           </div>
         </header>
 
@@ -2262,51 +2133,6 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
         {/* Removida a fita de LED do topo */}
 
-<<<<<<< HEAD
-        {showAnalytics && (
-          <div className="absolute top-20 right-8 glass-modal rounded-3xl p-6 w-96 shadow-2xl z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)] flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-indigo-400" /> Analytics Hoje
-              </h3>
-              <button onClick={() => setShowAnalytics(false)} className="p-1.5 hover:bg-[var(--bg-chat-hover)] rounded-full text-[var(--text-placeholder)]"><X className="w-4 h-4" /></button>
-            </div>
-            
-            <div className="space-y-6">
-              {Object.entries(dailyUsage.models).length === 0 ? (
-                <div className="text-center py-8 text-xs text-[var(--text-placeholder)] italic">Nenhum dado de uso registrado hoje.</div>
-              ) : (
-                Object.entries(dailyUsage.models).map(([modelId, data]) => {
-                  const limit = MODEL_LIMITS[modelId] || { name: modelId, rpd: 100 };
-                  const percent = Math.min(100, (data.requests / limit.rpd) * 100);
-                  return (
-                    <div key={modelId} className="space-y-2">
-                      <div className="flex justify-between text-xs font-medium">
-                        <span className="text-[var(--text-primary)]">{limit.name}</span>
-                        <span className="text-[var(--text-placeholder)]">{data.requests} / {limit.rpd} reqs</span>
-                      </div>
-                      <div className="h-1.5 bg-[var(--bg-chat-hover)] rounded-full overflow-hidden">
-                        <div className={`h-full transition-all duration-1000 ${percent > 90 ? 'bg-red-500' : percent > 50 ? 'bg-amber-500' : 'bg-indigo-500'}`} style={{ width: `${percent}%` }}></div>
-                      </div>
-                      <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] opacity-60">
-                        <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> {data.tokens.total.toLocaleString()} tokens</span>
-                        <span>{percent.toFixed(1)}% da cota</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="mt-8 pt-4 border-t border-[var(--border-light)] flex justify-between items-center text-[10px] text-[var(--text-placeholder)]">
-              <span>Data: {dailyUsage.date}</span>
-              <span className="bg-green-500/10 text-green-400 px-2 py-1 rounded-full font-bold">API CONECTADA</span>
-            </div>
-          </div>
-        )}
-
-=======
->>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {activeTab === 'files' && activeChatId ? (
             <ChatFileHub messages={messages} onClose={() => setActiveTab('chat')} />
@@ -2324,6 +2150,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               }}
               enabledModelIds={enabledModelIds}
               onSetEnabledModelIds={setEnabledModelIds}
+              appFont={appFont}
+              onSetAppFont={setAppFont}
               paidApiKey={paidApiKey}
               onUpdatePaidApiKey={(key) => {
                 saveConfig({ paidApiKey: key });
@@ -2332,6 +2160,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               onUpdateDefaultApiKey={(key) => {
                 saveConfig({ defaultApiKey: key });
               }}
+              localEndpoint={localEndpoint}
+              onUpdateLocalEndpoint={setLocalEndpoint}
               liveModel={liveModel}
               onSetLiveModel={handleSetLiveModel}
               personalities={personalities}

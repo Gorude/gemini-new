@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { type Message } from '../services/gemini';
-import { User, Bot } from 'lucide-react';
+import { User } from 'lucide-react';
+import NemonIcon from './NemonIcon';
 
 interface MessageTimelineProps {
   messages: Message[];
@@ -54,7 +55,7 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
       {/* Nível 2: Popup Flutuante */}
       {hoveredId && (
         <div 
-          className="absolute right-[calc(100%+16px)] w-64 p-4 bg-[rgba(30,31,32,0.8)] backdrop-blur-xl border border-[rgba(255,255,255,0.1)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-right-4 duration-200 pointer-events-none"
+          className="absolute right-[calc(100%+16px)] w-64 p-3 bg-[rgba(30,31,32,0.8)] backdrop-blur-xl border border-[rgba(255,255,255,0.1)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-right-4 duration-200 pointer-events-none"
           style={{ top: '50%', transform: 'translateY(-50%)' }}
         >
           <div className="text-xs text-[var(--text-primary)] leading-relaxed">
@@ -67,7 +68,7 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
                 </div>
              ) : (
                 <div className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest text-zinc-400">
-                  <Bot size={10} /> Resposta Nemon
+                  <NemonIcon themed={false} size={10} /> Resposta Nemon
                 </div>
              )}
           </div>
@@ -78,7 +79,7 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
       <div 
         className={`flex items-center transition-all duration-500 ease-out h-[50vh] max-h-[500px] py-2 rounded-2xl ${
           isExpanded 
-            ? 'w-60 bg-[rgba(19,19,20,0.6)] backdrop-blur-xl px-2 pr-4 shadow-2xl' 
+            ? 'w-60 bg-[rgba(19,19,20,0.6)] backdrop-blur-xl px-2 pr-3 shadow-2xl' 
             : 'w-6 px-0'
         }`}
       >

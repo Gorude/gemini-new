@@ -180,7 +180,7 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) 
           {/* Draggable Header */}
           <div 
             onMouseDown={handleMouseDown}
-            className={`flex items-center justify-between px-4 py-3 bg-zinc-900/40 border-b border-zinc-800/60 cursor-move ${
+            className={`flex items-center justify-between px-3 py-3 bg-zinc-900/40 border-b border-zinc-800/60 cursor-move ${
               isDragging ? 'bg-zinc-900/60' : ''
             }`}
           >
@@ -257,7 +257,7 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) 
                       placeholder="Filtrar logs..." 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="bg-black/40 border border-zinc-800/80 rounded-lg pl-7 pr-2.5 py-1 text-[10px] w-[140px] focus:outline-none focus:border-zinc-700 text-zinc-200 transition"
+                      className="bg-black/40 border border-zinc-800/80 rounded-lg pl-4.5 pr-2.5 py-1 text-[10px] w-[140px] focus:outline-none focus:border-zinc-700 text-zinc-200 transition"
                     />
                   </div>
                   <button 
@@ -344,21 +344,22 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) 
                   )}
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-black/10 select-text">
+                <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar bg-black/10 select-text">
                   <div className="space-y-4">
                     {!dailyUsage || Object.entries(dailyUsage.models).length === 0 ? (
-                      <div className="text-center py-8 text-xs text-zinc-500 italic">
+                      <div className="text-center py-5 text-xs text-zinc-500 italic">
                         Nenhum dado de uso registrado hoje.
                       </div>
                     ) : (
                       Object.entries(dailyUsage.models).map(([modelId, data]) => {
                         const limit = MODEL_LIMITS[modelId] || { name: modelId, rpd: 100 };
-                        const percent = Math.min(100, (data.requests / limit.rpd) * 100);
+                        const isUnlimited = !isFinite(limit.rpd);
+                        const percent = isUnlimited ? 0 : Math.min(100, (data.requests / limit.rpd) * 100);
                         return (
                           <div key={modelId} className="space-y-2 bg-zinc-900/40 p-3.5 rounded-xl border border-zinc-800/40">
                             <div className="flex justify-between text-xs font-semibold">
                               <span className="text-zinc-200">{limit.name}</span>
-                              <span className="text-zinc-400">{data.requests} / {limit.rpd} reqs</span>
+                              <span className="text-zinc-400">{data.requests} / {isUnlimited ? '∞' : limit.rpd} reqs</span>
                             </div>
                             <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden">
                               <div 
@@ -379,7 +380,7 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) 
                   </div>
                   
                   {dailyUsage && (
-                    <div className="pt-4 border-t border-zinc-900 flex justify-between items-center text-[10px] text-zinc-500">
+                    <div className="pt-3 border-t border-zinc-900 flex justify-between items-center text-[10px] text-zinc-500">
                       <span>Data: {dailyUsage.date}</span>
                       <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">API CONECTADA</span>
                     </div>

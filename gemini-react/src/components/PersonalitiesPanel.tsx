@@ -47,7 +47,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
   return (
     <div className="space-y-6">
       {/* Sub-Header / Back Button */}
-      <div className="flex items-center gap-3 bg-[var(--bg-main)]/30 p-4 rounded-2xl border border-[var(--border-light)] justify-between">
+      <div className="flex items-center gap-3 bg-[var(--bg-main)]/30 p-3 rounded-2xl border border-[var(--border-light)] justify-between">
         <div className="flex items-center gap-3">
           {isEditing && (
             <button 
@@ -70,7 +70,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
         {!isEditing && (
           <button 
             onClick={handleAddNew}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition shadow-lg shadow-[var(--accent-glow)]"
+            className="flex items-center gap-2 px-3 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition shadow-lg shadow-[var(--accent-glow)]"
           >
             <Plus className="w-4 h-4" /> Novo Perfil
           </button>
@@ -80,7 +80,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
       {/* Main Content */}
       <div className="min-h-0 flex-1">
         {isEditing ? (
-          <form onSubmit={handleSubmit} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 bg-[var(--bg-main)]/20 border border-[var(--border-light)] p-6 rounded-2xl">
+          <form onSubmit={handleSubmit} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 bg-[var(--bg-main)]/20 border border-[var(--border-light)] p-4 rounded-2xl">
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-placeholder)]">Nome da Personalidade</label>
               <input 
@@ -88,7 +88,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Especialista em TypeScript"
-                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-border)] transition"
+                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-3 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-border)] transition"
                 required
               />
             </div>
@@ -98,7 +98,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Ex: Você é um programador experiente que preza pela simplicidade e clareza no código..."
-                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-4 py-3 outline-none focus:border-[var(--accent-border)] transition h-48 resize-none text-sm leading-relaxed text-[var(--text-primary)]"
+                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-3 py-3 outline-none focus:border-[var(--accent-border)] transition h-48 resize-none text-sm leading-relaxed text-[var(--text-primary)]"
                 required
               />
             </div>
@@ -120,7 +120,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
               </div>
             ) : (
               personalities.map((p) => (
-                <div key={p.id} className="group flex items-center gap-4 p-4 bg-[var(--bg-main)]/35 rounded-2xl border border-[var(--border-light)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-chat-active)] transition duration-200">
+                <div key={p.id} className="group flex items-center gap-4 p-3 bg-[var(--bg-main)]/35 rounded-2xl border border-[var(--border-light)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-chat-active)] transition duration-200">
                   <div className="w-10 h-10 rounded-xl bg-[var(--accent-bg)] flex items-center justify-center shrink-0">
                     <User className="w-5 h-5 text-[var(--accent-text)] opacity-60" />
                   </div>

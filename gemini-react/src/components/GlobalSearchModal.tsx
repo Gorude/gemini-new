@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, MessageSquare, X, Bot, User, Archive } from 'lucide-react';
+import { Search, MessageSquare, X, User, Archive } from 'lucide-react';
+import NemonIcon from './NemonIcon';
 import { type ChatSession } from '../types';
 
 interface GlobalSearchModalProps {
@@ -133,7 +134,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
 
   return (
     <div 
-      className="fixed inset-0 z-[1000] flex items-start justify-center pt-24 px-4 backdrop-blur-[2px] bg-transparent"
+      className="fixed inset-0 z-[1000] flex items-start justify-center pt-24 px-3 backdrop-blur-[2px] bg-transparent"
       onClick={onClose}
     >
       <div 
@@ -142,7 +143,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
         className="w-full max-w-xl bg-[var(--bg-modal)] backdrop-blur-3xl rounded-3xl border border-[var(--border-main)] shadow-[0_25px_60px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300"
       >
         {/* Search Input Bar */}
-        <div className="flex items-center px-5 py-4 border-b border-[var(--border-light)] gap-3 bg-[var(--bg-sidebar)]/10">
+        <div className="flex items-center px-3.5 py-3 border-b border-[var(--border-light)] gap-3 bg-[var(--bg-sidebar)]/10">
           <Search className="w-5 h-5 text-[var(--text-placeholder)] shrink-0" />
           <input
             ref={inputRef}
@@ -190,7 +191,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
                       {res.matchType === 'title' ? (
                         <MessageSquare className="w-4 h-4 text-blue-400" />
                       ) : res.msgRole === 'ai' ? (
-                        <Bot className="w-4 h-4 text-emerald-400" />
+                        <NemonIcon themed={false} className="w-4 h-4 text-emerald-400" />
                       ) : (
                         <User className="w-4 h-4 text-purple-400" />
                       )}
@@ -226,7 +227,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
         </div>
 
         {/* Footer shortcuts helper */}
-        <div className="px-5 py-2.5 border-t border-[var(--border-light)] bg-[var(--bg-sidebar)]/20 text-[9px] text-[var(--text-placeholder)] flex justify-between font-medium">
+        <div className="px-3.5 py-2.5 border-t border-[var(--border-light)] bg-[var(--bg-sidebar)]/20 text-[9px] text-[var(--text-placeholder)] flex justify-between font-medium">
           <span>Use ↑ ↓ para navegar e Enter para abrir</span>
           <span>Esc para fechar</span>
         </div>
