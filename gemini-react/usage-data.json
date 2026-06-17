@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 {"date":"2026-05-19","models":{"gemma-4-31b-it":{"requests":3,"tokens":{"prompt":171570,"candidates":4258,"total":178127}}}}
+=======
+{"date":"2026-06-03","models":{}}
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1

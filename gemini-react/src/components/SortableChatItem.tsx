@@ -65,7 +65,7 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
     >
       <div 
         onClick={() => onSelect(chat.id)} 
-        className={`group/item flex items-center gap-2 py-2.5 px-3 mx-1 rounded-full cursor-pointer transition relative ${activeChatId === chat.id ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)]' : 'hover:bg-white/5 text-[var(--text-primary)]'}`}
+        className={`group/item flex items-center gap-2 py-1.5 px-3 mx-1 rounded-full cursor-pointer transition relative ${activeChatId === chat.id ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)]' : 'hover:bg-white/5 text-[var(--text-primary)]'}`}
       >
         {!isLocked && (
           <div 
@@ -80,7 +80,7 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
         {editingChatId === chat.id ? (
           <input 
             autoFocus 
-            className="bg-transparent border-none outline-none text-white w-full text-[14px]" 
+            className="bg-transparent border-none outline-none text-[var(--text-primary)] w-full text-[14px]" 
             value={editTitle} 
             onChange={(e) => onEditTitleChange(e.target.value)} 
             onBlur={() => onRenameConfirm(chat.id)} 

@@ -7,25 +7,30 @@ import 'katex/dist/katex.min.css';
 
 const renderer = new marked.Renderer();
 
-// Override paragraph: suppress empty paragraphs that create whitespace
-renderer.paragraph = ({ tokens }) => {
-  const body = (renderer as any).__proto__.paragraph.call(renderer, { tokens });
-  const text = body.replace(/<p>(\s|<br>)*<\/p>/gi, '');
-  return text;
+// Custom code renderer supporting both positional and token object formats for Marked compatibility
+renderer.code = (codeOrToken: any, langOrUndefined?: any) => {
+  let text = '';
+  let lang = 'plaintext';
+  
+  if (codeOrToken && typeof codeOrToken === 'object') {
+    text = codeOrToken.text || '';
+    lang = codeOrToken.lang || 'plaintext';
+  } else {
+    text = codeOrToken || '';
+    lang = langOrUndefined || 'plaintext';
+  }
+  
+  const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+  const highlighted = hljs.highlight(text, { language }).value;
+  return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
 };
 
-// Configuração segura do Marked.js
-const markedOptions: any = {
+// Configuração segura do Marked.js usando marked.use
+marked.use({
   renderer: renderer,
-  highlight: function (code: string, lang: string) {
-    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-    return hljs.highlight(code, { language }).value;
-  },
-  langPrefix: 'hljs language-',
   breaks: false,
   gfm: true
-};
-marked.setOptions(markedOptions);
+});
 
 // Adicionar suporte nativo à matemática
 marked.use(markedKatex({
@@ -249,8 +254,58 @@ export interface Message {
   duration?: number;
   factCheckResults?: FactCheckResult[];
   isVerifying?: boolean;
+  pendingMemoryUpdates?: Array<{
+    id: string;
+    category: string;
+    oldText: string;
+    newText: string;
+    resolved?: 'accepted' | 'ignored';
+  }>;
+  continuationText?: string;
 }
 
+
+import { auth, db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
+let globalDefaultApiKey = '';
+let globalPaidApiKey = '';
+
+export function setGlobalDefaultApiKey(key: string) {
+  globalDefaultApiKey = key;
+}
+
+export function setGlobalPaidApiKey(key: string) {
+  globalPaidApiKey = key;
+}
+
+export async function getApiKey(manualApiKey?: string): Promise<string> {
+  if (manualApiKey) return manualApiKey;
+  if (globalPaidApiKey) return globalPaidApiKey;
+  if (globalDefaultApiKey) return globalDefaultApiKey;
+  
+  try {
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data();
+        if (data.paidApiKey) {
+          globalPaidApiKey = data.paidApiKey;
+          return data.paidApiKey;
+        }
+        if (data.defaultApiKey) {
+          globalDefaultApiKey = data.defaultApiKey;
+          return data.defaultApiKey;
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore
+  }
+  
+  throw new Error("Chave de API do Google AI Studio padrão não configurada. Vá em Configurações > API para configurar.");
+}
 
 export async function* streamGeminiContent(
   text: string,
@@ -261,7 +316,8 @@ export async function* streamGeminiContent(
   webSearch: boolean = false,
   signal?: AbortSignal,
   thinking: boolean = false,
-  jsonMode: boolean = false
+  jsonMode: boolean = false,
+  manualApiKey?: string
 ): AsyncGenerator<{
   text?: string;
   thoughts?: string;
@@ -270,9 +326,7 @@ export async function* streamGeminiContent(
   sources?: { title: string; uri: string }[];
   usage?: { promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }
 }> {
-  const key = import.meta.env.VITE_GEMINI_FREE_API_KEY;
-  if (!key) throw new Error("Chave de API FREE não configurada no arquivo .env");
-
+  const key = await getApiKey(manualApiKey);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`;
 
   const currentParts: any[] = [];
@@ -504,9 +558,10 @@ export async function generateGeminiContent(
   webSearch: boolean = false,
   thinking: boolean = false,
   jsonMode: boolean = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  manualApiKey?: string
 ) {
-  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, signal, thinking, jsonMode);
+  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, signal, thinking, jsonMode, manualApiKey);
   let fullText = "", fullThoughts = "", isGrounded = false, usage: any = null;
 
   for await (const chunk of gen) {
@@ -525,8 +580,8 @@ export async function generateImagenContent(
   aspectRatio: '1:1' | '9:16' | '16:9',
   manualApiKey?: string
 ): Promise<{ data: string; mimeType: string }> {
-  const key = manualApiKey || import.meta.env.VITE_GEMINI_PAID_API_KEY;
-  if (!key) throw new Error("Chave de API Imagen (Paga) não configurada.");
+  const key = manualApiKey || globalPaidApiKey || globalDefaultApiKey;
+  if (!key) throw new Error("Nenhuma chave de API configurada para o Imagen. Configure-a em Configurações > API.");
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${key}`;
 

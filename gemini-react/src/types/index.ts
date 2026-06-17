@@ -44,3 +44,10 @@ export interface MemoryFact {
   connections: string[];
   timestamp: number;
 }
+
+export interface PendingMemoryUpdate {
+  id: string;
+  category: string;
+  oldText: string;
+  newText: string;
+}

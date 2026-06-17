@@ -1,31 +1,38 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
-import { 
-  Archive, 
-  Trash2, 
-  ChevronDown, 
-  X, 
-  Bot, 
-  Settings, 
+import {
+  Archive,
+  Trash2,
+  ChevronDown,
+  X,
+  Settings,
   Menu,
   Search,
   SquarePen,
-  Activity,
-  Zap,
-  BarChart2,
   User,
   Files,
   MessageSquare,
   RotateCcw,
+<<<<<<< HEAD
   Type
+=======
+  Type,
+  LogOut
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 } from 'lucide-react';
+import { auth, db } from './services/firebase';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
+import LoginScreen from './components/LoginScreen';
 import ChatRuler from './components/ChatRuler';
 import MessageList from './components/MessageList';
 import ChatInput from './components/ChatInput';
 import MessageTimeline from './components/MessageTimeline';
 import SortableChatItem from './components/SortableChatItem';
+import NemonIcon from './components/NemonIcon';
+import GlobalSearchModal from './components/GlobalSearchModal';
 
 import {
-  DndContext, 
+  DndContext,
   closestCenter,
   MouseSensor,
   TouchSensor,
@@ -42,26 +49,29 @@ import {
   verticalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
-import { 
+import {
   restrictToVerticalAxis
 } from '@dnd-kit/modifiers';
-import { Lock, Unlock, GripVertical } from 'lucide-react';
+import { Lock, Unlock, GripVertical, Code } from 'lucide-react';
 
-import { 
-  generateGeminiContent, 
+import {
+  generateGeminiContent,
   generateImagenContent,
-  streamGeminiContent, 
+  streamGeminiContent,
   performFactCheck,
   extractAndParseJson,
-  type Message 
+  setGlobalPaidApiKey,
+  setGlobalDefaultApiKey,
+  type Message
 } from './services/gemini';
 
-import { 
-  type ChatSession, 
+import {
+  type ChatSession,
   type DailyUsage,
   type PendingFile,
   type Personality,
-  type MemoryFact
+  type MemoryFact,
+  type PendingMemoryUpdate
 } from './types';
 
 import { v4 as uuidv4 } from 'uuid';
@@ -72,10 +82,8 @@ const DEFAULT_PERSONALITY: Personality = {
   prompt: ''
 };
 
-import DnaModal from './components/DnaModal';
 import LiveView from './components/LiveView';
 import LiveSetupModal from './components/LiveSetupModal';
-import PersonalitiesModal from './components/PersonalitiesModal';
 import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
 import SelectionPopup from './components/SelectionPopup';
@@ -83,22 +91,25 @@ import { logger } from './services/logger';
 import LogWindow from './components/LogWindow';
 
 import SettingsModal from './components/SettingsModal';
-import { 
-  MODEL_LIMITS
+import {
+  MODEL_OPTIONS,
+  LIVE_MODEL_MAP
 } from './constants';
 
 const getPacificDate = () => {
-  return new Intl.DateTimeFormat('en-CA', { 
-    timeZone: 'America/Los_Angeles', 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit' 
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
   }).format(new Date());
 };
 
 let isLoggerInitialized = false;
 
 function App() {
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [chats, setChats] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string>('');
   const [memoryFacts, setMemoryFacts] = useState<MemoryFact[]>([]);
@@ -111,23 +122,20 @@ function App() {
   const [imagenModel, setImagenModel] = useState('imagen-4.0-fast-generate-001');
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '9:16' | '16:9'>('1:1');
   const [expandedSourcesMsgId, setExpandedSourcesMsgId] = useState<string | null>(null);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('gemoro_theme') || 'escuro');
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem('nemon-theme') || 'escuro');
   const [enabledModelIds, setEnabledModelIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('gemoro_enabled_models');
+    const saved = localStorage.getItem('nemon_enabled_models');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch { /* ignore */ }
     }
-    return ['gemma-4-31b-it', 'gemini-3-flash-preview'];
+    return ['gemma-4-31b-it', 'gemini-3.1-flash-lite-preview'];
   });
-  const [showDnaModal, setShowDnaModal] = useState(false);
   const [isArchiveExpanded, setIsArchiveExpanded] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [isOrderLocked, setIsOrderLocked] = useState(() => {
-    const saved = localStorage.getItem('gemoro_sidebar_locked');
+    const saved = localStorage.getItem('nemon_sidebar_locked');
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [showLiveSetupModal, setShowLiveSetupModal] = useState(false);
@@ -152,17 +160,21 @@ function App() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [visibleMessagesCount, setVisibleMessagesCount] = useState(15);
   const [chatMargin, setChatMargin] = useState(() => {
-    const saved = localStorage.getItem('gemoro_chat_margin');
+    const saved = localStorage.getItem('nemon_chat_margin');
     return saved ? parseFloat(saved) : 5;
   });
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [selectedPersonalityId, setSelectedPersonalityId] = useState(() => {
-    return localStorage.getItem('gemoro_selected_personality_id') || 'default';
+    return localStorage.getItem('nemon_selected_personality_id') || 'default';
   });
-  const [showPersonalitiesModal, setShowPersonalitiesModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'dna'>('geral');
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
   const [chatFontSize, setChatFontSize] = useState<number>(() => {
+<<<<<<< HEAD
     const saved = localStorage.getItem('gemoro_chat_font_size');
+=======
+    const saved = localStorage.getItem('nemon_chat_font_size');
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
     if (saved === 'sm') return 13;
     if (saved === 'md') return 15.5;
     if (saved === 'lg') return 18;
@@ -171,35 +183,38 @@ function App() {
   });
   const [showFontSizeSelector, setShowFontSizeSelector] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'chat' | 'files'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'settings'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('gemoro_sidebar_open');
+      const saved = localStorage.getItem('nemon_sidebar_open');
       if (saved !== null) return saved === 'true';
       return window.innerWidth > 1024;
     }
     return true;
   });
-  const [isLiveProactive, setIsLiveProactive] = useState(() => localStorage.getItem('gemoro_live_proactive') === 'true');
+  const [isLiveProactive, setIsLiveProactive] = useState(() => localStorage.getItem('nemon_live_proactive') === 'true');
   const [proactiveIdleCount, setProactiveIdleCount] = useState(0); // 0: Idle, 1: Probed, 2: Retried (Stopped)
   const [paidApiKey, setPaidApiKey] = useState('');
+  const [defaultApiKey, setDefaultApiKey] = useState('');
+  const [liveModel, setLiveModel] = useState(() => localStorage.getItem('nemon_live_model') || 'gemini-2.5-flash-live');
+  const [useMemoryLive, setUseMemoryLive] = useState(true);
+  const [isLiveDetached, setIsLiveDetached] = useState(false);
+  const [isLiveMicEnabled, setIsLiveMicEnabled] = useState(() => {
+    const saved = localStorage.getItem('nemon_live_mic_enabled');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
-  
-  // Sincronizar Uso Local com o Servidor
-  useEffect(() => {
-    const fetchUsage = async () => {
-      try {
-        const res = await fetch('/api/usage');
-        const data = await res.json();
-        if (data && data.date === getPacificDate()) {
-          setDailyUsage(data);
-        }
-      } catch (e) {
-        console.error("Erro ao carregar uso do servidor:", e);
-      }
-    };
-    fetchUsage();
+  const [isLogOpen, setIsLogOpen] = useState(false);
+  const [logsCount, setLogsCount] = useState(0);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const saveMemoryFactsToFirestore = useCallback((facts: MemoryFact[]) => {
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { memoryFacts: facts }).catch(e => console.error("Erro ao salvar memórias:", e));
+    }
   }, []);
+
+
 
   // INTERCEPTAR EVENTOS DO CONSOLE E EXCEÇÕES GLOBAIS
   useEffect(() => {
@@ -252,39 +267,42 @@ function App() {
     };
   }, []);
 
+  // Subscrever ao logger para obter a contagem de logs no mobile
   useEffect(() => {
-    fetch('/api/config')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.paidApiKey) {
-          setPaidApiKey(data.paidApiKey);
-        }
-      })
-      .catch(err => console.error("Erro ao carregar chave de API:", err));
+    const unsubscribe = logger.subscribe((newLogs) => {
+      setLogsCount(newLogs.length);
+    });
+    return unsubscribe;
   }, []);
 
-  const saveConfig = useCallback((config: { paidApiKey: string }) => {
-    fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config)
-    }).catch(err => console.error("Erro ao salvar configuração:", err));
+  const saveConfig = useCallback((config: { paidApiKey?: string; defaultApiKey?: string }) => {
+    if (config.paidApiKey !== undefined) {
+      setPaidApiKey(config.paidApiKey);
+      setGlobalPaidApiKey(config.paidApiKey);
+    }
+    if (config.defaultApiKey !== undefined) {
+      setDefaultApiKey(config.defaultApiKey);
+      setGlobalDefaultApiKey(config.defaultApiKey);
+    }
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, config).catch(err => console.error("Erro ao salvar configuração:", err));
+    }
   }, []);
 
   useEffect(() => {
     localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(dailyUsage));
-    fetch('/api/usage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dailyUsage)
-    }).catch(e => console.error("Erro ao salvar uso no servidor:", e));
+    if (auth.currentUser && dailyUsage.date) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { dailyUsage }).catch(e => console.error("Erro ao salvar uso no Firestore:", e));
+    }
   }, [dailyUsage]);
-  
+
   // LIVE MODE STATE
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [liveStatus, setLiveStatus] = useState<'connecting' | 'connected' | 'error' | 'disconnected'>('disconnected');
   const [liveTranscript, setLiveTranscript] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
-  const [liveVoice, setLiveVoice] = useState(() => localStorage.getItem('gemoro_live_voice') || 'Charon');
+  const [liveVoice, setLiveVoice] = useState(() => localStorage.getItem('nemon_live_voice') || 'Charon');
   const [liveVisionType, setLiveVisionType] = useState<'camera' | 'screen' | null>(null);
   const [liveVideoStream, setLiveVideoStream] = useState<MediaStream | null>(null);
   const [isLiveSpeaking, setIsLiveSpeaking] = useState(false);
@@ -310,20 +328,24 @@ function App() {
   const [categorizationProgress, setCategorizationProgress] = useState<{ current: number, total: number }>({ current: 0, total: 0 });
 
   useEffect(() => {
-    localStorage.setItem('gemoro_enabled_models', JSON.stringify(enabledModelIds));
+    localStorage.setItem('nemon_enabled_models', JSON.stringify(enabledModelIds));
   }, [enabledModelIds]);
 
   useEffect(() => {
-    localStorage.setItem('gemoro_sidebar_open', isSidebarOpen.toString());
+    localStorage.setItem('nemon_sidebar_open', isSidebarOpen.toString());
   }, [isSidebarOpen]);
 
   useEffect(() => {
-    localStorage.setItem('gemoro_live_proactive', isLiveProactive.toString());
+    localStorage.setItem('nemon_live_proactive', isLiveProactive.toString());
   }, [isLiveProactive]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--chat-font-size', `${chatFontSize}px`);
+<<<<<<< HEAD
     localStorage.setItem('gemoro_chat_font_size', chatFontSize.toString());
+=======
+    localStorage.setItem('nemon_chat_font_size', chatFontSize.toString());
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   }, [chatFontSize]);
 
   const previousScrollHeightRef = useRef<number>(0);
@@ -334,6 +356,34 @@ function App() {
   const factCheckControllersRef = useRef<Record<string, AbortController>>({});
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const saveTimeoutRef = useRef<number | null>(null);
+
+  // Refs for closing popups when clicking outside
+  const personalityRef = useRef<HTMLDivElement>(null);
+  const fontSizeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        showPersonalitySelector &&
+        personalityRef.current &&
+        !personalityRef.current.contains(target)
+      ) {
+        setShowPersonalitySelector(false);
+      }
+      if (
+        showFontSizeSelector &&
+        fontSizeRef.current &&
+        !fontSizeRef.current.contains(target)
+      ) {
+        setShowFontSizeSelector(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPersonalitySelector, showFontSizeSelector]);
 
   useEffect(() => {
     if (!isLiveActive || !isLiveProactive) {
@@ -348,7 +398,7 @@ function App() {
       }
 
       const elapsed = Date.now() - lastLiveActivityRef.current;
-      
+
       // Monitoramento de Inatividade
       if (proactiveIdleCount === 0 && elapsed > 30000) {
         if (liveSessionRef.current) {
@@ -358,7 +408,7 @@ function App() {
           setProactiveIdleCount(1);
           lastLiveActivityRef.current = Date.now();
         }
-      } 
+      }
       else if (proactiveIdleCount === 1 && elapsed > 30000) {
         if (liveSessionRef.current) {
           console.log("[PROATIVIDADE] Inatividade continuada (60s). Estágio 2: Check-in...");
@@ -377,9 +427,9 @@ function App() {
     if (memoryFacts.length === 0) return;
     setIsCategorizing(true);
     setCategorizationProgress({ current: 0, total: 0 });
-    
+
     console.log("Iniciando organização inteligente em lotes...");
-    
+
     // Configurações de lote (batching) para garantir estabilidade JSON
     const CHUNK_SIZE = 15;
     const chunks: MemoryFact[][] = [];
@@ -394,7 +444,7 @@ function App() {
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         console.log(`Processando lote ${i + 1}/${chunks.length}...`);
-        
+
         const prompt = `Você é um especialista em organização de conhecimento. 
         Analise a seguinte lista de memórias e organize-as em categorias lógicas e interconectadas.
         
@@ -433,13 +483,9 @@ function App() {
             // Atualização parcial do estado para feedback visual imediato
             setMemoryFacts([...currentFacts]);
             setCategorizationProgress(prev => ({ ...prev, current: i + 1 }));
-            
+
             // Checkpoint no servidor
-            fetch('/api/memory', { 
-              method: 'POST', 
-              headers: { 'Content-Type': 'application/json' }, 
-              body: JSON.stringify(currentFacts) 
-            });
+            saveMemoryFactsToFirestore(currentFacts);
           }
         } catch (batchError) {
           console.error(`Erro no lote ${i + 1}:`, batchError);
@@ -459,116 +505,211 @@ function App() {
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = useMemo(() => activeChat?.messages || [], [activeChat]);
 
-  // Load Initial Data
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [historyRes, memoryRes, personalitiesRes] = await Promise.all([
-          fetch('/api/history'),
-          fetch('/api/memory'),
-          fetch('/api/personalities')
-        ]);
-        if (historyRes.ok) {
-          const history = await historyRes.json();
-          if (Array.isArray(history)) {
-            setChats(history);
-            if (history.length > 0) setActiveChatId(history[0].id);
-          }
-        }
-        if (memoryRes.ok) {
-          const memoryData = (await memoryRes.json()) as Array<string | MemoryFact>;
-          if (Array.isArray(memoryData)) {
-            if (memoryData.length > 0 && typeof memoryData[0] === 'string') {
-              // Automatic Migration to DNA 2.0
-              console.log("Iniciando migração para DNA 2.0... Total de fatos: ", memoryData.length);
-              const migrationPrompt = `Você é um sistema de migração de dados. Converta a seguinte lista de fatos (strings) em um JSON estruturado com o formato: { id: string, text: string, category: string, connections: string[] (IDs de fatos relacionados), timestamp: number }.
-              As categorias devem ser geradas dinamicamente (ex: Pessoal, Profissional, Hardware, Preferências). 
-              LISTA DE FATOS:\n${(memoryData as string[]).join('\n')}`;
-              
-              try {
-                const res = await generateGeminiContent(migrationPrompt, 'gemma-4-31b-it', [], "Responda APENAS com o JSON cru contendo um array de objetos.");
-                // Tentar extrair JSON do texto
-                const jsonMatch = res.text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-                const migrated = JSON.parse(jsonMatch ? jsonMatch[0] : res.text);
-                
-                if (Array.isArray(migrated) && migrated.length > 0) {
-                  setMemoryFacts(migrated);
-                  fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migrated) });
-                  console.log("Migração inteligente concluída!");
-                } else {
-                  throw new Error("Resposta da IA inválida ou vazia");
-                }
-              } catch (e) {
-                console.error("Falha na migração com IA, executando fallback local para restaurar visibilidade:", e);
-                const fallback = (memoryData as string[]).map((f: string) => ({ 
-                  id: uuidv4(), 
-                  text: f, 
-                  category: 'Diversos', 
-                  connections: [], 
-                  timestamp: Date.now() 
-                }));
-                setMemoryFacts(fallback);
-                fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fallback) });
-                console.log("Memórias restauradas em modo de compatibilidade (Diversos).");
-              }
-            } else {
-              setMemoryFacts(memoryData as MemoryFact[]);
-            }
-          }
-        }
+  const previousChatsRef = useRef<ChatSession[]>([]);
+  const isInitialLoadRef = useRef(true);
 
-        if (personalitiesRes.ok) {
-          const persData = await personalitiesRes.json();
-          if (Array.isArray(persData) && persData.length > 0) {
-            setPersonalities(persData);
-          } else {
-            // Migration from localStorage
-            const saved = localStorage.getItem('gemoro_personalities');
-            if (saved) {
-              try {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  setPersonalities(parsed);
-                  fetch('/api/personalities', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: saved 
-                  });
-                }
-              } catch { /* ignore */ }
+  // Load Initial Data from Firestore on Auth State Change
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        setIsInitialLoading(true);
+        isInitialLoadRef.current = true;
+        try {
+          const uid = currentUser.uid;
+          const userDocRef = doc(db, 'users', uid);
+          const userDocSnap = await getDoc(userDocRef);
+          
+          let dbMemoryFacts: MemoryFact[] = [];
+          let dbPersonalities: Personality[] = [];
+          let dbDailyUsage: DailyUsage = { date: getPacificDate(), models: {} };
+          let dbPaidApiKey = '';
+          let dbDefaultApiKey = '';
+          let dbSidebarOrder: string[] = [];
+          
+          if (userDocSnap.exists()) {
+            const data = userDocSnap.data();
+            dbMemoryFacts = data.memoryFacts || [];
+            dbPersonalities = data.personalities || [];
+            if (data.dailyUsage && data.dailyUsage.date === getPacificDate()) {
+              dbDailyUsage = data.dailyUsage;
             }
+            dbPaidApiKey = data.paidApiKey || '';
+            dbDefaultApiKey = data.defaultApiKey || '';
+            dbSidebarOrder = data.sidebarOrder || [];
+            
+            // Sync settings to states
+            if (data.settings) {
+              if (data.settings.theme) {
+                setTheme(data.settings.theme);
+                document.documentElement.setAttribute('data-theme', data.settings.theme);
+              }
+              if (data.settings.chatMargin !== undefined) setChatMargin(data.settings.chatMargin);
+              if (data.settings.selectedPersonalityId) setSelectedPersonalityId(data.settings.selectedPersonalityId);
+              if (data.settings.chatFontSize !== undefined) setChatFontSize(data.settings.chatFontSize);
+              if (data.settings.isOrderLocked !== undefined) setIsOrderLocked(data.settings.isOrderLocked);
+              if (data.settings.enabledModelIds) setEnabledModelIds(data.settings.enabledModelIds);
+              if (data.settings.isLiveProactive !== undefined) setIsLiveProactive(data.settings.isLiveProactive);
+              if (data.settings.liveVoice) setLiveVoice(data.settings.liveVoice);
+              if (data.settings.liveModel) setLiveModel(data.settings.liveModel);
+            }
+          } else {
+            // First time: Create Firestore document
+            const initialData = {
+              email: currentUser.email,
+              displayName: currentUser.displayName,
+              memoryFacts: [],
+              personalities: [],
+              dailyUsage: { date: getPacificDate(), models: {} },
+              paidApiKey: '',
+              defaultApiKey: '',
+              sidebarOrder: [],
+              settings: {
+                theme,
+                chatMargin,
+                selectedPersonalityId,
+                chatFontSize,
+                isOrderLocked,
+                enabledModelIds,
+                isLiveProactive,
+                liveVoice,
+                liveModel
+              }
+            };
+            await setDoc(userDocRef, initialData);
           }
+          
+          setMemoryFacts(dbMemoryFacts);
+          setPersonalities(dbPersonalities);
+          setDailyUsage(dbDailyUsage);
+          setPaidApiKey(dbPaidApiKey);
+          setGlobalPaidApiKey(dbPaidApiKey);
+          setDefaultApiKey(dbDefaultApiKey);
+          setGlobalDefaultApiKey(dbDefaultApiKey);
+          
+          // Load all chats
+          const chatsColRef = collection(db, 'users', uid, 'chats');
+          const chatsSnap = await getDocs(chatsColRef);
+          const loadedChats: ChatSession[] = [];
+          chatsSnap.forEach((d) => {
+            loadedChats.push(d.data() as ChatSession);
+          });
+          
+          const orderedChats = [...loadedChats];
+          if (dbSidebarOrder.length > 0) {
+            orderedChats.sort((a, b) => {
+              const indexA = dbSidebarOrder.indexOf(a.id);
+              const indexB = dbSidebarOrder.indexOf(b.id);
+              if (indexA === -1 && indexB === -1) return 0;
+              if (indexA === -1) return 1;
+              if (indexB === -1) return -1;
+              return indexA - indexB;
+            });
+          }
+          
+          setChats(orderedChats);
+          if (orderedChats.length > 0) {
+            setActiveChatId(orderedChats[0].id);
+          } else {
+            setActiveChatId('');
+          }
+        } catch (err) {
+          console.error("Erro ao carregar dados do Firestore:", err);
+        } finally {
+          setIsInitialLoading(false);
         }
-      } catch (e) {
-        console.error("Erro ao carregar dados iniciais:", e);
-      } finally {
-        setIsInitialLoading(false);
+      } else {
+        // Logged out
+        setChats([]);
+        setActiveChatId('');
+        setMemoryFacts([]);
+        setPersonalities([]);
+        setPaidApiKey('');
+        setGlobalPaidApiKey('');
+        setDefaultApiKey('');
       }
-    };
-    loadData();
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
+  // Save changes to chats subcollection & sidebarOrder in Firestore
   useEffect(() => {
-    localStorage.setItem('gemoro_sidebar_locked', JSON.stringify(isOrderLocked));
+    if (!auth.currentUser || isAuthLoading || isInitialLoading) return;
+    const uid = auth.currentUser.uid;
+
+    if (isInitialLoadRef.current) {
+      previousChatsRef.current = chats;
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    // 1. Detect deleted chats
+    const deletedChats = previousChatsRef.current.filter(prevChat => !chats.some(c => c.id === prevChat.id));
+    deletedChats.forEach(async (chat) => {
+      const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
+      await deleteDoc(chatDocRef).catch(e => console.error("Erro ao deletar chat no Firestore:", e));
+    });
+
+    // 2. Detect updated or new chats
+    chats.forEach(async (chat) => {
+      const prevChat = previousChatsRef.current.find(c => c.id === chat.id);
+      if (!prevChat || JSON.stringify(prevChat) !== JSON.stringify(chat)) {
+        const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
+        await setDoc(chatDocRef, chat).catch(e => console.error("Erro ao salvar chat no Firestore:", e));
+      }
+    });
+
+    // 3. Save sidebar order if changed
+    const currentOrder = chats.map(c => c.id);
+    const prevOrder = previousChatsRef.current.map(c => c.id);
+    if (JSON.stringify(currentOrder) !== JSON.stringify(prevOrder)) {
+      const userDocRef = doc(db, 'users', uid);
+      updateDoc(userDocRef, { sidebarOrder: currentOrder }).catch(e => console.error("Erro ao salvar ordem no Firestore:", e));
+    }
+
+    previousChatsRef.current = chats;
+  }, [chats, isAuthLoading, isInitialLoading]);
+
+  // Sync Preferences/Settings to Firestore
+  useEffect(() => {
+    if (auth.currentUser && !isAuthLoading && !isInitialLoading) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, {
+        settings: {
+          theme,
+          chatMargin,
+          selectedPersonalityId,
+          chatFontSize,
+          isOrderLocked,
+          enabledModelIds,
+          isLiveProactive,
+          liveVoice,
+          liveModel
+        }
+      }).catch(e => console.error("Erro ao salvar configurações no Firestore:", e));
+    }
+  }, [theme, chatMargin, selectedPersonalityId, chatFontSize, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, liveModel, isAuthLoading, isInitialLoading]);
+
+  useEffect(() => {
+    localStorage.setItem('nemon_sidebar_locked', JSON.stringify(isOrderLocked));
   }, [isOrderLocked]);
 
   // Auto-Save Margins
   useEffect(() => {
-    localStorage.setItem('gemoro_chat_margin', chatMargin.toString());
+    localStorage.setItem('nemon_chat_margin', chatMargin.toString());
   }, [chatMargin]);
 
   // Auto-Save Personalities
   useEffect(() => {
-    if (personalities.length > 0) {
-      fetch('/api/personalities', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(personalities)
-      });
+    if (auth.currentUser && personalities.length > 0) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { personalities }).catch(e => console.error("Erro ao salvar personalidades no Firestore:", e));
     }
-    localStorage.setItem('gemoro_selected_personality_id', selectedPersonalityId);
+    localStorage.setItem('nemon_selected_personality_id', selectedPersonalityId);
   }, [personalities, selectedPersonalityId]);
 
+<<<<<<< HEAD
   const saveChats = useCallback((chatsToSave: ChatSession[]) => {
     if (chatsToSave.length > 0) {
       fetch('/api/history', {
@@ -605,6 +746,8 @@ function App() {
     };
   }, [chats, isLoading, saveChats]);
 
+=======
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   // Close menus on click outside
   useEffect(() => {
     const handleGlobalClick = () => setMenuOpenId(null);
@@ -614,7 +757,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('gemoro_theme', theme);
+    localStorage.setItem('nemon-theme', theme);
   }, [theme]);
 
   // LIVE MODE LOGIC
@@ -628,6 +771,7 @@ function App() {
     setLiveVideoStream(null);
     setIsLiveSpeaking(false);
     setIsLiveActive(false);
+    setIsLiveDetached(false);
     setLiveStatus('disconnected');
     setLiveTranscript([]);
     audioQueueRef.current = [];
@@ -639,16 +783,8 @@ function App() {
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showPersonalitiesModal) {
-          setShowPersonalitiesModal(false);
-          return;
-        }
-        if (showDnaModal) {
-          setShowDnaModal(false);
-          return;
-        }
-        if (showSettingsModal) {
-          setShowSettingsModal(false);
+        if (activeTab === 'settings') {
+          setActiveTab('chat');
           return;
         }
         if (isLiveActive) {
@@ -659,7 +795,7 @@ function App() {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [showPersonalitiesModal, showDnaModal, showSettingsModal, isLiveActive, handleLiveStop]);
+  }, [activeTab, isLiveActive, handleLiveStop]);
 
   const scrollToBottom = useCallback((force = false, smooth = false) => {
     if (chatWindowRef.current) {
@@ -671,40 +807,58 @@ function App() {
     }
   }, []);
 
-  const parseMemoryTags = useCallback((str: string) => {
-    let newMemories = [...memoryFacts];
-    let hasMemoryUpdates = false;
+  const parseMemoryTags = useCallback((str: string, isFinal: boolean = false, onFindUpdates?: (updates: PendingMemoryUpdate[]) => void) => {
     const memoryTagRegex = /<MEMORY(?:\s+category=['"]([^'"]*)['"])?(?:\s+connections=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/MEMORY>/g;
     const updateTagRegex = /<UPDATE_MEMORY\s+id=['"]([^'"]*)['"](?:\s+category=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/UPDATE_MEMORY>/g;
     const deleteTagRegex = /<DELETE_MEMORY\s+id=['"]([^'"]*?)['"]\s*\/>/g;
 
-    let match;
-    // Adicionar
-    while ((match = memoryTagRegex.exec(str)) !== null) {
-      const categoryValue = match[1] || 'Diversos';
-      const connectionsValue = match[2] ? match[2].split(',').map(s => s.trim()) : [];
-      const textValue = match[3].trim();
-      newMemories.push({ id: uuidv4(), text: textValue, category: categoryValue, connections: connectionsValue, timestamp: Date.now() });
-      hasMemoryUpdates = true;
-    }
-    // Deletar
-    while ((match = deleteTagRegex.exec(str)) !== null) {
-      const idValue = match[1];
-      newMemories = newMemories.filter((m: MemoryFact) => m.id !== idValue);
-      hasMemoryUpdates = true;
-    }
-    // Atualizar
-    while ((match = updateTagRegex.exec(str)) !== null) {
-      const idValue = match[1];
-      const categoryValue = match[2];
-      const textValue = match[3].trim();
-      newMemories = newMemories.map((mValue: MemoryFact) => mValue.id === idValue ? { ...mValue, text: textValue, category: categoryValue || mValue.category, timestamp: Date.now() } : mValue);
-      hasMemoryUpdates = true;
-    }
+    if (isFinal) {
+      let newMemories = [...memoryFacts];
+      let hasMemoryUpdates = false;
+      let match;
 
-    if (hasMemoryUpdates) {
-      setMemoryFacts(newMemories);
-      fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newMemories) });
+      // Adicionar novos fatos automaticamente (não são contradições)
+      while ((match = memoryTagRegex.exec(str)) !== null) {
+        const categoryValue = match[1] || 'Diversos';
+        const connectionsValue = match[2] ? match[2].split(',').map(s => s.trim()) : [];
+        const textValue = match[3].trim();
+        newMemories.push({ id: uuidv4(), text: textValue, category: categoryValue, connections: connectionsValue, timestamp: Date.now() });
+        hasMemoryUpdates = true;
+      }
+
+      // Deletar fatos automaticamente
+      while ((match = deleteTagRegex.exec(str)) !== null) {
+        const idValue = match[1];
+        newMemories = newMemories.filter((m: MemoryFact) => m.id !== idValue);
+        hasMemoryUpdates = true;
+      }
+
+      // Interceptar atualizações de fatos (contradições/mudanças) para confirmação visual
+      const updates: PendingMemoryUpdate[] = [];
+      updateTagRegex.lastIndex = 0;
+      while ((match = updateTagRegex.exec(str)) !== null) {
+        const idValue = match[1];
+        const categoryValue = match[2];
+        const textValue = match[3].trim();
+        const oldFact = memoryFacts.find(m => m.id === idValue);
+        if (oldFact && oldFact.text !== textValue) {
+          updates.push({
+            id: idValue,
+            category: categoryValue || oldFact.category,
+            oldText: oldFact.text,
+            newText: textValue
+          });
+        }
+      }
+
+      if (updates.length > 0 && onFindUpdates) {
+        onFindUpdates(updates);
+      }
+
+      if (hasMemoryUpdates) {
+        setMemoryFacts(newMemories);
+        saveMemoryFactsToFirestore(newMemories);
+      }
     }
 
     return str
@@ -712,15 +866,18 @@ function App() {
       .replace(updateTagRegex, '')
       .replace(deleteTagRegex, '')
       .trim();
-  }, [memoryFacts]);
+  }, [memoryFacts, saveMemoryFactsToFirestore]);
 
   const executeAIRequest = useCallback(async (
-    targetChatId: string, 
-    userText: string, 
-    filesToSend: PendingFile[], 
-    apiHistory: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }>, 
-    isFirstMessage: boolean, 
-    replaceId?: string
+    targetChatId: string,
+    userText: string,
+    filesToSend: PendingFile[],
+    apiHistory: Array<{ role: string; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> }>,
+    isFirstMessage: boolean,
+    replaceId?: string,
+    isAppending: boolean = false,
+    _originalText: string = '',
+    originalThoughts: string = ''
   ) => {
     setIsLoading(true);
     const controller = new AbortController();
@@ -728,14 +885,20 @@ function App() {
 
     const selectedPersonality = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
 
-    const systemInstruction = "Você é o Gemoro, uma inteligência artificial avançada, empática e extremante RÁPIDA. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
+    const systemInstruction = "Você é o Nemon, uma inteligência artificial avançada, empática e extremamente RÁPIDA. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
       (selectedPersonality.prompt ? `INSTRUÇÃO DE PERSONALIDADE ATIVA: "${selectedPersonality.prompt}"\n\n` : "") +
       (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f: MemoryFact) => `[ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n") + "\n\n" : "") +
       "Regras de Pesquisa e Memória:\n" +
       "1. Se a ferramenta de pesquisa estiver ativada (WEB SEARCH ON), você DEVE obrigatoriamente realizar a ferramenta google_search para fazer uma pesquisa na web ANTES de responder, mesmo para assuntos que você considere de conhecimento geral. O usuário deseja ver as fontes e evidências (ícones de sites) em todas as respostas.\n" +
-      "2. Se descobrir um fato NOVO importante, adicione <MEMORY category='...'>texto</MEMORY>.\n" +
-      "3. Para atualizar: <UPDATE_MEMORY id='ID'>novo texto</UPDATE_MEMORY>.\n" +
-      "4. Seja conciso e direto ao ponto quando possível.";
+      "2. Regras de DNA (Memória Persistente):\n" +
+      "   - Cada memória DEVE conter apenas um fato atômico, simples e específico (ex: 'O usuário se chama José Gabriel', 'O usuário tem 19 anos', 'O usuário estuda ADS'). NUNCA agrupe múltiplos fatos diferentes ou informações complementares em um único texto.\n" +
+      "   - NOVA INFORMAÇÃO vs CONTRADIÇÃO (MUITO IMPORTANTE):\n" +
+      "     * Se o usuário disser algo NOVO que NÃO contradiz nenhuma memória existente (mesmo que seja da mesma categoria, como perfil, hobbies ou estudos), você DEVE criar uma NOVA memória usando <MEMORY category='...'>texto</MEMORY>. NÃO atualize uma memória antiga apenas para embutir/concatenar essa nova informação nela.\n" +
+      "       Exemplo: Se já existe [ID: 123] 'O nome do usuário é José Gabriel' e o usuário diz 'Eu estudo ADS', isso NÃO contradiz o nome dele. Crie um novo fato: <MEMORY category='USER_PROFILE'>O usuário estuda ADS</MEMORY>. NÃO faça update da memória de ID 123!\n" +
+      "     * Use <UPDATE_MEMORY id='ID'>novo texto</UPDATE_MEMORY> APENAS quando um fato salvo anteriormente tiver mudado de verdade (ex: mudou de idade, mudou de cidade, mudou de emprego) ou estiver comprovadamente errado/desatualizado. A atualização serve para substituir a informação desatualizada pela nova, mantendo o mesmo ID.\n" +
+      "       Exemplo: Se já existe [ID: 456] 'O usuário tem 19 anos' e ele diz 'Fiz 20 anos hoje', use <UPDATE_MEMORY id='456'>O usuário tem 20 anos</UPDATE_MEMORY>.\n" +
+      "   - NUNCA atualize uma memória se a nova informação for apenas complementar e puder ser armazenada em um fato separado.\n" +
+      "3. Seja conciso e direto ao ponto quando possível.";
 
     try {
       const startTime = performance.now();
@@ -755,8 +918,15 @@ function App() {
       setChats(prev => prev.map(c => {
         if (c.id === targetChatId) {
           const freshMsg: Message = { id: currentAiMsgId, role: 'ai', text: '', thoughts: '', duration: 0, isSearching: webSearchEnabled };
-          const updatedMsgs = replaceId 
-            ? c.messages.map(m => m.id === replaceId ? freshMsg : m)
+          const updatedMsgs = replaceId
+            ? c.messages.map(m => {
+                if (m.id === replaceId) {
+                  return isAppending
+                    ? { ...m, isSearching: webSearchEnabled, isVerifying: false }
+                    : freshMsg;
+                }
+                return m;
+              })
             : [...c.messages, freshMsg];
           return { ...c, messages: updatedMsgs };
         }
@@ -767,17 +937,17 @@ function App() {
         try {
           const res = await generateImagenContent(userText, imagenModel, aspectRatio, paidApiKey);
           const currentDuration = (performance.now() - startTime) / 1000;
-          
+
           setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
             ...c,
-            messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
-              ...m, 
-              text: `Gerei esta imagem para você usando **${imagenModel}**:`, 
+            messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? {
+              ...m,
+              text: `Gerei esta imagem para você usando **${imagenModel}**:`,
               files: [{ name: 'generated_image.png', mimeType: res.mimeType, data: res.data }],
-              duration: currentDuration 
+              duration: currentDuration
             } : m)
           } : c));
-          
+
           setIsLoading(false);
           return;
         } catch (imgError: unknown) {
@@ -807,11 +977,11 @@ function App() {
             }
           });
         }
-        
+
         // Limpeza em tempo real para o streaming
         let streamingText = fullText;
         let streamingThoughts = fullThoughts;
-        
+
         // 1. Extrair blocos completos de <thinking>
         const completeThinkingMatch = /<thinking>([\s\S]*?)<\/thinking>/g;
         let m;
@@ -821,25 +991,26 @@ function App() {
           }
           streamingText = streamingText.replace(m[0], '');
         }
-        
+
         // 2. Ocultar blocos incompletos ou texto que parece ser raciocínio (fallback)
         if (streamingText.includes('<thinking>')) {
           streamingText = streamingText.split('<thinking>')[0];
         }
-        
+
         const currentDuration = (performance.now() - startTime) / 1000;
         const currentCleanText = parseMemoryTags(streamingText).trim();
 
         setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
           ...c,
-          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
-            ...m, 
-            text: currentCleanText, 
-            thoughts: streamingThoughts.trim(), 
-            isGrounded, 
-            isSearching, 
-            sources: [...allSources], 
-            duration: currentDuration 
+          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? {
+            ...m,
+            text: isAppending ? m.text : currentCleanText,
+            continuationText: isAppending ? currentCleanText : undefined,
+            thoughts: isAppending ? (originalThoughts + (originalThoughts ? "\n\n" : "") + streamingThoughts.trim()) : streamingThoughts.trim(),
+            isGrounded,
+            isSearching,
+            sources: [...allSources],
+            duration: currentDuration
           } : m)
         } : c));
       }
@@ -851,14 +1022,16 @@ function App() {
           const modelData = state.models[model] || { requests: 0, tokens: { prompt: 0, candidates: 0, total: 0 } };
           const newState: DailyUsage = {
             ...state,
-            models: { ...state.models, [model]: {
-              requests: modelData.requests + 1,
-              tokens: {
-                prompt: modelData.tokens.prompt + (finalUsage.promptTokenCount || 0),
-                candidates: modelData.tokens.candidates + (finalUsage.candidatesTokenCount || 0),
-                total: modelData.tokens.total + (finalUsage.totalTokenCount || 0),
+            models: {
+              ...state.models, [model]: {
+                requests: modelData.requests + 1,
+                tokens: {
+                  prompt: modelData.tokens.prompt + (finalUsage.promptTokenCount || 0),
+                  candidates: modelData.tokens.candidates + (finalUsage.candidatesTokenCount || 0),
+                  total: modelData.tokens.total + (finalUsage.totalTokenCount || 0),
+                }
               }
-            }}
+            }
           };
           localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(newState));
           return newState;
@@ -878,7 +1051,10 @@ function App() {
       }
       finalCleanedText = finalCleanedText.replace(/<\/thinking>/g, '').replace(/<thinking>/g, '').trim();
 
-      let finalCleanText = parseMemoryTags(finalCleanedText).trim();
+      let updatesFound: PendingMemoryUpdate[] = [];
+      let finalCleanText = parseMemoryTags(finalCleanedText, true, (upds) => {
+        updatesFound = upds;
+      }).trim();
 
       // 2. LÓGICA DE AUTO-RECUPERAÇÃO (Hidden Turn)
       if (!finalCleanText && finalThoughts && finalThoughts.length > 50) {
@@ -893,30 +1069,36 @@ function App() {
             `O modelo gerou apenas o raciocínio interno. Com base no raciocínio abaixo, escreva apenas a RESPOSTA FINAL amigável e direta para o usuário (em Português), ignorando a parte técnica do planejamento:\n\n${finalThoughts}`,
             model,
             [],
-            "Você é o Gemoro. Resuma o raciocínio em uma resposta final útil."
+            "Você é o Nemon. Resuma o raciocínio em uma resposta final útil."
           );
           if (recoveryRes.text) {
-            finalCleanText = parseMemoryTags(recoveryRes.text).trim();
+            finalCleanText = parseMemoryTags(recoveryRes.text, true, (upds) => {
+              updatesFound = [...updatesFound, ...upds];
+            }).trim();
           }
         } catch (e) {
           console.warn("Falha na auto-recuperação:", e);
-          finalCleanText = finalThoughts; 
+          finalCleanText = finalThoughts;
         }
       } else if (!finalCleanText && finalThoughts) {
         finalCleanText = finalThoughts;
       }
 
-      setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { 
-        ...c, 
-        messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { 
-          ...m, 
-          text: finalCleanText, 
-          thoughts: finalThoughts.trim(),
+      setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
+        ...c,
+        messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? {
+          ...m,
+          text: isAppending ? m.text : finalCleanText,
+          continuationText: isAppending ? finalCleanText : undefined,
+          thoughts: isAppending ? (originalThoughts + (originalThoughts ? "\n\n" : "") + finalThoughts.trim()) : finalThoughts.trim(),
           isSearching: false,
           isGrounded,
           isVerifying: false,
-          sources: [...allSources]
-        } : m) 
+          sources: [...allSources],
+          pendingMemoryUpdates: updatesFound.length > 0 
+            ? [...(m.pendingMemoryUpdates || []), ...updatesFound] 
+            : m.pendingMemoryUpdates
+        } : m)
       } : c));
 
       if (isFirstMessage) {
@@ -928,13 +1110,13 @@ function App() {
         ).then(res => {
           if (res.text) {
             const cleanTitle = res.text.replace(/["'*]/g, '').trim();
-          setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { ...c, title: cleanTitle, isNaming: false } : c));
+            setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? { ...c, title: cleanTitle, isNaming: false } : c));
           } else {
             setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: 'Chat Sem Nome', isNaming: false } : c));
           }
         }).catch(err => {
           console.warn("Aviso: Falha na autogeração de título", err);
-          setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: userText.substring(0, 25)+'...', isNaming: false } : c));
+          setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, title: userText.substring(0, 25) + '...', isNaming: false } : c));
         });
       }
     } catch (error: unknown) {
@@ -949,10 +1131,14 @@ function App() {
       setIsLoading(false);
       abortControllerRef.current = null;
       currentAiMsgIdRef.current = null;
+<<<<<<< HEAD
       setChats(prev => {
         saveChats(prev);
         return prev;
       });
+=======
+      setChats(prev => prev);
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
     }
   }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, selectedPersonalityId, parseMemoryTags]);
 
@@ -961,9 +1147,9 @@ function App() {
       // Capturamos os IDs antes de qualquer mutação ou aborto
       const msgIdToRemove = currentAiMsgIdRef.current;
       const targetChatId = activeChatId;
-      
+
       abortControllerRef.current.abort();
-      
+
       // Remover a mensagem apenas se ela ainda estiver vazia
       if (msgIdToRemove && targetChatId) {
         setChats(prev => prev.map(c => {
@@ -971,7 +1157,7 @@ function App() {
             // Verificamos se a mensagem existe e se está vazia
             const msg = c.messages.find(m => m.id === msgIdToRemove);
             const isEmpty = !msg || (!msg.text && !msg.thoughts && (!msg.files || msg.files.length === 0));
-            
+
             if (isEmpty) {
               return {
                 ...c,
@@ -982,13 +1168,17 @@ function App() {
           return c;
         }));
       }
-      
+
       setIsLoading(false);
       currentAiMsgIdRef.current = null;
+<<<<<<< HEAD
       setChats(prev => {
         saveChats(prev);
         return prev;
       });
+=======
+      setChats(prev => prev);
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
     }
   }, [activeChatId, saveChats]);
 
@@ -1011,7 +1201,7 @@ function App() {
               if (msg.id === messageId) {
                 // Filtrar resultados antigos que coincidem com os novos segmentos para evitar sobreposição
                 const existingResults = msg.factCheckResults || [];
-                const filteredOld = existingResults.filter(old => 
+                const filteredOld = existingResults.filter(old =>
                   !results.some(newRes => newRes.segment === old.segment)
                 );
                 const newResults = [...filteredOld, ...results];
@@ -1034,7 +1224,7 @@ function App() {
 
   const handleAskAboutSegment = useCallback((segmentText: string, questionText: string) => {
     const contextualPrompt = `Contexto selecionado: "${segmentText}"\n\nPergunta do usuário: ${questionText}`;
-    
+
     // Obter histórico para manter o contexto do chat
     const activeChat = chats.find(c => c.id === activeChatId);
     if (!activeChat) return;
@@ -1049,17 +1239,22 @@ function App() {
 
 
   const handleLiveStart = useCallback(() => {
+    if (isLiveActive && isLiveDetached) {
+      setIsLiveDetached(false);
+      return;
+    }
     setShowLiveSetupModal(true);
-  }, []);
+  }, [isLiveActive, isLiveDetached]);
 
   const confirmLiveStart = useCallback(async (useMemory: boolean) => {
+    setUseMemoryLive(useMemory);
     setShowLiveSetupModal(false);
     setIsLiveActive(true);
     setLiveStatus('connecting');
     setLiveTranscript([]);
-    
+
     if (liveAudioContextRef.current) {
-       liveAudioContextRef.current.close();
+      liveAudioContextRef.current.close();
     }
     liveAudioContextRef.current = new AudioContext({ sampleRate: 24000 });
     const analyserNode = liveAudioContextRef.current.createAnalyser();
@@ -1070,30 +1265,43 @@ function App() {
     // Contexto de Memória
     let dnaContext = "";
     if (useMemory && memoryFacts.length > 0) {
-      dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" + 
+      dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" +
         memoryFacts.map(f => `- [ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n");
     }
 
     const memoryRules = useMemory ? `
 REGRAS DE MEMÓRIA (MODO LIVE):
-1. Use <MEMORY category='...'>texto</MEMORY> para novos fatos.
-2. Use <UPDATE_MEMORY id='...' category='...'>texto</UPDATE_MEMORY> para atualizar.
-3. Use <DELETE_MEMORY id='...' /> para remover.
-4. IMPORTANTE: NUNCA, SOB HIPÓTESE ALGUMA, PRONUNCIE AS TAGS XML EM VOZ ALTA. Elas devem ficar invisíveis no áudio.
+1. Cada memória DEVE conter apenas um fato atômico, simples e específico (ex: 'O usuário se chama José Gabriel', 'O usuário tem 19 anos', 'O usuário estuda ADS'). NUNCA agrupe múltiplos fatos no mesmo texto.
+2. Use <MEMORY category='...'>texto</MEMORY> para novos fatos que NÃO contradizem memórias antigas. NÃO atualize memórias antigas para concatenar novas informações complementares (ex: se já sabe o nome, e o usuário disser o curso, crie um novo fato com <MEMORY>, NÃO atualize o fato do nome).
+3. Use <UPDATE_MEMORY id='...' category='...'>texto</UPDATE_MEMORY> para atualizar um fato APENAS quando a informação antiga daquele ID específico for diretamente contradita/substituída por uma nova (ex: mudou de idade ou de cidade).
+4. Use <DELETE_MEMORY id='...' /> para remover.
+5. IMPORTANTE: NUNCA, SOB HIPÓTESE ALGUMA, PRONUNCIE AS TAGS XML EM VOZ ALTA. Elas devem ficar invisíveis no áudio.
 ` : "";
 
     const selectedPersonalityProfile = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
     const fullInstructionStr = `${selectedPersonalityProfile.prompt}${dnaContext}${memoryRules}\n\nResponda sempre de forma natural e conversacional.`;
+
+    const liveModelString = LIVE_MODEL_MAP[liveModel] || 'models/gemini-2.5-flash-native-audio-preview-12-2025';
 
     const session = new GeminiLiveSession({
       onStatusChange: (status) => setLiveStatus(status),
       onStream: (stream) => setLiveVideoStream(stream),
       onError: (err) => { alert(err); handleLiveStop(); },
       onTranscript: (role, text) => {
-        setLiveTranscript(prev => [...prev, { role, text }]);
-        
+        setLiveTranscript(prev => {
+          if (prev.length > 0 && prev[prev.length - 1].role === role) {
+            const last = prev[prev.length - 1];
+            return [
+              ...prev.slice(0, -1),
+              { role, text: last.text + text }
+            ];
+          } else {
+            return [...prev, { role, text }];
+          }
+        });
+
         lastLiveActivityRef.current = Date.now();
-        
+
         if (role === 'user') {
           resetProactivityState("Fala do usuário");
         } else if (role === 'ai') {
@@ -1116,15 +1324,19 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             setIsLiveProactive(false);
           }
         }
+        let liveUpdates: PendingMemoryUpdate[] = [];
         if (role === 'ai' && useMemory) {
-          parseMemoryTags(text);
+          parseMemoryTags(text, true, (upds) => {
+            liveUpdates = upds;
+          });
         }
 
         setChats(prev => prev.map(c => {
           if (c.id === activeChatId) {
             const newMessage: Message = {
               id: Date.now() + Math.random().toString(),
-              role, text, duration: 0
+              role, text, duration: 0,
+              pendingMemoryUpdates: liveUpdates.length > 0 ? liveUpdates : undefined
             };
             return { ...c, messages: [...c.messages, newMessage] };
           }
@@ -1152,23 +1364,51 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           activeSourcesRef.current.delete(source);
           setIsLiveSpeaking(activeSourcesRef.current.size > 0);
         };
-        
+
         activeSourcesRef.current.add(source);
         setIsLiveSpeaking(true);
-        
+
         lastLiveActivityRef.current = Date.now();
         if (!proactiveTimerActiveRef.current && proactiveIdleCount !== 0) {
-           resetProactivityState("Áudio reativo da IA");
+          resetProactivityState("Áudio reativo da IA");
         }
 
         source.start(startTime);
         nextAudioTimeRef.current = startTime + buffer.duration;
       }
-    }, fullInstructionStr, liveVoice);
+    }, fullInstructionStr, liveVoice, paidApiKey || defaultApiKey, liveModelString);
 
     liveSessionRef.current = session;
+    session.setMicEnabled(isLiveMicEnabled);
     await session.start();
-  }, [activeChatId, personalities, selectedPersonalityId, liveVoice, memoryFacts, handleLiveStop, parseMemoryTags, proactiveIdleCount, resetProactivityState]);
+  }, [activeChatId, personalities, selectedPersonalityId, liveVoice, memoryFacts, handleLiveStop, parseMemoryTags, proactiveIdleCount, resetProactivityState, liveModel, paidApiKey, defaultApiKey, isLiveMicEnabled]);
+
+  const handleSetLiveModel = useCallback((newModel: string) => {
+    setLiveModel(newModel);
+    localStorage.setItem('nemon_live_model', newModel);
+    if (isLiveActive) {
+      handleLiveStop();
+      setTimeout(() => {
+        confirmLiveStart(useMemoryLive);
+      }, 300);
+    }
+  }, [isLiveActive, useMemoryLive, confirmLiveStart, handleLiveStop]);
+
+  const handleToggleLiveMic = useCallback(() => {
+    setIsLiveMicEnabled(prev => {
+      const next = !prev;
+      localStorage.setItem('nemon_live_mic_enabled', next.toString());
+      if (liveSessionRef.current) {
+        liveSessionRef.current.setMicEnabled(next);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleOpenSettings = useCallback((tab: 'geral' | 'modelos' | 'api' | 'personalidades' | 'dna' = 'geral') => {
+    setActiveTab('settings');
+    setSettingsTab(tab);
+  }, []);
 
   const handleToggleCamera = useCallback(async () => {
     if (!liveSessionRef.current) return;
@@ -1207,7 +1447,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     });
     activeSourcesRef.current.clear();
     setIsLiveSpeaking(false);
-    
+
     // Resetar o cronograma de áudio para o tempo atual
     if (liveAudioContextRef.current) {
       nextAudioTimeRef.current = liveAudioContextRef.current.currentTime;
@@ -1222,6 +1462,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (isLiveActive && liveSessionRef.current) {
       resetProactivityState("Chat manual (Live)");
       liveSessionRef.current.sendText(text);
+      setLiveTranscript(prev => [...prev, { role: 'user', text }]);
       return;
     }
 
@@ -1236,7 +1477,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
     const newUserMsg: Message = { id: Date.now().toString(), role: 'user', text, files };
     setChats(prev => prev.map(c => c.id === targetId ? { ...c, messages: [...c.messages, newUserMsg] } : c));
-    
+
     // apiHistory construction
     const currentChat = targetId === activeChatId ? activeChat : { messages: [] };
     const apiHistory = (currentChat?.messages || []).map(m => ({
@@ -1247,11 +1488,78 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     executeAIRequest(targetId, text, files, apiHistory, isFirst);
   }, [activeChatId, activeChat, executeAIRequest, isLiveActive, resetProactivityState]);
 
+  const handleResolveMemoryUpdate = useCallback((messageId: string, updateId: string, action: 'accepted' | 'ignored') => {
+    let updateToApply: any = null;
+    let originalText = '';
+    let originalThoughts = '';
+    const chat = chats.find(c => c.id === activeChatId);
+    let msgIndex = -1;
+
+    if (chat) {
+      msgIndex = chat.messages.findIndex(m => m.id === messageId);
+      const msg = msgIndex !== -1 ? chat.messages[msgIndex] : null;
+      if (msg) {
+        originalText = msg.text || '';
+        originalThoughts = msg.thoughts || '';
+        if (msg.pendingMemoryUpdates) {
+          updateToApply = msg.pendingMemoryUpdates.find(upd => upd.id === updateId);
+        }
+      }
+    }
+
+    if (msgIndex === -1 || !chat) return;
+
+    // 1. Mark as resolved in the state
+    setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === activeChatId ? {
+      ...c,
+      messages: c.messages.map((m: Message) => m.id === messageId ? {
+        ...m,
+        pendingMemoryUpdates: m.pendingMemoryUpdates?.map(upd => 
+          upd.id === updateId ? { ...upd, resolved: action } : upd
+        )
+      } : m)
+    } : c));
+
+    // 2. Persist in Firestore if accepted
+    if (action === 'accepted' && updateToApply) {
+      const newMemories = memoryFacts.map((m: MemoryFact) => 
+        m.id === updateId ? { ...m, text: updateToApply.newText, category: updateToApply.category, timestamp: Date.now() } : m
+      );
+      setMemoryFacts(newMemories);
+      saveMemoryFactsToFirestore(newMemories);
+    }
+
+    // 3. Build API history up to the current AI message
+    const historyBefore = chat.messages.slice(0, msgIndex + 1);
+    const apiHistory = historyBefore.map(m => ({
+      role: m.role === 'ai' ? 'model' : 'user',
+      parts: [...(m.files?.map(f => ({ inlineData: { mimeType: f.mimeType, data: f.data } })) || []), { text: m.text }]
+    }));
+
+    // 4. Construct virtual user response
+    const virtualUserText = action === 'accepted'
+      ? "[SISTEMA: O usuário confirmou a atualização do DNA de memória. Continue sua resposta anterior normalmente a partir desse ponto. NÃO tente atualizar, criar ou apagar qualquer memória, e NÃO gere nenhuma tag de memória (<MEMORY>, <UPDATE_MEMORY>, <DELETE_MEMORY>) para este turno de continuação.]"
+      : "[SISTEMA: O usuário recusou a atualização de memória proposta. Mantenha a memória exatamente como estava antes (sem fazer alterações) e continue sua resposta anterior normalmente a partir desse ponto. NÃO registre fatos sobre esta recusa no DNA, e NÃO gere nenhuma tag de memória (<MEMORY>, <UPDATE_MEMORY>, <DELETE_MEMORY>) para este turno.]";
+    
+    // 5. Execute request behind the scenes, appending to the same AI message
+    executeAIRequest(
+      activeChatId,
+      virtualUserText,
+      [], // No files
+      apiHistory,
+      false, // isFirstMessage
+      messageId, // replaceId
+      true, // isAppending
+      originalText,
+      originalThoughts
+    );
+  }, [activeChatId, chats, memoryFacts, saveMemoryFactsToFirestore, executeAIRequest]);
+
   const handleScroll = useCallback(() => {
     if (chatWindowRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatWindowRef.current;
       setShowScrollButton(scrollHeight - scrollTop - clientHeight > 300);
-      
+
       if (scrollTop < 50 && visibleMessagesCount < messages.length && !isLazyLoadingRef.current) {
         isLazyLoadingRef.current = true;
         previousScrollHeightRef.current = scrollHeight;
@@ -1268,11 +1576,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (isLazyLoadingRef.current && chatWindowRef.current && previousScrollHeightRef.current > 0) {
       const scrollContainer = chatWindowRef.current;
       const heightDiff = scrollContainer.scrollHeight - previousScrollHeightRef.current;
-      
+
       if (heightDiff > 0) {
         scrollContainer.scrollTop += heightDiff;
       }
-      
+
       isLazyLoadingRef.current = false;
       previousScrollHeightRef.current = 0;
     }
@@ -1287,7 +1595,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       if (chat.id === activeChatId) {
         return {
           ...chat,
-          messages: chat.messages.map(m => 
+          messages: chat.messages.map(m =>
             m.id === msgId ? { ...m, isVerifying: false } : m
           )
         };
@@ -1298,7 +1606,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
   const handleFactCheck = useCallback(async (msgId: string) => {
     if (!activeChat) return;
-    
+
     // Abort existing fact check for this message if any
     if (factCheckControllersRef.current[msgId]) {
       factCheckControllersRef.current[msgId].abort();
@@ -1312,7 +1620,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       if (chat.id === activeChatId) {
         return {
           ...chat,
-          messages: chat.messages.map(m => 
+          messages: chat.messages.map(m =>
             m.id === msgId ? { ...m, isVerifying: true } : m
           )
         };
@@ -1325,14 +1633,14 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     try {
       const results = await performFactCheck(msg.text, controller.signal);
-      
+
       delete factCheckControllersRef.current[msgId];
 
       setChats(prev => prev.map(chat => {
         if (chat.id === activeChatId) {
           return {
             ...chat,
-            messages: chat.messages.map(m => 
+            messages: chat.messages.map(m =>
               m.id === msgId ? { ...m, factCheckResults: results, isVerifying: false } : m
             )
           };
@@ -1345,14 +1653,14 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       } else {
         console.error("Fact check failed:", e);
       }
-      
+
       delete factCheckControllersRef.current[msgId];
 
       setChats(prev => prev.map(chat => {
         if (chat.id === activeChatId) {
           return {
             ...chat,
-            messages: chat.messages.map(m => 
+            messages: chat.messages.map(m =>
               m.id === msgId ? { ...m, isVerifying: false } : m
             )
           };
@@ -1362,8 +1670,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }
   }, [activeChat, activeChatId]);
 
-  const handleDeleteChat = useCallback((e: React.MouseEvent, id: string) => { 
-    e.stopPropagation(); 
+  const handleDeleteChat = useCallback((e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     if (confirm("Deseja excluir esta conversa para sempre?")) {
       setChats(p => p.filter(c => c.id !== id));
       if (activeChatId === id) setActiveChatId('');
@@ -1377,7 +1685,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
   const handleRenameChat = useCallback((id: string) => {
     if (editTitle.trim()) {
-      setChats(p => p.map(c => c.id === id ? {...c, title: editTitle.trim()} : c));
+      setChats(p => p.map(c => c.id === id ? { ...c, title: editTitle.trim() } : c));
     }
     setEditingChatId(null);
   }, [editTitle]);
@@ -1390,9 +1698,6 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   const handleRestoreChat = useCallback((chatId: string) => {
     setChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, archived: false } : chat));
     setActiveChatId(chatId);
-    
-    // Save to server
-    fetch(`/api/history/${chatId}/archive`, { method: 'POST' });
   }, []);
 
   const sensors = useSensors(
@@ -1419,7 +1724,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveDragId(null);
-    
+
     if (over && active.id !== over.id) {
       setChats((items) => {
         const oldIndex = items.findIndex((i) => i.id === active.id);
@@ -1442,7 +1747,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       if (c.id === activeChatId) {
         const updatedMsgs = [...c.messages];
         updatedMsgs[msgIndex] = { ...updatedMsgs[msgIndex], text: newText };
-        if (updatedMsgs[msgIndex+1]?.role === 'ai') updatedMsgs[msgIndex+1] = { ...updatedMsgs[msgIndex+1], text: '', thoughts: '' };
+        if (updatedMsgs[msgIndex + 1]?.role === 'ai') updatedMsgs[msgIndex + 1] = { ...updatedMsgs[msgIndex + 1], text: '', thoughts: '' };
         return { ...c, messages: updatedMsgs };
       }
       return c;
@@ -1452,7 +1757,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       role: m.role === 'ai' ? 'model' : 'user',
       parts: [...(m.files?.map(f => ({ inlineData: { mimeType: f.mimeType, data: f.data } })) || []), { text: m.text }]
     }));
-    executeAIRequest(activeChatId, newText, chat.messages[msgIndex].files || [], apiHistory, false, chat.messages[msgIndex+1]?.id);
+    executeAIRequest(activeChatId, newText, chat.messages[msgIndex].files || [], apiHistory, false, chat.messages[msgIndex + 1]?.id);
   }, [activeChatId, chats, editingMsgText, isLoading, executeAIRequest]);
 
   const handleRegenerate = useCallback((msgId: string) => {
@@ -1461,9 +1766,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     if (!chat) return;
     const idx = chat.messages.findIndex(m => m.id === msgId);
     if (idx <= 0) return;
-    const userMsg = chat.messages[idx-1];
+    const userMsg = chat.messages[idx - 1];
     setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: c.messages.map(m => m.id === msgId ? { ...m, text: '', thoughts: '' } : m) } : c));
-    const historyBefore = chat.messages.slice(0, idx-1);
+    const historyBefore = chat.messages.slice(0, idx - 1);
     const apiHistory = historyBefore.map(m => ({
       role: m.role === 'ai' ? 'model' : 'user',
       parts: [...(m.files?.map(f => ({ inlineData: { mimeType: f.mimeType, data: f.data } })) || []), { text: m.text }]
@@ -1477,11 +1782,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     // Verificar se a mensagem está fora do alcance da renderização (Lazy Loading)
     const itemsFromEnd = messages.length - msgIndex;
-    
+
     if (itemsFromEnd > visibleMessagesCount) {
       // Expandir a contagem de mensagens visíveis para incluir o alvo
       setVisibleMessagesCount(itemsFromEnd + 10);
-      
+
       // Pequeno delay para garantir que o React renderizou o novo elemento no DOM
       setTimeout(() => {
         const el = document.getElementById(`msg-${id}`);
@@ -1502,7 +1807,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
   // Intersection Observer for Message Timeline sync
   useEffect(() => {
-    if (!activeChatId || isLiveActive) return;
+    if (!activeChatId || isLiveActive || !chatWindowRef.current) return;
 
     const options = {
       root: chatWindowRef.current,
@@ -1524,42 +1829,68 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     elements.forEach(el => observer.observe(el));
 
     return () => observer.disconnect();
-  }, [activeChatId, messages, visibleMessagesCount, isLiveActive]);
+  }, [activeChatId, messages, visibleMessagesCount, isLiveActive, activeTab, isInitialLoading]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#09090b]">
+        <div className="w-10 h-10 rounded-full border-4 border-zinc-700/30 border-t-zinc-500 animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden text-[var(--text-primary)] relative bg-[var(--bg-main)]">
       <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'} flex flex-col glass-sidebar shadow-2xl`}>
         <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 lg:hidden">
           <div className="flex items-center gap-2">
-            <Bot className="w-6 h-6 text-blue-400" />
-            <span className="font-bold text-white tracking-tighter">Gemoro</span>
+            <NemonIcon size={24} />
+            <span className="font-bold text-[var(--text-bold)] tracking-tighter">Nemon</span>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition"><X className="w-5 h-5" /></button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setIsGlobalSearchOpen(true)} 
+              className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              title="Pesquisar"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setIsSidebarOpen(false)} 
+              className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 flex items-center justify-between text-[var(--text-secondary)] mb-4 hidden lg:flex">
-          <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-white/5 rounded-full transition hover:rotate-90 transition-transform duration-300"><Menu className="w-5 h-5" /></button>
-          <button className="p-2 hover:bg-white/5 rounded-full transition ml-auto"><Search className="w-5 h-5" /></button>
+          <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition hover:rotate-90 transition-transform duration-300 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Menu className="w-5 h-5" /></button>
+          <button onClick={() => setIsGlobalSearchOpen(true)} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition ml-auto text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Search className="w-5 h-5" /></button>
         </div>
 
         <div className="px-4 mb-8">
-          <button 
-            onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); setActiveTab('chat'); }} 
-            className="flex items-center gap-3 px-4 py-3 w-full rounded-full hover:bg-white/5 transition text-[var(--text-primary)] font-medium"
+          <button
+            onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); setActiveTab('chat'); }}
+            className="flex items-center gap-3 px-4 py-3 w-full rounded-full hover:bg-[var(--bg-chat-hover)] transition text-[var(--text-primary)] font-medium"
           >
             <SquarePen className="w-5 h-5 opacity-70" />
             <span>Nova conversa</span>
           </button>
-          
-          <button 
-            onClick={() => setIsArchiveExpanded(!isArchiveExpanded)} 
-            className={`flex items-center gap-3 px-4 py-2.5 mt-2 w-full rounded-full transition text-sm font-medium border border-transparent ${isArchiveExpanded ? 'bg-white/5 text-[var(--text-primary)] border-white/5' : 'hover:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+
+          <button
+            onClick={() => setIsArchiveExpanded(!isArchiveExpanded)}
+            className={`flex items-center gap-3 px-4 py-2.5 mt-2 w-full rounded-full transition text-sm font-medium border border-transparent ${isArchiveExpanded ? 'bg-[var(--bg-chat-active)] text-[var(--text-primary)] border-[var(--border-light)]' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
           >
-            <Archive className={`w-4 h-4 transition-transform duration-300 ${isArchiveExpanded ? 'text-blue-400' : 'opacity-50'}`} />
+            <Archive className={`w-4 h-4 transition-transform duration-300 ${isArchiveExpanded ? '' : 'opacity-50'}`} style={isArchiveExpanded ? { color: 'var(--accent-text)' } : {}} />
             <span>Arquivadas</span>
             <div className="ml-auto flex items-center gap-2">
               {chats.filter(c => c.archived).length > 0 && (
-                <span className="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md text-[9px] font-bold">
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold" style={{ background: 'var(--accent-bg)', color: 'var(--accent-text)' }}>
                   {chats.filter(c => c.archived).length}
                 </span>
               )}
@@ -1569,27 +1900,30 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
           {/* Drawer de Arquivadas */}
           {isArchiveExpanded && (
-            <div className="mt-1 ml-4 border-l border-white/5 pl-2 space-y-1 animate-in slide-in-from-top-2 duration-300">
+            <div className="mt-1 ml-4 border-l border-[var(--border-light)] pl-2 space-y-1 animate-in slide-in-from-top-2 duration-300">
               {chats.filter(c => c.archived).length === 0 ? (
                 <div className="text-[10px] text-[var(--text-secondary)] opacity-40 py-2 px-4 italic">Sem arquivados</div>
               ) : (
                 chats.filter(c => c.archived).map(chat => (
-                  <div 
-                    key={chat.id} 
+                  <div
+                    key={chat.id}
                     onClick={() => { setActiveChatId(chat.id); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
-                    className={`group/arch flex items-center gap-2 py-1.5 px-3 rounded-xl cursor-pointer hover:bg-white/5 transition text-[var(--text-secondary)] hover:text-white ${activeChatId === chat.id ? 'bg-white/5 text-white' : ''}`}
+                    className={`group/arch flex items-center gap-2 py-1.5 px-3 rounded-xl cursor-pointer hover:bg-[var(--bg-chat-hover)] transition text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${activeChatId === chat.id ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)]' : ''}`}
                   >
                     <MessageSquare className="w-3.5 h-3.5 opacity-40 group-hover/arch:opacity-100 transition-opacity" />
                     <span className="text-xs truncate flex-1">{chat.title}</span>
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); handleRestoreChat(chat.id); }}
-                      className="opacity-0 group-hover/arch:opacity-100 p-1 hover:bg-blue-500/20 rounded-md transition text-blue-400"
+                      className="opacity-0 group-hover/arch:opacity-100 p-1 rounded-md transition"
+                      style={{ color: 'var(--accent-text)' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-bg)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = ''}
                       title="Restaurar"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); if(confirm('Excluir permanentemente?')) handleDeleteChat(e, chat.id); }}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (confirm('Excluir permanentemente?')) handleDeleteChat(e, chat.id); }}
                       className="opacity-0 group-hover/arch:opacity-100 p-1 hover:bg-red-500/20 rounded-md transition text-red-400"
                       title="Excluir"
                     >
@@ -1605,29 +1939,30 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
           <div className="flex items-center justify-between px-4 mb-4 mt-6">
             <div className="text-[14px] font-medium text-[var(--text-primary)]">Conversas</div>
-            <button 
+            <button
               onClick={() => setIsOrderLocked(!isOrderLocked)}
-              className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-[var(--text-secondary)] opacity-40 hover:opacity-100 hover:bg-white/5' : 'text-blue-400 bg-blue-500/10'}`}
+              className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-[var(--text-secondary)] opacity-40 hover:opacity-100 hover:bg-[var(--bg-chat-hover)]' : ''}`}
+              style={!isOrderLocked ? { color: 'var(--accent-text)', background: 'var(--accent-bg)' } : {}}
               title={isOrderLocked ? "Destravar reordenação" : "Travar reordenação"}
             >
               {isOrderLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
             </button>
           </div>
-          
+
           <div className="space-y-1">
-            <DndContext 
+            <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               modifiers={[restrictToVerticalAxis]}
             >
-              <SortableContext 
+              <SortableContext
                 items={chats.filter(c => !c.archived).map(c => c.id)}
                 strategy={verticalListSortingStrategy}
               >
                 {chats.filter(c => !c.archived).map(chat => (
-                  <SortableChatItem 
+                  <SortableChatItem
                     key={chat.id}
                     chat={chat}
                     activeChatId={activeChatId}
@@ -1662,23 +1997,53 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
         </div>
 
-        <div className="mt-auto p-4 border-t border-[var(--border-light)] relative">
-          <button 
-            onClick={() => setShowSettingsModal(true)} 
-            className={`flex items-center gap-3 px-4 py-3 w-full rounded-full transition font-medium hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]`}
+        <div className="mt-auto p-4 border-t border-[var(--border-light)] relative flex flex-col gap-2">
+          {user && (
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-[var(--bg-chat-hover)]/30 border border-[var(--border-light)] group">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt={user.displayName || "Avatar"} className="w-8 h-8 rounded-full border border-[var(--border-light)]" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[var(--accent-bg)] text-[var(--accent-text)] flex items-center justify-center font-bold text-xs">
+                  {user.displayName?.charAt(0) || "U"}
+                </div>
+              )}
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-xs font-semibold text-[var(--text-bold)] truncate">{user.displayName}</div>
+                <div className="text-[10px] text-[var(--text-secondary)] truncate">{user.email}</div>
+              </div>
+              <button 
+                onClick={() => signOut(auth)} 
+                className="p-1.5 hover:bg-red-500/10 hover:text-red-400 rounded-lg text-[var(--text-secondary)] transition-all cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100"
+                title="Sair"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              setActiveTab('settings');
+              setSettingsTab('geral');
+              if (window.innerWidth < 768) setIsSidebarOpen(false);
+            }}
+            className={`flex items-center gap-3 px-4 py-3 w-full rounded-full transition font-medium transition-all duration-300 ${activeTab === 'settings' ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] shadow-lg shadow-black/10' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]'}`}
           >
-            <Settings className={`w-5 h-5 transition-transform duration-300 opacity-70`} /> 
+            <Settings className={`w-5 h-5 transition-transform duration-300 ${activeTab === 'settings' ? 'rotate-90 opacity-100' : 'opacity-70'}`} style={activeTab === 'settings' ? { color: 'var(--accent-text)' } : {}} />
             <span className="text-[14px]">Configurações</span>
           </button>
-          
         </div>
       </aside>
 
       <main className="main-content flex flex-col h-full w-full bg-[var(--bg-main)]">
+<<<<<<< HEAD
         <header className="p-4 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
+=======
+        <header className="py-6 flex justify-between items-center px-4 md:px-8 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
           <div className="flex-1 flex items-center gap-4">
             {!isSidebarOpen && (
-              <button 
+              <button
                 onClick={() => setIsSidebarOpen(true)}
                 className="p-2.5 hover:bg-[var(--bg-chat-hover)] rounded-xl transition-all hover:scale-110 active:scale-90"
               >
@@ -1687,6 +2052,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             )}
           </div>
 
+<<<<<<< HEAD
           {/* Personality & Font Size Selector */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3">
             {/* Personality Selector */}
@@ -1694,10 +2060,36 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               <button 
                 onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
                 className="flex items-center gap-2.5 px-5 py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
+=======
+          {/* Centered Header Controls Wrapper */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[45] flex items-center gap-2 sm:gap-4">
+            {/* Left Side: Files Button */}
+            <div className="w-20 sm:w-24 flex justify-end">
+              {activeChatId && (
+                <button
+                  onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
+                  className={`flex items-center justify-center rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 w-9 h-9 ${activeTab === 'files'
+                      ? 'text-white shadow-lg'
+                      : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border-[var(--border-light)] hover:border-[var(--glow-active)]'
+                    }`}
+                  style={activeTab === 'files' ? { background: 'var(--accent)', borderColor: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' } : {}}
+                  title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
+                >
+                  <Files className={`w-4 h-4 ${activeTab === 'files' ? 'text-white' : ''}`} style={activeTab !== 'files' ? { color: 'var(--accent-text)' } : {}} />
+                </button>
+              )}
+            </div>
+
+            {/* Centered Personality Selector (the base) */}
+            <div className="relative" ref={personalityRef}>
+              <button
+                onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
+                className="flex items-center gap-1.5 sm:gap-2.5 px-3 py-1.5 sm:px-5 sm:py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[120px] sm:min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
               >
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                  <span className="text-xs font-bold tracking-tight text-[var(--text-primary)] truncate">
+                <div className="flex items-center gap-1.5 sm:gap-2 overflow-hidden">
+                  <User className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-text)' }} />
+                  <span className="text-xs font-bold tracking-tight text-[var(--text-primary)] truncate max-w-[70px] sm:max-w-none">
                     {personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
                   </span>
                 </div>
@@ -1706,25 +2098,32 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
               {showPersonalitySelector && (
                 <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl py-2 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+<<<<<<< HEAD
                   <button 
+=======
+                  <button
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
                     onClick={() => { setSelectedPersonalityId('default'); setShowPersonalitySelector(false); }}
-                    className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'bg-blue-500/10 text-blue-400 font-bold' : 'text-[var(--text-secondary)]'}`}
+                    className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
+                    style={selectedPersonalityId === 'default' ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                   >
                     <User className="w-3.5 h-3.5" /> Normal (Padrão)
                   </button>
                   {personalities.map(p => (
-                    <button 
+                    <button
                       key={p.id}
                       onClick={() => { setSelectedPersonalityId(p.id); setShowPersonalitySelector(false); }}
-                      className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'bg-blue-500/10 text-blue-400 font-bold' : 'text-[var(--text-secondary)]'}`}
+                      className={`w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
+                      style={selectedPersonalityId === p.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                     >
                       <User className="w-3.5 h-3.5" /> {p.name}
                     </button>
                   ))}
                   <div className="h-px bg-[var(--border-light)] my-2"></div>
-                  <button 
-                    onClick={() => { setShowPersonalitiesModal(true); setShowPersonalitySelector(false); }}
-                    className="w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 text-blue-400 font-medium"
+                  <button
+                    onClick={() => { setActiveTab('settings'); setSettingsTab('personalidades'); setShowPersonalitySelector(false); }}
+                    className="w-full text-left px-5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 font-medium"
+                    style={{ color: 'var(--accent-text)' }}
                   >
                     <Settings className="w-3.5 h-3.5" /> Gerenciar Personalidades
                   </button>
@@ -1732,6 +2131,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               )}
             </div>
 
+<<<<<<< HEAD
             {/* Font Size Selector */}
             <div className="relative">
               <button 
@@ -1766,10 +2166,65 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                   </div>
                 </div>
               )}
+=======
+            {/* Right Side: Font Size Selector & Log Window Trigger */}
+            <div className="w-20 sm:w-24 flex justify-start items-center gap-1.5 sm:gap-3" ref={fontSizeRef}>
+              {/* Font Size Selector */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
+                  className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
+                  title="Tamanho da Fonte"
+                >
+                  <Type className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
+                </button>
+
+                {showFontSizeSelector && (
+                  <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl p-4 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
+                    <div className="text-[9px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest border-b border-[var(--border-light)] pb-1.5">
+                      Fonte do Chat
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-semibold text-[var(--text-secondary)]">
+                      <span>Tamanho</span>
+                      <span className="px-2 py-0.5 rounded-md font-mono" style={{ color: 'var(--accent-text)', background: 'var(--accent-bg)' }}>{chatFontSize}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="12"
+                      max="24"
+                      step="0.5"
+                      value={chatFontSize}
+                      onChange={(e) => setChatFontSize(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-[var(--border-light)] rounded-lg appearance-none cursor-pointer focus:outline-none"
+                      style={{ accentColor: 'var(--accent)' }}
+                    />
+                    <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] font-medium">
+                      <span>12px</span>
+                      <span>24px</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Log Window Trigger - Mobile only */}
+              <button
+                onClick={() => setIsLogOpen(!isLogOpen)}
+                className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9 relative sm:hidden"
+                title="Logs & Diagnósticos"
+              >
+                <Code className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
+                {logsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full h-4 w-4 flex items-center justify-center border border-zinc-950 animate-pulse">
+                    {logsCount}
+                  </span>
+                )}
+              </button>
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
             </div>
           </div>
 
           <div className="flex-1 flex justify-end items-center gap-2">
+<<<<<<< HEAD
             {activeChatId && (
               <button 
                 onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
@@ -1797,13 +2252,17 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 <div className="w-1 h-3 bg-green-500 rounded-full"></div>
               </div>
             </button>
+=======
+            {/* Vazio ou outros controles de topo */}
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
           </div>
         </header>
 
-        <ChatRuler margin={chatMargin} onMarginChange={setChatMargin} />
+        {activeTab === 'chat' && <ChatRuler margin={chatMargin} onMarginChange={setChatMargin} />}
 
         {/* Removida a fita de LED do topo */}
 
+<<<<<<< HEAD
         {showAnalytics && (
           <div className="absolute top-20 right-8 glass-modal rounded-3xl p-6 w-96 shadow-2xl z-[70] animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex justify-between items-center mb-6">
@@ -1846,14 +2305,73 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
         )}
 
+=======
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {activeTab === 'files' && activeChatId ? (
             <ChatFileHub messages={messages} onClose={() => setActiveTab('chat')} />
+          ) : activeTab === 'settings' ? (
+            <SettingsModal
+              inline={true}
+              initialTab={settingsTab}
+              onClose={() => setActiveTab('chat')}
+              theme={theme}
+              onSetTheme={setTheme}
+              chatMargin={chatMargin}
+              onSetChatMargin={(m) => {
+                setChatMargin(m);
+                localStorage.setItem('nemon_chat_margin', m.toString());
+              }}
+              enabledModelIds={enabledModelIds}
+              onSetEnabledModelIds={setEnabledModelIds}
+              paidApiKey={paidApiKey}
+              onUpdatePaidApiKey={(key) => {
+                saveConfig({ paidApiKey: key });
+              }}
+              defaultApiKey={defaultApiKey}
+              onUpdateDefaultApiKey={(key) => {
+                saveConfig({ defaultApiKey: key });
+              }}
+              liveModel={liveModel}
+              onSetLiveModel={handleSetLiveModel}
+              personalities={personalities}
+              onSavePersonality={(p) => {
+                const exists = personalities.find(item => item.id === p.id);
+                if (exists) {
+                  setPersonalities((prev: Personality[]) => prev.map((item: Personality) => item.id === p.id ? p : item));
+                } else {
+                  setPersonalities((prev: Personality[]) => [...prev, p]);
+                }
+              }}
+              onDeletePersonality={(id) => {
+                setPersonalities((prev: Personality[]) => prev.filter((p: Personality) => p.id !== id));
+                if (selectedPersonalityId === id) setSelectedPersonalityId('default');
+              }}
+              memoryFacts={memoryFacts}
+              onDeleteMemoryFact={(id) => {
+                const next = memoryFacts.filter((m) => m.id !== id);
+                setMemoryFacts(next);
+                saveMemoryFactsToFirestore(next);
+              }}
+              onSaveMemoryFact={(fact) => {
+                let next;
+                if (fact.id) {
+                  next = memoryFacts.map(m => m.id === fact.id ? fact : m);
+                } else {
+                  next = [...memoryFacts, { ...fact, id: uuidv4(), timestamp: Date.now() }];
+                }
+                setMemoryFacts(next);
+                saveMemoryFactsToFirestore(next);
+              }}
+              onAutoCategorizeMemory={handleAutoCategorize}
+              isCategorizingMemory={isCategorizing}
+              categorizationProgress={categorizationProgress}
+            />
           ) : (
             <>
               <div className="flex-1 overflow-hidden flex flex-col relative">
-                {isLiveActive ? (
-                  <LiveView 
+                {isLiveActive && !isLiveDetached ? (
+                  <LiveView
                     status={liveStatus}
                     transcript={liveTranscript}
                     currentVoice={liveVoice}
@@ -1865,70 +2383,122 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onInterrupt={handleInterruptLive}
                     onVoiceChange={(v: string) => {
                       setLiveVoice(v);
-                      localStorage.setItem('gemoro_live_voice', v);
+                      localStorage.setItem('nemon_live_voice', v);
                       handleLiveStop();
                       setTimeout(handleLiveStart, 500);
                     }}
                     isProactiveEnabled={isLiveProactive}
                     onToggleProactive={() => setIsLiveProactive(!isLiveProactive)}
                     onClose={handleLiveStop}
+                    isDetached={false}
+                    onToggleDetach={() => setIsLiveDetached(true)}
+                    onSendText={(text) => {
+                      if (liveSessionRef.current) {
+                        liveSessionRef.current.sendText(text);
+                        setLiveTranscript(prev => [...prev, { role: 'user', text }]);
+                      }
+                    }}
+                    liveModel={liveModel}
+                    onSetLiveModel={handleSetLiveModel}
+                    isMicEnabled={isLiveMicEnabled}
+                    onToggleMic={handleToggleLiveMic}
                   />
                 ) : (
-                  <MessageList 
-                    messages={messages}
-                    margin={chatMargin}
-                    visibleMessagesCount={visibleMessagesCount}
-                    isInitialLoading={isInitialLoading}
-                    activeChatId={activeChatId}
-                    onScroll={handleScroll}
-                    chatWindowRef={chatWindowRef}
-                    isLoading={isLoading}
-                    onFactCheck={handleFactCheck}
-                    onCancelFactCheck={handleCancelFactCheck}
-                    editingMsgId={editingMsgId}
-                    editingMsgText={editingMsgText}
-                    copiedId={copiedId}
-                    expandedSourcesMsgId={expandedSourcesMsgId}
-                    imagenModel={imagenModel}
-                    onEditPrompt={(id, text) => { setEditingMsgId(id); setEditingMsgText(text); }}
-                    onSaveEdit={handleSaveEdit}
-                    onSetEditingMsgText={setEditingMsgText}
-                    onCancelEdit={() => setEditingMsgId(null)}
-                    onRegenerate={handleRegenerate}
-                    onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? {...c, messages: c.messages.filter((m: Message) => m.id !== id)} : c))}
-                    onCopy={(text, id) => { 
-                      let finalOutput = text;
-                      if (!id.endsWith('-md')) {
-                        // Strip Markdown for plain text copy
-                        finalOutput = text
-                          .replace(/^#+\s+/gm, '') // Headings
-                          .replace(/(\*\*|__)(.*?)\1/g, '$2') // Bold
-                          .replace(/(\*|_)(.*?)\1/g, '$2') // Italic
-                          .replace(/`{3,}/g, '') // Code blocks
-                          .replace(/`(.+?)`/g, '$1') // Inline code
-                          .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Links
-                          .replace(/^[*-]\s+/gm, ''); // List items
-                      }
-                      navigator.clipboard.writeText(finalOutput); 
-                      setCopiedId(id); 
-                      setTimeout(() => setCopiedId(null), 2000); 
-                    }}
-                    onToggleSources={setExpandedSourcesMsgId}
-                    onSelectionChange={(text, pos, msgId) => setSelectionData({ text, pos, messageId: msgId })}
-                  />
+                  <>
+                    <MessageList
+                      messages={messages}
+                      margin={chatMargin}
+                      visibleMessagesCount={visibleMessagesCount}
+                      isInitialLoading={isInitialLoading}
+                      activeChatId={activeChatId}
+                      onScroll={handleScroll}
+                      chatWindowRef={chatWindowRef}
+                      isLoading={isLoading}
+                      onFactCheck={handleFactCheck}
+                      onCancelFactCheck={handleCancelFactCheck}
+                      editingMsgId={editingMsgId}
+                      editingMsgText={editingMsgText}
+                      copiedId={copiedId}
+                      expandedSourcesMsgId={expandedSourcesMsgId}
+                      imagenModel={imagenModel}
+                      onEditPrompt={(id, text) => { setEditingMsgId(id); setEditingMsgText(text); }}
+                      onSaveEdit={handleSaveEdit}
+                      onSetEditingMsgText={setEditingMsgText}
+                      onCancelEdit={() => setEditingMsgId(null)}
+                      onRegenerate={handleRegenerate}
+                      onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? { ...c, messages: c.messages.filter((m: Message) => m.id !== id) } : c))}
+                      onCopy={(text, id) => {
+                        let finalOutput = text;
+                        if (!id.endsWith('-md')) {
+                          // Strip Markdown for plain text copy
+                          finalOutput = text
+                            .replace(/^#+\s+/gm, '') // Headings
+                            .replace(/(\*\*|__)(.*?)\1/g, '$2') // Bold
+                            .replace(/(\*|_)(.*?)\1/g, '$2') // Italic
+                            .replace(/`{3,}/g, '') // Code blocks
+                            .replace(/`(.+?)`/g, '$1') // Inline code
+                            .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Links
+                            .replace(/^[*-]\s+/gm, ''); // List items
+                        }
+                        navigator.clipboard.writeText(finalOutput);
+                        setCopiedId(id);
+                        setTimeout(() => setCopiedId(null), 2000);
+                      }}
+                      onToggleSources={setExpandedSourcesMsgId}
+                      onSelectionChange={(text, pos, msgId) => setSelectionData({ text, pos, messageId: msgId })}
+                      onResolveMemoryUpdate={handleResolveMemoryUpdate}
+                      hasFreeApiKey={!!defaultApiKey}
+                      onOpenSettings={handleOpenSettings}
+                    />
+
+                    {isLiveActive && isLiveDetached && (
+                      <LiveView
+                        status={liveStatus}
+                        transcript={liveTranscript}
+                        currentVoice={liveVoice}
+                        analyser={liveAnalyser}
+                        visionType={liveVisionType}
+                        videoStream={liveVideoStream}
+                        onToggleCamera={handleToggleCamera}
+                        onToggleScreen={handleToggleScreen}
+                        onInterrupt={handleInterruptLive}
+                        onVoiceChange={(v: string) => {
+                          setLiveVoice(v);
+                          localStorage.setItem('nemon_live_voice', v);
+                          handleLiveStop();
+                          setTimeout(handleLiveStart, 500);
+                        }}
+                        isProactiveEnabled={isLiveProactive}
+                        onToggleProactive={() => setIsLiveProactive(!isLiveProactive)}
+                        onClose={handleLiveStop}
+                        isDetached={true}
+                        onToggleDetach={() => setIsLiveDetached(false)}
+                        onSendText={(text) => {
+                          if (liveSessionRef.current) {
+                            liveSessionRef.current.sendText(text);
+                            setLiveTranscript(prev => [...prev, { role: 'user', text }]);
+                          }
+                        }}
+                        liveModel={liveModel}
+                        onSetLiveModel={handleSetLiveModel}
+                        isMicEnabled={isLiveMicEnabled}
+                        onToggleMic={handleToggleLiveMic}
+                      />
+                    )}
+                  </>
                 )}
-                
+
                 {activeChat && messages.length > 0 && !isLiveActive && (
-                  <MessageTimeline 
-                    messages={messages} 
-                    onJumpToMessage={handleJumpToMessage} 
+                  <MessageTimeline
+                    messages={messages}
+                    onJumpToMessage={handleJumpToMessage}
                     activeId={activeMessageId}
                   />
                 )}
               </div>
 
               {selectionData && (
-                <SelectionPopup 
+                <SelectionPopup
                   text={selectionData.text}
                   position={selectionData.pos}
                   theme={theme}
@@ -1939,17 +2509,19 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 />
               )}
 
-              <ChatInput 
+              <ChatInput
                 isLoading={isLoading}
                 isLiveSpeaking={isLiveSpeaking}
-                isLiveActive={isLiveActive}
+                isLiveActive={isLiveActive && !isLiveDetached}
+                liveModel={liveModel}
+                onSetLiveModel={handleSetLiveModel}
                 webSearchEnabled={webSearchEnabled}
                 thinkingEnabled={thinkingEnabled}
                 imageGenEnabled={imageGenEnabled}
                 model={model}
                 imagenModel={imagenModel}
                 aspectRatio={aspectRatio}
-                canSearch={model.includes('gemma') || model.includes('gemini-2')}
+                canSearch={MODEL_OPTIONS.find(m => m.id === model)?.hasSearch ?? false}
                 showScrollButton={showScrollButton}
                 margin={chatMargin}
                 personalityName={personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
@@ -1970,89 +2542,43 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           )}
         </div>
 
-        {showPersonalitiesModal && (
-          <PersonalitiesModal 
-            personalities={personalities}
-            onClose={() => setShowPersonalitiesModal(false)}
-            onSave={(p: Personality) => {
-              const exists = personalities.find(item => item.id === p.id);
-              if (exists) {
-                setPersonalities((prev: Personality[]) => prev.map((item: Personality) => item.id === p.id ? p : item));
-              } else {
-                setPersonalities((prev: Personality[]) => [...prev, p]);
-              }
-            }}
-            onDelete={(id: string) => {
-              setPersonalities((prev: Personality[]) => prev.filter((p: Personality) => p.id !== id));
-              if (selectedPersonalityId === id) setSelectedPersonalityId('default');
-            }}
-          />
-        )}
-
-
       </main>
 
-        {showDnaModal && (
-        <DnaModal 
-          memoryFacts={memoryFacts}
-          isCategorizing={isCategorizing}
-          progress={categorizationProgress}
-          onAutoCategorize={handleAutoCategorize}
-          onClose={() => setShowDnaModal(false)}
-          onDelete={(id) => {
-            const next = memoryFacts.filter((m) => m.id !== id);
-            setMemoryFacts(next);
-            fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
-          }}
-          onSave={(fact: MemoryFact) => {
-            let next;
-            if (fact.id) {
-              next = memoryFacts.map(m => m.id === fact.id ? fact : m);
-            } else {
-              next = [...memoryFacts, { ...fact, id: uuidv4(), timestamp: Date.now() }];
-            }
-            setMemoryFacts(next);
-            fetch('/api/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
-          }}
-        />
-      )}
-
       {showLiveSetupModal && (
-        <LiveSetupModal 
+        <LiveSetupModal
           onClose={() => setShowLiveSetupModal(false)}
           onConfirm={confirmLiveStart}
           isConnecting={liveStatus === 'connecting' && isLiveActive}
         />
       )}
 
-      {showSettingsModal && (
-        <SettingsModal 
-          onClose={() => setShowSettingsModal(false)}
-          theme={theme}
-          onSetTheme={setTheme}
-          chatMargin={chatMargin}
-          onSetChatMargin={(m) => {
-            setChatMargin(m);
-            localStorage.setItem('gemoro_chat_margin', m.toString());
+
+      {isGlobalSearchOpen && (
+        <GlobalSearchModal 
+          chats={chats}
+          onClose={() => setIsGlobalSearchOpen(false)}
+          onSelectChat={(chatId, msgId) => {
+            setActiveChatId(chatId);
+            setActiveTab('chat');
+            setIsGlobalSearchOpen(false);
+            if (window.innerWidth < 768) setIsSidebarOpen(false);
+            if (msgId) {
+              setTimeout(() => {
+                handleJumpToMessage(msgId);
+              }, 150);
+            }
           }}
-          enabledModelIds={enabledModelIds}
-          onSetEnabledModelIds={setEnabledModelIds}
-          paidApiKey={paidApiKey}
-          onUpdatePaidApiKey={(key) => {
-            setPaidApiKey(key);
-            saveConfig({ paidApiKey: key });
-          }}
-          onOpenPersonalities={() => setShowPersonalitiesModal(true)}
-          onOpenDna={() => setShowDnaModal(true)}
         />
       )}
+
+
       {isSidebarOpen && (
-        <div 
+        <div
           onClick={() => setIsSidebarOpen(false)}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] md:hidden animate-in fade-in duration-300"
         ></div>
       )}
-      <LogWindow />
+      <LogWindow dailyUsage={dailyUsage} isOpen={isLogOpen} setIsOpen={setIsLogOpen} />
     </div>
   );
 }

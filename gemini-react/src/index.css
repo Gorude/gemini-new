@@ -2,6 +2,7 @@
 @import "tailwindcss";
 
 :root[data-theme="escuro"] {
+<<<<<<< HEAD
   --bg-main: #090a0f;
   --bg-main-grad: linear-gradient(135deg, #090a0f 0%, #111319 100%);
   --bg-sidebar: rgba(18, 20, 26, 0.65); 
@@ -20,12 +21,33 @@
   --text-user-bold: #f8fafc;
   --text-secondary: #94a3b8;
   --text-placeholder: #64748b;
+=======
+  --bg-main: #0d0d0d;
+  --bg-main-grad: linear-gradient(135deg, #0d0d0d 0%, #161616 100%);
+  --bg-sidebar: rgba(18, 18, 18, 0.65); 
+  --bg-chat-hover: rgba(255, 255, 255, 0.05);
+  --bg-chat-active: rgba(255, 255, 255, 0.08);
+  --bg-nav-active: rgba(255, 255, 255, 0.12);
+  --text-nav-active: #ffffff;
+  --bg-user-bubble: linear-gradient(135deg, #333333 0%, #222222 100%);
+  --bg-input: rgba(20, 20, 20, 0.55);
+  --bg-modal: rgba(20, 20, 20, 0.85);
+  --border-main: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.05);
+  --text-primary: #cccccc;
+  --text-bold: #ffffff;
+  --text-user-regular: rgba(255, 255, 255, 0.85);
+  --text-user-bold: #ffffff;
+  --text-secondary: #999999;
+  --text-placeholder: #555555;
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   --code-bg: #0f1115;
   --inline-code-bg: #1e222b;
   --code-border: rgba(255, 255, 255, 0.06);
   --scrollbar-track: transparent;
   --scrollbar-thumb: rgba(255, 255, 255, 0.12);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+<<<<<<< HEAD
   --glass-bg: rgba(22, 24, 30, 0.65);
   --glass-border: rgba(255, 255, 255, 0.045);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
@@ -43,16 +65,54 @@
   --bg-nav-active: rgba(79, 70, 229, 0.12);
   --text-nav-active: #4f46e5;
   --bg-user-bubble: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+=======
+  --glass-bg: rgba(20, 20, 20, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.045);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --glow-primary: rgba(255, 255, 255, 0.05);
+  --glow-active: rgba(255, 255, 255, 0.2);
+  --message-bold-weight: 500;
+  --nemon-logo-fill: #ffffff;
+  --nemon-logo-stroke: #ffffff;
+  --accent: #27272a;
+  --accent-hover: #3f3f46;
+  --accent-text: #ffffff;
+  --accent-bg: rgba(255, 255, 255, 0.06);
+  --accent-bg-strong: rgba(255, 255, 255, 0.1);
+  --accent-border: rgba(255, 255, 255, 0.15);
+  --accent-glow: rgba(255, 255, 255, 0.08);
+  --bg-sidebar-solid: #121212;
+}
+
+:root[data-theme="claro"] {
+  --bg-main: #fcfcfc;
+  --bg-main-grad: linear-gradient(135deg, #fcfcfc 0%, #ebebeb 100%);
+  --bg-sidebar: rgba(255, 255, 255, 0.65);
+  --bg-chat-hover: rgba(0, 0, 0, 0.025);
+  --bg-chat-active: rgba(0, 0, 0, 0.05);
+  --bg-nav-active: rgba(0, 0, 0, 0.08);
+  --text-nav-active: #000000;
+  --bg-user-bubble: linear-gradient(135deg, #222222 0%, #111111 100%);
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   --bg-input: rgba(255, 255, 255, 0.7);
   --bg-modal: rgba(255, 255, 255, 0.9);
   --border-main: rgba(0, 0, 0, 0.08);
   --border-light: rgba(0, 0, 0, 0.04);
+<<<<<<< HEAD
   --text-primary: #1e293b;
   --text-bold: #0f172a;
   --text-user-regular: rgba(255, 255, 255, 0.92);
   --text-user-bold: #ffffff;
   --text-secondary: #475569;
   --text-placeholder: #94a3b8;
+=======
+  --text-primary: #1f1f1f;
+  --text-bold: #000000;
+  --text-user-regular: rgba(255, 255, 255, 0.92);
+  --text-user-bold: #ffffff;
+  --text-secondary: #5a5a5a;
+  --text-placeholder: #8a8a8a;
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   --code-bg: #f1f5f9;
   --inline-code-bg: #e2e8f0;
   --code-border: rgba(0, 0, 0, 0.06);
@@ -62,9 +122,25 @@
   --glass-bg: rgba(255, 255, 255, 0.6);
   --glass-border: rgba(0, 0, 0, 0.05);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
+<<<<<<< HEAD
   --glow-primary: rgba(79, 70, 229, 0.06);
   --glow-active: rgba(79, 70, 229, 0.25);
   --message-bold-weight: 600;
+=======
+  --glow-primary: rgba(0, 0, 0, 0.02);
+  --glow-active: rgba(0, 0, 0, 0.12);
+  --message-bold-weight: 600;
+  --nemon-logo-fill: #000000;
+  --nemon-logo-stroke: #000000;
+  --accent: #18181b;
+  --accent-hover: #27272a;
+  --accent-text: #18181b;
+  --accent-bg: rgba(0, 0, 0, 0.04);
+  --accent-bg-strong: rgba(0, 0, 0, 0.08);
+  --accent-border: rgba(0, 0, 0, 0.12);
+  --accent-glow: rgba(0, 0, 0, 0.05);
+  --bg-sidebar-solid: #ffffff;
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }
 
 :root[data-theme="areia"] {
@@ -98,6 +174,19 @@
   --glow-primary: rgba(217, 119, 6, 0.08);
   --glow-active: rgba(217, 119, 6, 0.3);
   --message-bold-weight: 600;
+<<<<<<< HEAD
+=======
+  --nemon-logo-fill: #b45309;
+  --nemon-logo-stroke: #b45309;
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-text: #d97706;
+  --accent-bg: rgba(180, 83, 9, 0.1);
+  --accent-bg-strong: rgba(180, 83, 9, 0.15);
+  --accent-border: rgba(180, 83, 9, 0.3);
+  --accent-glow: rgba(180, 83, 9, 0.25);
+  --bg-sidebar-solid: #ebdcc9;
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }
 
 :root[data-theme="galaxia"] {
@@ -131,6 +220,19 @@
   --glow-primary: rgba(217, 70, 239, 0.15);
   --glow-active: rgba(217, 70, 239, 0.45);
   --message-bold-weight: 500;
+<<<<<<< HEAD
+=======
+  --nemon-logo-fill: #ec4899;
+  --nemon-logo-stroke: #ec4899;
+  --accent: #a855f7;
+  --accent-hover: #9333ea;
+  --accent-text: #c084fc;
+  --accent-bg: rgba(168, 85, 247, 0.12);
+  --accent-bg-strong: rgba(168, 85, 247, 0.18);
+  --accent-border: rgba(168, 85, 247, 0.3);
+  --accent-glow: rgba(168, 85, 247, 0.3);
+  --bg-sidebar-solid: #12102a;
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }
 
 body { 
@@ -368,7 +470,11 @@ body {
   box-shadow: 0 4px 15px rgba(0,0,0,0.05);
   transition: background-color 0.3s ease; 
 }
+<<<<<<< HEAD
 .gemini-gradient { background: linear-gradient(70deg, #4285f4, #9b72cb, #d96570); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+=======
+.gemini-gradient { background: linear-gradient(70deg, #71717a, #a1a1aa, #f4f4f5); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 .shimmer-line { height: 15px; background: linear-gradient(90deg, var(--bg-sidebar) 25%, var(--bg-chat-hover) 50%, var(--bg-sidebar) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite linear; border-radius: 4px; margin-bottom: 10px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
@@ -407,11 +513,11 @@ body {
 
 .aura-loader {
   background: linear-gradient(90deg, 
-    rgba(30, 31, 32, 0) 0%, 
-    rgba(155, 114, 203, 0.5) 25%, 
-    rgba(66, 133, 244, 0.7) 50%, 
-    rgba(155, 114, 203, 0.5) 75%, 
-    rgba(30, 31, 32, 0) 100%
+    rgba(128, 128, 128, 0) 0%, 
+    rgba(128, 128, 128, 0.25) 25%, 
+    rgba(128, 128, 128, 0.5) 50%, 
+    rgba(128, 128, 128, 0.25) 75%, 
+    rgba(128, 128, 128, 0) 100%
   );
   background-size: 200% 100%;
   animation: aura-sweep 2s infinite linear;
@@ -445,37 +551,50 @@ body {
   height: 400%;
   background: conic-gradient(
     transparent,
-    #6366f1 10%, /* indigo-500 */
-    #a5b4fc 20%, /* indigo-300 */
+    #52525b 10%, /* zinc-600 */
+    #e4e4e7 20%, /* zinc-200 */
     transparent 30%,
     transparent 60%,
-    #6366f1 70%,
-    #a5b4fc 80%,
+    #52525b 70%,
+    #e4e4e7 80%,
     transparent 90%
   );
   animation: rotate-border 4s linear infinite;
+<<<<<<< HEAD
+=======
+  z-index: -1;
 }
 
-/* Gemini spinning ring loader */
-@keyframes gemini-spin {
+.generating-glow::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: var(--bg-main);
+  border-radius: inherit;
+  z-index: -1;
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
+}
+
+/* Nemon spinning ring loader */
+@keyframes nemon-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-.gemini-spinner {
+.nemon-spinner {
   border-radius: 50%;
   padding: 2px;
   background: conic-gradient(
     from 0deg,
-    #4285F4,
-    #9B72CB,
-    #D96570,
-    #9B72CB,
-    #4285F4
+    #27272a,
+    #71717a,
+    #e4e4e7,
+    #71717a,
+    #27272a
   );
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
-  animation: gemini-spin 1.2s linear infinite;
+  animation: nemon-spin 1.2s linear infinite;
 }
 
 @keyframes loading-bar {
@@ -583,5 +702,59 @@ body {
   border-left: 4px solid #d97706;
 }
 :root[data-theme="claro"] .thought-panel {
+<<<<<<< HEAD
   border-left: 4px solid #4f46e5;
+=======
+  border-left: 4px solid #27272a;
+}
+
+/* Custom 4-dot breathing spinner */
+@keyframes breathing-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes dot-breathe {
+  0%, 100% {
+    transform: translate(var(--dx), var(--dy));
+  }
+  50% {
+    transform: translate(calc(var(--dx) * 0.3), calc(var(--dy) * 0.3));
+  }
+}
+
+.breathing-dots-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  position: relative;
+  animation: breathing-spin 2.2s linear infinite;
+}
+
+.breathing-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  animation: dot-breathe 1.8s ease-in-out infinite;
+}
+
+.breathing-dot:nth-child(1) {
+  --dx: 0px;
+  --dy: -9px;
+}
+.breathing-dot:nth-child(2) {
+  --dx: 9px;
+  --dy: 0px;
+}
+.breathing-dot:nth-child(3) {
+  --dx: 0px;
+  --dy: 9px;
+}
+.breathing-dot:nth-child(4) {
+  --dx: -9px;
+  --dy: 0px;
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
 }

@@ -109,6 +109,7 @@ function chatHistoryApi() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: "./",
   plugins: [
     tailwindcss(),
     react(),
@@ -118,5 +119,9 @@ export default defineConfig({
     watch: {
       ignored: ['**/chat-history.json', '**/user-memory.json', '**/personalities.json', '**/usage-data.json', '**/app-config.json']
     }
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true
   }
 })

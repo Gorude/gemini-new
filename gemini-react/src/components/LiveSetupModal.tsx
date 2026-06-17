@@ -16,7 +16,7 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
         
         {/* Header */}
         <div className="p-10 pb-6 text-center">
-          <div className="w-24 h-24 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500 mx-auto mb-8 shadow-inner">
+          <div className="w-24 h-24 rounded-2xl bg-zinc-800 flex items-center justify-center text-zinc-400 mx-auto mb-8 shadow-inner">
             <Headphones className="w-12 h-12" />
           </div>
           <h3 className="text-2xl font-semibold text-white mb-2">Modo Live</h3>
@@ -29,15 +29,15 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
         <div className="px-10 pb-10 space-y-8">
           <div 
             onClick={() => setUseMemory(!useMemory)}
-            className={`p-5 rounded-xl transition-all cursor-pointer flex items-center gap-5 ${useMemory ? 'bg-blue-600/15' : 'bg-white/5 hover:bg-white/10'}`}
+            className={`p-5 rounded-xl transition-all cursor-pointer flex items-center gap-5 ${useMemory ? 'bg-zinc-800/80 border border-zinc-700/50' : 'bg-white/5 hover:bg-white/10'}`}
           >
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all ${useMemory ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/10 text-white/30'}`}>
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all ${useMemory ? 'bg-zinc-700 text-white shadow-lg shadow-black/30' : 'bg-white/10 text-white/30'}`}>
               <User className="w-6 h-6" />
             </div>
             <div className="flex-1 text-left">
               <div className="text-[15px] font-medium text-white flex justify-between items-center">
                 Lembrar de mim
-                <div className={`w-9 h-5 rounded-full relative transition-colors duration-300 ${useMemory ? 'bg-blue-600' : 'bg-white/20'}`}>
+                <div className={`w-9 h-5 rounded-full relative transition-colors duration-300 ${useMemory ? 'bg-zinc-600' : 'bg-white/20'}`}>
                   <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 ${useMemory ? 'left-5' : 'left-1'}`}></div>
                 </div>
               </div>
@@ -51,7 +51,7 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
             <button 
               disabled={isConnecting}
               onClick={() => onConfirm(useMemory)}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-xl shadow-blue-900/40 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="w-full py-4 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-xl shadow-black/40 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               {isConnecting ? (
                 <>
@@ -77,7 +77,7 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
 
         {isConnecting && (
           <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10">
-            <div className="h-full bg-blue-500 animate-[loading-bar_2s_ease-in-out_infinite] shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+            <div className="h-full bg-[var(--accent)] animate-[loading-bar_2s_ease-in-out_infinite] shadow-[0_0_10px_var(--accent-glow)]"></div>
           </div>
         )}
       </div>

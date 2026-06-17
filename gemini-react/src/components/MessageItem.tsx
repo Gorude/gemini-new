@@ -15,14 +15,15 @@ import {
   ChevronRight,
   Edit2,
   ShieldCheck,
-  Clock
+  Clock,
+  Brain
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
-
 interface MessageItemProps {
   msg: Message;
   isLoading: boolean;
+  isGenerating: boolean;
   editingMsgId: string | null;
   editingMsgText: string;
   copiedId: string | null;
@@ -40,11 +41,13 @@ interface MessageItemProps {
   onFactCheck: (id: string) => void;
   onCancelFactCheck?: (id: string) => void;
   onSelectionChange?: (text: string, pos: { x: number, y: number }, messageId: string) => void;
+  onResolveMemoryUpdate?: (messageId: string, updateId: string, action: 'accepted' | 'ignored') => void;
 }
 
 const MessageItem: React.FC<MessageItemProps> = React.memo(({
   msg,
   isLoading,
+  isGenerating,
   editingMsgId,
   editingMsgText,
   copiedId,
@@ -61,7 +64,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   onToggleSources,
   onFactCheck,
   onCancelFactCheck,
-  onSelectionChange
+  onSelectionChange,
+  onResolveMemoryUpdate
 }) => {
   const [verifySeconds, setVerifySeconds] = React.useState(0);
   const [isTimerHovered, setIsTimerHovered] = React.useState(false);
@@ -159,7 +163,13 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             ? `<a href="${res.sourceUrl}" target="_blank" class="fact-link" title="Ver fonte original">🔗</a>` 
             : '';
           
+<<<<<<< HEAD
           markers[markerId] = `<span class="${className}" title="${res.explanation || ''}">${res.segment}${sourceLink}</span>`;
+=======
+          // Render segment markdown and strip wrapping <p> tags so it stays inline
+          const renderedSegment = safeMarkdown(res.segment).replace(/^\s*<p>([\s\S]*?)<\/p>\s*$/, '$1').trim();
+          markers[markerId] = `<span class="${className}" title="${res.explanation || ''}">${renderedSegment}${sourceLink}</span>`;
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
           textWithMarkers = textWithMarkers.replace(flexibleRegex, markerId);
         }
       });
@@ -176,6 +186,14 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
     return safeMarkdown(msg.text);
   }, [msg.text, msg.factCheckResults]);
 
+<<<<<<< HEAD
+=======
+  const parsedContinuationHtml = React.useMemo(() => {
+    if (!msg.continuationText) return "";
+    return safeMarkdown(msg.continuationText);
+  }, [msg.continuationText]);
+
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
   const isEditing = editingMsgId === msg.id;
 
   const forceRender = !msg.text || msg.isSearching || msg.isVerifying || (msg.role === 'ai' && isLoading);
@@ -195,25 +213,22 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
     <div ref={containerRef} id={`msg-${msg.id}`} className={`group/msg relative flex flex-col w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300 animate-message-entrance`}>
       {/* Context Indicator Line */}
       {isContext && (
-        <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-indigo-500/50 opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
+        <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-[var(--accent)] opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
       )}
 
       {msg.role === 'ai' ? (
         <div className="ai-msg w-full">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 flex items-center justify-center relative">
-              {!msg.text && (
-                <div className="gemini-spinner absolute inset-0" />
-              )}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M11.9961 24C12.3961 17.6 17.6039 12.4 24 12.0039C17.6039 11.6039 12.3961 6.4 11.9961 0C11.5961 6.4 6.39609 11.6039 0 12.0039C6.39609 12.4 11.5961 17.6 11.9961 24Z" fill="url(#geminiGrad)"/>
-                <defs>
-                  <linearGradient id="geminiGrad" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="#4285F4"/><stop offset="0.5" stopColor="#9B72CB"/><stop offset="1" stopColor="#D96570"/>
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
+            {isGenerating && (
+              <div className="w-10 h-10 flex items-center justify-center relative shrink-0">
+                <div className="breathing-dots-container">
+                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                </div>
+              </div>
+            )}
 
             {/* Web Search Sources Icons */}
             {(msg.sources && msg.sources.length > 0 || msg.isSearching) && (
@@ -281,7 +296,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 )}
 
                 {expandedSourcesMsgId === msg.id && msg.sources && (
-                  <div onClick={(e) => e.stopPropagation()} className="absolute top-10 left-10 bg-[var(--bg-sidebar)] shadow-2xl rounded-2xl p-3 min-w-[320px] max-w-[400px] z-[60] border border-[var(--border-light)] animate-in fade-in zoom-in-95 duration-200">
+                  <div onClick={(e) => e.stopPropagation()} className="absolute top-10 left-10 bg-[var(--bg-main)] shadow-2xl rounded-2xl p-3 min-w-[320px] max-w-[400px] z-[60] border border-[var(--border-light)] animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex justify-between items-center mb-2 px-1">
                       <h5 className="text-[10px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest">Todas as Referências</h5>
                       <button onClick={() => onToggleSources(null)} className="text-[var(--text-placeholder)] hover:text-white"><X className="w-3.5 h-3.5" /></button>
@@ -303,7 +318,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                           <a key={idx} href={src.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group">
                             <img src={`https://www.google.com/s2/favicons?domain=${d}&sz=64`} className="w-4 h-4 rounded-sm shrink-0" alt="" />
                             <div className="flex flex-col min-w-0">
-                              <span className="text-xs text-[var(--text-primary)] font-medium truncate group-hover:text-blue-400 transition-colors">{src.title || 'Página da Web'}</span>
+                              <span className="text-xs text-[var(--text-primary)] font-medium truncate group-hover:text-[var(--accent-text)] transition-colors">{src.title || 'Página da Web'}</span>
                               <span className="text-[9px] text-[var(--text-placeholder)] truncate">{src.uri}</span>
                             </div>
                           </a>
@@ -317,7 +332,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
 
             {(msg.isGrounded || (msg.sources && msg.sources.length > 0)) && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-bold text-blue-400 animate-in fade-in slide-in-from-left-2 duration-500">
-                <Globe className="w-3 h-3" />
+                <Globe className="w-3 h-3 text-blue-400" />
                 PESQUISADO NA WEB
               </div>
             )}
@@ -353,6 +368,94 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
               onMouseUp={handleMouseUp}
               className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em]"
               dangerouslySetInnerHTML={{ __html: parsedHtml }}
+<<<<<<< HEAD
+=======
+            />
+          ) : null}
+
+          {msg.pendingMemoryUpdates && msg.pendingMemoryUpdates.length > 0 && (
+            <div className="mt-4 bg-[var(--bg-sidebar)]/30 border border-[var(--border-light)] rounded-[1.5rem] p-4.5 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex items-start gap-2.5 mb-2.5">
+                <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400 shrink-0">
+                  <Brain className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: 'var(--accent-text)' }}>
+                    Atualizar DNA de Memória?
+                  </h4>
+                  <p className="text-[9.5px] text-[var(--text-secondary)] mt-0.5 leading-normal">
+                    Identifiquei uma contradição ou nova informação sobre você. Deseja atualizar seu DNA?
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-3">
+                {msg.pendingMemoryUpdates.map((upd, idx) => {
+                  const isResolved = !!upd.resolved;
+                  return (
+                    <div key={idx} className="bg-[var(--bg-main)]/40 border border-[var(--border-light)]/50 rounded-xl p-3 text-[10.5px]">
+                      <div className="font-bold text-[8px] uppercase tracking-wider opacity-50 mb-1">
+                        Categoria: {upd.category}
+                      </div>
+                      <div className="line-through text-red-400/80 mb-1.5 break-words">
+                        Antigo: "{upd.oldText}"
+                      </div>
+                      <div className="text-green-400 font-semibold break-words">
+                        Novo: "{upd.newText}"
+                      </div>
+                      {isResolved && (
+                        <div className="mt-2.5 pt-2 border-t border-[var(--border-light)]/30 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider">
+                          {upd.resolved === 'accepted' ? (
+                            <span className="text-green-400 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" /> DNA Atualizado
+                            </span>
+                          ) : (
+                            <span className="text-[var(--text-placeholder)] flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5" /> Ignorado
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Show action buttons ONLY if not resolved yet */}
+              {!msg.pendingMemoryUpdates.some(upd => upd.resolved) && (
+                <div className="flex justify-end gap-2 text-[10.5px]">
+                  <button 
+                    onClick={() => {
+                      msg.pendingMemoryUpdates?.forEach(upd => {
+                        onResolveMemoryUpdate?.(msg.id, upd.id, 'ignored');
+                      });
+                    }}
+                    className="px-3 py-1.5 rounded-xl font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] transition-all cursor-pointer"
+                  >
+                    Ignorar
+                  </button>
+                  <button 
+                    onClick={() => {
+                      msg.pendingMemoryUpdates?.forEach(upd => {
+                        onResolveMemoryUpdate?.(msg.id, upd.id, 'accepted');
+                      });
+                    }}
+                    className="px-3 py-1.5 rounded-xl font-bold text-white shadow-lg transition-all cursor-pointer"
+                    style={{ background: 'var(--accent)', boxShadow: '0 4px 12px var(--accent-glow)' }}
+                  >
+                    Atualizar DNA
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {msg.continuationText ? (
+            <div 
+              onMouseUp={handleMouseUp}
+              className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em] mt-4"
+              dangerouslySetInnerHTML={{ __html: parsedContinuationHtml }}
+>>>>>>> 6e41ceb9a41db6dc4c5d117b8b35aacf1e2a64a1
             />
           ) : null}
 
@@ -402,9 +505,9 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 disabled={isLoading && !msg.isVerifying} 
                 onMouseEnter={() => msg.isVerifying && setIsTimerHovered(true)}
                 onMouseLeave={() => setIsTimerHovered(false)}
-                className={`text-[var(--text-placeholder)] hover:text-blue-400 transition flex items-center gap-1.5 ${
+                className={`text-[var(--text-placeholder)] hover:text-[var(--accent-text)] transition flex items-center gap-1.5 ${
                   msg.isVerifying 
-                    ? (isTimerHovered ? 'text-red-500 hover:text-red-600 font-bold scale-105' : 'text-blue-500 font-semibold') 
+                    ? (isTimerHovered ? 'text-red-500 hover:text-red-600 font-bold scale-105' : 'text-[var(--accent-text)] font-semibold') 
                     : ''
                 }`}
                 title={msg.isVerifying ? "Cancelar checagem de fatos" : "Checar fatos na web"}
@@ -417,8 +520,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                     </>
                   ) : (
                     <>
-                      <Clock className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                      <span className="text-[10px] font-bold text-blue-400">{verifySeconds.toFixed(1)}s</span>
+                      <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] animate-pulse" />
+                      <span className="text-[10px] font-bold text-[var(--accent-text)]">{verifySeconds.toFixed(1)}s</span>
                     </>
                   )
                 ) : (
@@ -450,7 +553,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                      <img src={`data:${f.mimeType};base64,${f.data}`} className="object-cover w-full h-full" alt="upload" />
                    ) : (
                      <div className="flex flex-col items-center justify-center w-full h-full text-[10px] break-words p-2 text-center text-[var(--text-secondary)] bg-[var(--bg-sidebar)]">
-                       <FileText className="w-6 h-6 mb-2 text-indigo-400 opacity-80" />
+                       <FileText className="w-6 h-6 mb-2 text-[var(--accent-text)] opacity-80" />
                        <span className="truncate w-full">{f.name}</span>
                      </div>
                    )}
@@ -460,11 +563,11 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
            )}
            
            {isEditing ? (
-             <div className="w-full flex flex-col gap-2 bg-[var(--bg-sidebar)] p-4 rounded-3xl border border-indigo-500/50 shadow-2xl">
+             <div className="w-full flex flex-col gap-2 bg-[var(--bg-sidebar)] p-4 rounded-3xl border border-[var(--accent-border)] shadow-2xl">
                <textarea autoFocus className="w-full bg-transparent border-none outline-none text-[var(--text-primary)] resize-none" rows={3} value={editingMsgText} onChange={(e) => onSetEditingMsgText(e.target.value)} />
                <div className="flex justify-end gap-2">
                  <button onClick={onCancelEdit} className="px-4 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">Cancelar</button>
-                 <button onClick={() => onSaveEdit(msg.id)} className="px-4 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-full hover:bg-indigo-500 transition shadow-lg">Salvar e Enviar</button>
+                 <button onClick={() => onSaveEdit(msg.id)} className="px-4 py-1.5 text-xs font-medium bg-[var(--accent)] text-white rounded-full hover:bg-[var(--accent-hover)] transition shadow-lg">Salvar e Enviar</button>
                </div>
              </div>
            ) : (
