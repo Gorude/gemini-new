@@ -58,7 +58,7 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
           className="absolute right-[calc(100%+16px)] w-64 p-3 bg-[rgba(30,31,32,0.8)] backdrop-blur-xl border border-[rgba(255,255,255,0.1)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-right-4 duration-200 pointer-events-none"
           style={{ top: '50%', transform: 'translateY(-50%)' }}
         >
-          <div className="text-xs text-[var(--text-primary)] leading-relaxed">
+          <div className="text-xs text-(--text-primary) leading-relaxed">
             {getPreviewText(validMessages.find(m => m.id === hoveredId)?.text || '', 250)}
           </div>
           <div className="mt-3 flex items-center gap-2 pt-2 border-t border-white/5">
@@ -98,7 +98,7 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
               onClick={() => onJumpToMessage(msg.id)}
             >
               {/* Texto do Nível 1 */}
-              <span className={`text-[10px] font-medium truncate transition-all duration-500 ease-out whitespace-nowrap overflow-hidden ${activeId === msg.id ? 'text-white' : 'text-[var(--text-secondary)]'} ${
+              <span className={`text-[10px] font-medium truncate transition-all duration-500 ease-out whitespace-nowrap overflow-hidden ${activeId === msg.id ? 'text-white' : 'text-(--text-secondary)'} ${
                 isExpanded 
                   ? 'max-w-[170px] opacity-100 translate-x-0 pointer-events-auto' 
                   : 'max-w-0 opacity-0 translate-x-2 pointer-events-none'
@@ -109,8 +109,8 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, onJumpToMes
               {/* O Tick (Barra) */}
               <div 
                 className={`transition-all duration-300 rounded-full ${activeId === msg.id ? 'h-[4px] opacity-100' : 'h-[3px] opacity-40 group-hover:opacity-100'} ${isExpanded ? 'w-10 group-hover:w-16' : (activeId === msg.id ? 'w-6' : 'w-4 group-hover:w-6')} ${msg.role === 'user' 
-                  ? (activeId === msg.id ? 'bg-[var(--accent-text)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-[var(--accent)] group-hover:bg-[var(--accent-hover)]') 
-                  : (activeId === msg.id ? 'bg-[var(--accent-text)] shadow-[0_0_15px_var(--accent-glow)]' : 'bg-[var(--accent-hover)] group-hover:bg-[var(--accent)]')
+                  ? (activeId === msg.id ? 'bg-(--accent-text) shadow-[0_0_15px_var(--accent-glow)]' : 'bg-(--accent) group-hover:bg-(--accent-hover)') 
+                  : (activeId === msg.id ? 'bg-(--accent-text) shadow-[0_0_15px_var(--accent-glow)]' : 'bg-(--accent-hover) group-hover:bg-(--accent)')
                 }`}
               />
             </div>

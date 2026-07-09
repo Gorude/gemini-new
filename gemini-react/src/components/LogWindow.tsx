@@ -28,7 +28,10 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) 
   const [activeTab, setActiveTab] = useState<'geral' | 'requisicoes' | 'uso'>('geral');
   const [searchQuery, setSearchQuery] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
-  const [position, setPosition] = useState({ x: 20, y: 80 });
+  const [position, setPosition] = useState(() => ({
+    x: typeof window !== 'undefined' ? Math.max(20, window.innerWidth - 540) : 20,
+    y: typeof window !== 'undefined' ? Math.max(20, window.innerHeight - 520) : 80
+  }));
   const [isDragging, setIsDragging] = useState(false);
 
   const dragStart = useRef({ x: 0, y: 0 });
@@ -41,14 +44,6 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) 
       setLogs(newLogs);
     });
     return unsubscribe;
-  }, []);
-
-  // Position window on bottom right by default on mount
-  useEffect(() => {
-    setPosition({
-      x: Math.max(20, window.innerWidth - 540),
-      y: Math.max(20, window.innerHeight - 520)
-    });
   }, []);
 
   // Scroll to bottom on new logs

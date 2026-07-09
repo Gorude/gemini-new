@@ -48,7 +48,7 @@ import {
 import {
   restrictToVerticalAxis
 } from '@dnd-kit/modifiers';
-import { Lock, Unlock, GripVertical, Code } from 'lucide-react';
+import { Lock, Unlock, GripVertical, Code, Bell } from 'lucide-react';
 
 import {
   generateGeminiContent,
@@ -78,6 +78,111 @@ const DEFAULT_PERSONALITY: Personality = {
   id: 'default',
   name: 'Normal',
   prompt: ''
+};
+
+// Avaliador matemático seguro (sem eval/globais): usado pela ferramenta 'calculate'.
+// Aceita apenas números, operadores e um conjunto branco de funções/constantes.
+const CALC_SCOPE: Record<string, number | ((...n: number[]) => number)> = {
+  sqrt: Math.sqrt, abs: Math.abs, round: Math.round, floor: Math.floor, ceil: Math.ceil,
+  sin: Math.sin, cos: Math.cos, tan: Math.tan, asin: Math.asin, acos: Math.acos, atan: Math.atan,
+  ln: Math.log, log: Math.log10, log2: Math.log2, log10: Math.log10, exp: Math.exp,
+  min: Math.min, max: Math.max, pow: Math.pow, pi: Math.PI, e: Math.E
+};
+function safeCalculate(expression: string): number {
+  const cleaned = expression.trim()
+    .replace(/,/g, '.')     // vírgula decimal
+    .replace(/×/g, '*').replace(/÷/g, '/')
+    .replace(/\^/g, '**');  // potência
+  // Remove os nomes permitidos e verifica se o restante só tem caracteres seguros.
+  const withoutNames = cleaned.replace(/\b(sqrt|abs|round|floor|ceil|sin|cos|tan|asin|acos|atan|ln|log2|log10|log|exp|min|max|pow|pi|e)\b/gi, '');
+  if (/[^0-9+\-*/%.()\s,]/.test(withoutNames)) {
+    throw new Error('Expressão contém caracteres não permitidos.');
+  }
+  const keys = Object.keys(CALC_SCOPE);
+  const fn = new Function(...keys, `"use strict"; return (${cleaned});`);
+  const result = fn(...keys.map(k => CALC_SCOPE[k]));
+  if (typeof result !== 'number' || !isFinite(result)) {
+    throw new Error('Resultado inválido.');
+  }
+  return result;
+}
+
+// Descrições (pt-BR) dos códigos WMO de tempo retornados pela Open-Meteo.
+const WEATHER_CODES: Record<number, string> = {
+  0: 'céu limpo', 1: 'predominantemente limpo', 2: 'parcialmente nublado', 3: 'nublado',
+  45: 'névoa', 48: 'névoa com geada',
+  51: 'garoa leve', 53: 'garoa moderada', 55: 'garoa intensa',
+  56: 'garoa congelante leve', 57: 'garoa congelante intensa',
+  61: 'chuva leve', 63: 'chuva moderada', 65: 'chuva forte',
+  66: 'chuva congelante leve', 67: 'chuva congelante forte',
+  71: 'neve leve', 73: 'neve moderada', 75: 'neve forte', 77: 'grãos de neve',
+  80: 'pancadas de chuva leves', 81: 'pancadas de chuva moderadas', 82: 'pancadas de chuva violentas',
+  85: 'pancadas de neve leves', 86: 'pancadas de neve fortes',
+  95: 'trovoada', 96: 'trovoada com granizo leve', 99: 'trovoada com granizo forte'
+};
+
+// Normaliza texto para comparação (minúsculas, sem acentos).
+const normalizeStr = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+// Encontra a personalidade mais próxima do termo pedido (não exige nome exato).
+function bestPersonalityMatch(query: string, personas: Personality[]): Personality | null {
+  const q = normalizeStr(query);
+  if (!q) return null;
+  let best: Personality | null = null;
+  let bestScore = 0;
+  for (const p of personas) {
+    const n = normalizeStr(p.name);
+    let score = 0;
+    if (n === q) score = 1000;
+    else if (n.includes(q) || q.includes(n)) score = 500 + Math.min(n.length, q.length);
+    else {
+      const qWords = new Set(q.split(/\s+/).filter(Boolean));
+      const shared = n.split(/\s+/).filter(w => qWords.has(w)).length;
+      score = shared * 100;
+    }
+    if (score > bestScore) { bestScore = score; best = p; }
+  }
+  return bestScore > 0 ? best : null;
+}
+
+// Temas de cores disponíveis, com termos de match para a ferramenta set_theme.
+const LIVE_THEMES: { id: string; label: string; match: string[] }[] = [
+  { id: 'escuro', label: 'Escuro', match: ['escuro', 'dark', 'preto', 'noite'] },
+  { id: 'claro', label: 'Claro', match: ['claro', 'light', 'branco', 'dia'] },
+  { id: 'areia', label: 'Areia', match: ['areia', 'sand', 'bege', 'sepia', 'sépia'] },
+  { id: 'galaxia', label: 'Galáxia', match: ['galaxia', 'galaxy', 'roxo', 'espaco', 'espaço', 'espacial'] },
+  { id: 'claude', label: 'Claude', match: ['claude', 'terracota', 'anthropic'] },
+];
+
+// Rótulos amigáveis das ferramentas do modo LIVE, para o toast de notificação.
+const LIVE_TOOL_LABELS: Record<string, string> = {
+  google_search: 'Pesquisou no Google',
+  calculate: 'Fez um cálculo',
+  get_weather: 'Consultou o clima',
+  fact_check: 'Checou um fato',
+  set_theme: 'Trocou o tema',
+  list_personalities: 'Listou personalidades',
+  create_personality: 'Criou personalidade',
+  delete_personality: 'Excluiu personalidade',
+  get_current_time: 'Consultou a hora',
+  save_memory: 'Salvou na memória',
+  update_memory: 'Atualizou a memória',
+  delete_memory: 'Removeu da memória',
+  recall_memory: 'Consultou a memória',
+  set_voice: 'Trocou a voz',
+  toggle_camera: 'Alternou a câmera',
+  toggle_screen_share: 'Alternou a tela',
+  toggle_proactivity: 'Alternou proatividade',
+  open_settings: 'Abriu configurações',
+  end_session: 'Encerrou a sessão',
+  search_history: 'Buscou no histórico',
+  create_new_chat: 'Criou nova conversa',
+  switch_personality: 'Trocou de personalidade',
+  set_timer: 'Iniciou um cronômetro',
+  set_reminder: 'Agendou um lembrete',
+  set_alarm: 'Definiu um alarme',
+  list_alarms: 'Listou agendamentos',
+  cancel_alarm: 'Cancelou um agendamento'
 };
 
 import LiveView from './components/LiveView';
@@ -180,6 +285,7 @@ function App() {
   });
   const [showFontSizeSelector, setShowFontSizeSelector] = useState(false);
   const [appFont, setAppFont] = useState<string>(() => localStorage.getItem('nemon_app_font') || DEFAULT_FONT_ID);
+  const [retroMode, setRetroMode] = useState<boolean>(() => localStorage.getItem('nemon_retro_mode') === 'true');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'settings'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -344,12 +450,16 @@ function App() {
   const memoryFactsRef = useRef<MemoryFact[]>([]);
   const chatsRef = useRef<ChatSession[]>([]);
   const personalitiesRef = useRef<Personality[]>([]);
+  const selectedPersonalityIdRef = useRef<string>('default');
   // Executor de ferramentas do LIVE (definido após os handlers; acessado via ref para evitar TDZ).
   const liveToolExecutorRef = useRef<((name: string, args: any) => Promise<any>) | null>(null);
   // Registro de alarmes/cronômetros/lembretes agendados no modo LIVE.
   const scheduledAlarmsRef = useRef<Map<string, { id: string; kind: 'alarme' | 'cronômetro' | 'lembrete'; label: string; fireAtMs: number; timeoutId: number }>>(new Map());
   // Espelho do tipo de visão ativa (câmera/tela), usado pelo executor de ferramentas.
   const liveVisionTypeRef = useRef<'camera' | 'screen' | null>(null);
+  // Toast de notificação quando o modelo usa uma ferramenta no modo LIVE.
+  const [liveToolToast, setLiveToolToast] = useState<{ id: number; label: string } | null>(null);
+  const toolToastTimeoutRef = useRef<number | null>(null);
   const [liveAnalyser, setLiveAnalyser] = useState<AnalyserNode | null>(null);
   const [selectionData, setSelectionData] = useState<{ text: string, pos: { x: number, y: number }, messageId: string } | null>(null);
   const [isCheckingSegment] = useState(false);
@@ -374,6 +484,7 @@ function App() {
   useEffect(() => { memoryFactsRef.current = memoryFacts; }, [memoryFacts]);
   useEffect(() => { chatsRef.current = chats; }, [chats]);
   useEffect(() => { personalitiesRef.current = personalities; }, [personalities]);
+  useEffect(() => { selectedPersonalityIdRef.current = selectedPersonalityId; }, [selectedPersonalityId]);
   useEffect(() => { liveVisionTypeRef.current = liveVisionType; }, [liveVisionType]);
 
   useEffect(() => {
@@ -539,7 +650,7 @@ function App() {
       setIsCategorizing(false);
       setCategorizationProgress({ current: 0, total: 0 });
     }
-  }, [memoryFacts]);
+  }, [memoryFacts, saveMemoryFactsToFirestore]);
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = useMemo(() => activeChat?.messages || [], [activeChat]);
@@ -558,14 +669,14 @@ function App() {
           const uid = currentUser.uid;
           const userDocRef = doc(db, 'users', uid);
           const userDocSnap = await getDoc(userDocRef);
-          
+
           let dbMemoryFacts: MemoryFact[] = [];
           let dbPersonalities: Personality[] = [];
           let dbDailyUsage: DailyUsage = { date: getPacificDate(), models: {} };
           let dbPaidApiKey = '';
           let dbDefaultApiKey = '';
           let dbSidebarOrder: string[] = [];
-          
+
           if (userDocSnap.exists()) {
             const data = userDocSnap.data();
             dbMemoryFacts = data.memoryFacts || [];
@@ -576,7 +687,7 @@ function App() {
             dbPaidApiKey = data.paidApiKey || '';
             dbDefaultApiKey = data.defaultApiKey || '';
             dbSidebarOrder = data.sidebarOrder || [];
-            
+
             // Sync settings to states
             if (data.settings) {
               if (data.settings.theme) {
@@ -587,6 +698,7 @@ function App() {
               if (data.settings.selectedPersonalityId) setSelectedPersonalityId(data.settings.selectedPersonalityId);
               if (data.settings.chatFontSize !== undefined) setChatFontSize(data.settings.chatFontSize);
               if (data.settings.appFont) setAppFont(data.settings.appFont);
+              if (data.settings.retroMode !== undefined) setRetroMode(data.settings.retroMode);
               if (data.settings.isOrderLocked !== undefined) setIsOrderLocked(data.settings.isOrderLocked);
               if (data.settings.enabledModelIds) setEnabledModelIds(data.settings.enabledModelIds);
               if (data.settings.isLiveProactive !== undefined) setIsLiveProactive(data.settings.isLiveProactive);
@@ -619,7 +731,7 @@ function App() {
             };
             await setDoc(userDocRef, initialData);
           }
-          
+
           setMemoryFacts(dbMemoryFacts);
           setPersonalities(dbPersonalities);
           setDailyUsage(dbDailyUsage);
@@ -627,7 +739,7 @@ function App() {
           setGlobalPaidApiKey(dbPaidApiKey);
           setDefaultApiKey(dbDefaultApiKey);
           setGlobalDefaultApiKey(dbDefaultApiKey);
-          
+
           // Load all chats
           const chatsColRef = collection(db, 'users', uid, 'chats');
           const chatsSnap = await getDocs(chatsColRef);
@@ -635,7 +747,7 @@ function App() {
           chatsSnap.forEach((d) => {
             loadedChats.push(d.data() as ChatSession);
           });
-          
+
           const orderedChats = [...loadedChats];
           if (dbSidebarOrder.length > 0) {
             orderedChats.sort((a, b) => {
@@ -647,7 +759,7 @@ function App() {
               return indexA - indexB;
             });
           }
-          
+
           setChats(orderedChats);
           if (orderedChats.length > 0) {
             setActiveChatId(orderedChats[0].id);
@@ -672,6 +784,9 @@ function App() {
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
+    // Subscrição de auth deve rodar só na montagem; incluir os settings faria
+    // re-subscrever a cada mudança de configuração.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Save changes to chats subcollection & sidebarOrder in Firestore
@@ -727,11 +842,12 @@ function App() {
           enabledModelIds,
           isLiveProactive,
           liveVoice,
-          liveModel
+          liveModel,
+          retroMode
         }
       }).catch(e => console.error("Erro ao salvar configurações no Firestore:", e));
     }
-  }, [theme, chatMargin, selectedPersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, liveModel, isAuthLoading, isInitialLoading]);
+  }, [theme, chatMargin, selectedPersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, liveModel, retroMode, isAuthLoading, isInitialLoading]);
 
   useEffect(() => {
     localStorage.setItem('nemon_sidebar_locked', JSON.stringify(isOrderLocked));
@@ -762,6 +878,11 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('nemon-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-retro', retroMode ? 'on' : 'off');
+    localStorage.setItem('nemon_retro_mode', String(retroMode));
+  }, [retroMode]);
 
   // LIVE MODE LOGIC
   const handleLiveStop = useCallback(() => {
@@ -923,13 +1044,13 @@ function App() {
           const freshMsg: Message = { id: currentAiMsgId, role: 'ai', text: '', thoughts: '', duration: 0, isSearching: webSearchEnabled };
           const updatedMsgs = replaceId
             ? c.messages.map(m => {
-                if (m.id === replaceId) {
-                  return isAppending
-                    ? { ...m, isSearching: webSearchEnabled, isVerifying: false }
-                    : freshMsg;
-                }
-                return m;
-              })
+              if (m.id === replaceId) {
+                return isAppending
+                  ? { ...m, isSearching: webSearchEnabled, isVerifying: false }
+                  : freshMsg;
+              }
+              return m;
+            })
             : [...c.messages, freshMsg];
           return { ...c, messages: updatedMsgs };
         }
@@ -1098,8 +1219,8 @@ function App() {
           isGrounded,
           isVerifying: false,
           sources: [...allSources],
-          pendingMemoryUpdates: updatesFound.length > 0 
-            ? [...(m.pendingMemoryUpdates || []), ...updatesFound] 
+          pendingMemoryUpdates: updatesFound.length > 0
+            ? [...(m.pendingMemoryUpdates || []), ...updatesFound]
             : m.pendingMemoryUpdates
         } : m)
       } : c));
@@ -1280,8 +1401,14 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     const session = new GeminiLiveSession({
       onStatusChange: (status) => setLiveStatus(status),
       onStream: (stream) => setLiveVideoStream(stream),
-      onError: (err) => { alert(err); handleLiveStop(); },
+      onError: (err) => {
+        // Erro vai para os logs (não como popup bloqueante) e a aba LIVE
+        // permanece aberta para o usuário trocar de modelo ou tentar de novo.
+        logger.addLog('error', `[LIVE] ${err}`);
+        setLiveStatus('error');
+      },
       onInterrupt: () => handleInterruptLive(),
+      onToolUsed: (name) => handleLiveToolUsed(name),
       onToolCall: (name, args) =>
         liveToolExecutorRef.current
           ? liveToolExecutorRef.current(name, args)
@@ -1323,24 +1450,12 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             setIsLiveProactive(false);
           }
         }
-        let liveUpdates: PendingMemoryUpdate[] = [];
+        // A conversa do modo LIVE fica apenas na transcrição da tela do Live,
+        // NÃO é gravada como mensagens no chat em que o usuário estava antes.
+        // Ainda processamos tags de memória (DNA) da fala da IA, se habilitado.
         if (role === 'ai' && useMemory) {
-          parseMemoryTags(text, true, (upds) => {
-            liveUpdates = upds;
-          });
+          parseMemoryTags(text, true);
         }
-
-        setChats(prev => prev.map(c => {
-          if (c.id === activeChatId) {
-            const newMessage: Message = {
-              id: Date.now() + Math.random().toString(),
-              role, text, duration: 0,
-              pendingMemoryUpdates: liveUpdates.length > 0 ? liveUpdates : undefined
-            };
-            return { ...c, messages: [...c.messages, newMessage] };
-          }
-          return c;
-        }));
       },
       onAudioData: (chunk) => {
         if (!liveAudioContextRef.current || !analyserNode) return;
@@ -1380,6 +1495,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     liveSessionRef.current = session;
     session.setMicEnabled(isLiveMicEnabled);
     await session.start();
+    // handleInterruptLive/handleLiveToolUsed são referenciados de forma lazy (definidos
+    // depois deste callback); incluí-los nas deps causaria erro de TDZ na renderização.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId, personalities, selectedPersonalityId, liveVoice, memoryFacts, handleLiveStop, parseMemoryTags, proactiveIdleCount, resetProactivityState, liveModel, paidApiKey, defaultApiKey, isLiveMicEnabled]);
 
   const handleSetLiveModel = useCallback((newModel: string) => {
@@ -1457,6 +1575,39 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     resetProactivityState("Interrupção manual/VAD");
   }, [resetProactivityState]);
+
+  // Toca um sininho curto (chime de duas notas) reutilizando o contexto de áudio do LIVE.
+  const playToolBell = useCallback(() => {
+    const ctx = liveAudioContextRef.current;
+    if (!ctx) return;
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+      // Duas notas (Lá5 → Mi6) com decaimento rápido — soa como um "ding" agradável.
+      [{ f: 880, t: 0 }, { f: 1318.5, t: 0.08 }].forEach(({ f, t }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        gain.gain.setValueAtTime(0.0001, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.15, now + t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.32);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + t);
+        osc.stop(now + t + 0.36);
+      });
+    } catch { /* ignore */ }
+  }, []);
+
+  // Feedback quando o modelo usa uma ferramenta no LIVE: toca o sino e mostra um toast breve.
+  const handleLiveToolUsed = useCallback((name: string) => {
+    playToolBell();
+    const label = LIVE_TOOL_LABELS[name] || name;
+    setLiveToolToast({ id: Date.now(), label });
+    if (toolToastTimeoutRef.current) clearTimeout(toolToastTimeoutRef.current);
+    toolToastTimeoutRef.current = window.setTimeout(() => setLiveToolToast(null), 2600);
+  }, [playToolBell]);
 
   // "Acorda" o modelo LIVE injetando uma mensagem de sistema para ele falar imediatamente.
   // Se não houver sessão ativa, cai para uma notificação do navegador.
@@ -1571,6 +1722,14 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         handleOpenSettings(tab);
         return { result: `Configurações abertas na aba ${tab}.` };
       }
+      case 'set_theme': {
+        const wanted = normalizeStr(String(a.name || ''));
+        if (!wanted) return { result: `Qual tema? Disponíveis: ${LIVE_THEMES.map(t => t.label).join(', ')}.` };
+        const found = LIVE_THEMES.find(t => t.match.some(m => wanted.includes(m) || m.includes(wanted)));
+        if (!found) return { result: `Tema "${a.name}" não encontrado. Disponíveis: ${LIVE_THEMES.map(t => t.label).join(', ')}.` };
+        setTheme(found.id); // aplicação é imediata via effect (data-theme)
+        return { result: `Tema alterado para ${found.label}.` };
+      }
       case 'end_session': {
         // Dá tempo do modelo se despedir antes de encerrar de fato.
         window.setTimeout(() => handleLiveStop(), 1500);
@@ -1598,13 +1757,93 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         setActiveTab('chat');
         return { result: 'Nova conversa criada.' };
       }
+      case 'list_personalities': {
+        const all = [DEFAULT_PERSONALITY, ...personalitiesRef.current.filter(p => p.id !== DEFAULT_PERSONALITY.id)];
+        const activeName = all.find(p => p.id === selectedPersonalityIdRef.current)?.name || DEFAULT_PERSONALITY.name;
+        return { result: `Personalidades disponíveis: ${all.map(p => p.name).join(', ')}. Ativa no momento: ${activeName}.` };
+      }
       case 'switch_personality': {
-        const wanted = String(a.name || '').toLowerCase().trim();
-        const p = personalitiesRef.current.find(pp => pp.name.toLowerCase() === wanted)
-          || personalitiesRef.current.find(pp => pp.name.toLowerCase().includes(wanted));
-        if (!p) return { result: `Personalidade "${a.name}" não encontrada.` };
-        setSelectedPersonalityId(p.id);
-        return { result: `Personalidade "${p.name}" ativada. Terá efeito pleno ao reiniciar a sessão LIVE.` };
+        const all = [DEFAULT_PERSONALITY, ...personalitiesRef.current.filter(p => p.id !== DEFAULT_PERSONALITY.id)];
+        const wanted = String(a.name || '').trim();
+        if (!wanted) {
+          return { result: `Para qual personalidade? Disponíveis: ${all.map(p => p.name).join(', ')}.` };
+        }
+        const match = bestPersonalityMatch(wanted, all);
+        if (!match) {
+          return { result: `Não encontrei "${wanted}". Personalidades disponíveis: ${all.map(p => p.name).join(', ')}. Qual delas você quer?` };
+        }
+        setSelectedPersonalityId(match.id);
+        selectedPersonalityIdRef.current = match.id;
+        const persona = match.prompt?.trim() ? match.prompt.trim() : 'Estilo neutro, natural e direto, sem exageros.';
+        // A instrução da persona volta no RESULTADO da tool: o modelo lê e passa a
+        // incorporá-la imediatamente, sem precisar reiniciar a sessão.
+        return {
+          result: `Personalidade alterada para "${match.name}". A partir de AGORA, incorpore integralmente esta persona e responda SEMPRE neste estilo (tom, voz e vocabulário), até que o usuário peça outra: ${persona} — Cumprimente o usuário brevemente já no novo personagem.`
+        };
+      }
+      case 'create_personality': {
+        const pName = String(a.name || '').trim();
+        const pPrompt = String(a.prompt || '').trim();
+        if (!pName) return { result: 'Informe um nome para a personalidade.' };
+        if (!pPrompt) return { result: 'Informe as instruções/estilo da personalidade.' };
+        const all = [DEFAULT_PERSONALITY, ...personalitiesRef.current];
+        if (all.some(p => normalizeStr(p.name) === normalizeStr(pName))) {
+          return { result: `Já existe uma personalidade chamada "${pName}". Escolha outro nome ou use switch_personality para ativá-la.` };
+        }
+        const newPersonality: Personality = {
+          id: `${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+          name: pName,
+          prompt: pPrompt
+        };
+        const next = [...personalitiesRef.current, newPersonality];
+        personalitiesRef.current = next;
+        setPersonalities(next); // auto-salva no Firestore via effect
+        return { result: `Personalidade "${pName}" criada e salva. Quer que eu ative ela agora?` };
+      }
+      case 'delete_personality': {
+        const wanted = String(a.name || '').trim();
+        if (!wanted) return { result: 'Qual personalidade devo excluir?' };
+        if (normalizeStr(wanted) === normalizeStr(DEFAULT_PERSONALITY.name)) {
+          return { result: 'A personalidade padrão "Normal" não pode ser excluída.' };
+        }
+        const custom = personalitiesRef.current; // não inclui a padrão
+        if (custom.length === 0) return { result: 'Não há personalidades personalizadas para excluir.' };
+        const match = bestPersonalityMatch(wanted, custom);
+        if (!match) {
+          return { result: `Não encontrei "${wanted}". Personalizadas: ${custom.map(p => p.name).join(', ')}.` };
+        }
+        const next = custom.filter(p => p.id !== match.id);
+        personalitiesRef.current = next;
+        setPersonalities(next); // auto-salva no Firestore via effect
+        let extra = '';
+        if (selectedPersonalityIdRef.current === match.id) {
+          setSelectedPersonalityId('default');
+          selectedPersonalityIdRef.current = 'default';
+          extra = ' Ela estava ativa, então voltei para a personalidade Normal.';
+        }
+        return { result: `Personalidade "${match.name}" excluída.${extra}` };
+      }
+
+      // ---------- Verificação de fatos ----------
+      case 'fact_check': {
+        const claim = String(a.claim || '').trim();
+        if (!claim) return { result: 'Informe a afirmação a verificar.' };
+        try {
+          const results = await performFactCheck(claim);
+          if (!results || results.length === 0) {
+            return { result: 'Não consegui verificar essa afirmação com fontes agora.' };
+          }
+          const verified = results.filter(r => r.isVerified).length;
+          const failed = results.length - verified;
+          const detail = results.map(r =>
+            `"${r.segment}": ${r.isVerified
+              ? 'VERIFICADO' + (r.sourceUrl ? ` (fonte: ${r.sourceUrl})` : '')
+              : 'NÃO confirmado' + (r.explanation ? ` — ${r.explanation}` : '')}`
+          ).join(' | ');
+          return { result: `Checagem concluída (${verified} verificado(s), ${failed} não confirmado(s)): ${detail}. Resuma o veredito ao usuário em voz alta, de forma natural.` };
+        } catch (err: any) {
+          return { result: `Não consegui checar agora: ${err?.message || 'erro de rede'}.` };
+        }
       }
 
       // ---------- Tempo estendido ----------
@@ -1637,7 +1876,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         let amanha = false;
         if (target.getTime() <= Date.now()) { target.setDate(target.getDate() + 1); amanha = true; }
         if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-          Notification.requestPermission().catch(() => {});
+          Notification.requestPermission().catch(() => { });
         }
         scheduleWake('alarme', target.getTime(), message, message);
         const hhmm = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
@@ -1660,6 +1899,66 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         clearTimeout(item.timeoutId);
         scheduledAlarmsRef.current.delete(id);
         return { result: `${item.kind} "${item.label}" cancelado.` };
+      }
+
+      // ---------- Cálculo ----------
+      case 'calculate': {
+        const expr = String(a.expression || '').trim();
+        if (!expr) return { result: 'Nenhuma expressão informada.' };
+        try {
+          const value = safeCalculate(expr);
+          // Formata com até 6 casas, sem zeros à direita.
+          const formatted = Number.isInteger(value) ? String(value) : parseFloat(value.toFixed(6)).toString();
+          return { result: `${expr} = ${formatted}` };
+        } catch (err: any) {
+          return { result: `Não consegui calcular "${expr}": ${err?.message || 'expressão inválida'}.` };
+        }
+      }
+
+      // ---------- Clima (Open-Meteo) ----------
+      case 'get_weather': {
+        try {
+          let lat: number;
+          let lon: number;
+          let place: string;
+          const loc = String(a.location || '').trim();
+
+          if (loc) {
+            const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(loc)}&count=1&language=pt&format=json`);
+            const geo = await geoRes.json();
+            if (!geo.results || geo.results.length === 0) {
+              return { result: `Não encontrei a localização "${loc}".` };
+            }
+            const r = geo.results[0];
+            lat = r.latitude;
+            lon = r.longitude;
+            place = [r.name, r.admin1, r.country_code].filter(Boolean).join(', ');
+          } else {
+            // Sem cidade: usa a geolocalização do dispositivo (pede permissão).
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+              if (!navigator.geolocation) { reject(new Error('Geolocalização indisponível.')); return; }
+              navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 });
+            });
+            lat = pos.coords.latitude;
+            lon = pos.coords.longitude;
+            place = 'sua localização atual';
+          }
+
+          const wxRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`);
+          const wx = await wxRes.json();
+          const c = wx.current;
+          const d = wx.daily;
+          if (!c) return { result: 'Não consegui obter o clima agora.' };
+          const desc = WEATHER_CODES[c.weather_code] ?? 'condição desconhecida';
+          return {
+            result: `Clima em ${place}: ${desc}, ${Math.round(c.temperature_2m)}°C (sensação ${Math.round(c.apparent_temperature)}°C), `
+              + `umidade ${c.relative_humidity_2m}%, vento ${Math.round(c.wind_speed_10m)} km/h. `
+              + `Hoje: máx ${Math.round(d.temperature_2m_max[0])}°C / mín ${Math.round(d.temperature_2m_min[0])}°C, `
+              + `chance de chuva ${d.precipitation_probability_max[0]}%.`
+          };
+        } catch (err: any) {
+          return { result: `Não consegui consultar o clima: ${err?.message || 'erro de rede'}.` };
+        }
       }
 
       default:
@@ -1730,7 +2029,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       ...c,
       messages: c.messages.map((m: Message) => m.id === messageId ? {
         ...m,
-        pendingMemoryUpdates: m.pendingMemoryUpdates?.map(upd => 
+        pendingMemoryUpdates: m.pendingMemoryUpdates?.map(upd =>
           upd.id === updateId ? { ...upd, resolved: action } : upd
         )
       } : m)
@@ -1738,7 +2037,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     // 2. Persist in Firestore if accepted
     if (action === 'accepted' && updateToApply) {
-      const newMemories = memoryFacts.map((m: MemoryFact) => 
+      const newMemories = memoryFacts.map((m: MemoryFact) =>
         m.id === updateId ? { ...m, text: updateToApply.newText, category: updateToApply.category, timestamp: Date.now() } : m
       );
       setMemoryFacts(newMemories);
@@ -1756,7 +2055,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     const virtualUserText = action === 'accepted'
       ? "[SISTEMA: O usuário confirmou a atualização do DNA de memória. Continue sua resposta anterior normalmente a partir desse ponto. NÃO tente atualizar, criar ou apagar qualquer memória, e NÃO gere nenhuma tag de memória (<MEMORY>, <UPDATE_MEMORY>, <DELETE_MEMORY>) para este turno de continuação.]"
       : "[SISTEMA: O usuário recusou a atualização de memória proposta. Mantenha a memória exatamente como estava antes (sem fazer alterações) e continue sua resposta anterior normalmente a partir desse ponto. NÃO registre fatos sobre esta recusa no DNA, e NÃO gere nenhuma tag de memória (<MEMORY>, <UPDATE_MEMORY>, <DELETE_MEMORY>) para este turno.]";
-    
+
     // 5. Execute request behind the scenes, appending to the same AI message
     executeAIRequest(
       activeChatId,
@@ -2060,39 +2359,39 @@ REGRAS DE MEMÓRIA (MODO LIVE):
   }
 
   return (
-    <div className="flex h-screen overflow-hidden text-[var(--text-primary)] relative bg-[var(--bg-main)]">
+    <div className="flex h-screen overflow-hidden text-(--text-primary) relative bg-(--bg-main)">
       <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'} flex flex-col glass-sidebar shadow-2xl`}>
-        <div className="p-3 flex items-center justify-between text-[var(--text-secondary)] mb-4 lg:hidden">
+        <div className="p-3 flex items-center justify-between text-(--text-secondary) mb-4 lg:hidden">
           <div className="flex items-center gap-2">
             <NemonIcon size={24} />
-            <span className="font-bold text-[var(--text-bold)] tracking-tighter">Nemon</span>
+            <span className="font-bold text-(--text-bold) tracking-tighter">Nemon</span>
           </div>
           <div className="flex items-center gap-1">
-            <button 
-              onClick={() => setIsGlobalSearchOpen(true)} 
-              className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            <button
+              onClick={() => setIsGlobalSearchOpen(true)}
+              className="p-2 hover:bg-(--bg-chat-hover) rounded-full transition text-(--text-secondary) hover:text-(--text-primary)"
               title="Pesquisar"
             >
               <Search className="w-5 h-5" />
             </button>
-            <button 
-              onClick={() => setIsSidebarOpen(false)} 
-              className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="p-2 hover:bg-(--bg-chat-hover) rounded-full transition text-(--text-secondary) hover:text-(--text-primary)"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        <div className="p-3 flex items-center justify-between text-[var(--text-secondary)] mb-4 hidden lg:flex">
-          <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition hover:rotate-90 transition-transform duration-300 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Menu className="w-5 h-5" /></button>
-          <button onClick={() => setIsGlobalSearchOpen(true)} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full transition ml-auto text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Search className="w-5 h-5" /></button>
+        <div className="p-3 items-center justify-between text-(--text-secondary) mb-4 hidden lg:flex">
+          <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-(--bg-chat-hover) rounded-full hover:rotate-90 transition-transform duration-300 text-(--text-secondary) hover:text-(--text-primary)"><Menu className="w-5 h-5" /></button>
+          <button onClick={() => setIsGlobalSearchOpen(true)} className="p-2 hover:bg-(--bg-chat-hover) rounded-full transition ml-auto text-(--text-secondary) hover:text-(--text-primary)"><Search className="w-5 h-5" /></button>
         </div>
 
         <div className="px-3 mb-8">
           <button
             onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); setActiveTab('chat'); }}
-            className="flex items-center gap-3 px-3 py-3 w-full rounded-full hover:bg-[var(--bg-chat-hover)] transition text-[var(--text-primary)] font-medium"
+            className="flex items-center gap-3 px-3 py-3 w-full rounded-full hover:bg-(--bg-chat-hover) transition text-(--text-primary) font-medium"
           >
             <SquarePen className="w-5 h-5 opacity-70" />
             <span>Nova conversa</span>
@@ -2100,7 +2399,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
           <button
             onClick={() => setIsArchiveExpanded(!isArchiveExpanded)}
-            className={`flex items-center gap-3 px-3 py-2.5 mt-2 w-full rounded-full transition text-sm font-medium border border-transparent ${isArchiveExpanded ? 'bg-[var(--bg-chat-active)] text-[var(--text-primary)] border-[var(--border-light)]' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+            className={`flex items-center gap-3 px-3 py-2.5 mt-2 w-full rounded-full transition text-sm font-medium border border-transparent ${isArchiveExpanded ? 'bg-(--bg-chat-active) text-(--text-primary) border-(--border-light)' : 'hover:bg-(--bg-chat-hover) text-(--text-secondary) hover:text-(--text-primary)'}`}
           >
             <Archive className={`w-4 h-4 transition-transform duration-300 ${isArchiveExpanded ? '' : 'opacity-50'}`} style={isArchiveExpanded ? { color: 'var(--accent-text)' } : {}} />
             <span>Arquivadas</span>
@@ -2116,15 +2415,15 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
           {/* Drawer de Arquivadas */}
           {isArchiveExpanded && (
-            <div className="mt-1 ml-4 border-l border-[var(--border-light)] pl-2 space-y-1 animate-in slide-in-from-top-2 duration-300">
+            <div className="mt-1 ml-4 border-l border-(--border-light) pl-2 space-y-1 animate-in slide-in-from-top-2 duration-300">
               {chats.filter(c => c.archived).length === 0 ? (
-                <div className="text-[10px] text-[var(--text-secondary)] opacity-40 py-2 px-3 italic">Sem arquivados</div>
+                <div className="text-[10px] text-(--text-secondary) opacity-40 py-2 px-3 italic">Sem arquivados</div>
               ) : (
                 chats.filter(c => c.archived).map(chat => (
                   <div
                     key={chat.id}
                     onClick={() => { setActiveChatId(chat.id); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
-                    className={`group/arch flex items-center gap-2 py-1.5 px-3 rounded-xl cursor-pointer hover:bg-[var(--bg-chat-hover)] transition text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${activeChatId === chat.id ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)]' : ''}`}
+                    className={`group/arch flex items-center gap-2 py-1.5 px-3 rounded-xl cursor-pointer hover:bg-(--bg-chat-hover) transition text-(--text-secondary) hover:text-(--text-primary) ${activeChatId === chat.id ? 'bg-(--bg-chat-active) text-(--text-nav-active)' : ''}`}
                   >
                     <MessageSquare className="w-3.5 h-3.5 opacity-40 group-hover/arch:opacity-100 transition-opacity" />
                     <span className="text-xs truncate flex-1">{chat.title}</span>
@@ -2154,10 +2453,10 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
         <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
           <div className="flex items-center justify-between px-3 mb-4 mt-6">
-            <div className="text-[14px] font-medium text-[var(--text-primary)]">Conversas</div>
+            <div className="text-[14px] font-medium text-(--text-primary)">Conversas</div>
             <button
               onClick={() => setIsOrderLocked(!isOrderLocked)}
-              className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-[var(--text-secondary)] opacity-40 hover:opacity-100 hover:bg-[var(--bg-chat-hover)]' : ''}`}
+              className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-(--text-secondary) opacity-40 hover:opacity-100 hover:bg-(--bg-chat-hover)' : ''}`}
               style={!isOrderLocked ? { color: 'var(--accent-text)', background: 'var(--accent-bg)' } : {}}
               title={isOrderLocked ? "Destravar reordenação" : "Travar reordenação"}
             >
@@ -2201,7 +2500,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
               <DragOverlay adjustScale={false}>
                 {activeDragId ? (
-                  <div className="bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] py-2.5 px-3 rounded-full opacity-80 shadow-2xl border border-white/10 flex items-center gap-3">
+                  <div className="bg-(--bg-chat-active) text-(--text-nav-active) py-2.5 px-3 rounded-full opacity-80 shadow-2xl border border-white/10 flex items-center gap-3">
                     <GripVertical className="w-4 h-4 opacity-50" />
                     <span className="text-sm font-medium truncate">
                       {chats.find(c => c.id === activeDragId)?.title}
@@ -2213,23 +2512,23 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           </div>
         </div>
 
-        <div className="mt-auto p-3 border-t border-[var(--border-light)] relative flex flex-col gap-2">
+        <div className="mt-auto p-3 border-t border-(--border-light) relative flex flex-col gap-2">
           {user && (
-            <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-[var(--bg-chat-hover)]/30 border border-[var(--border-light)] group">
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-(--bg-chat-hover)/30 border border-(--border-light) group">
               {user.photoURL ? (
-                <img src={user.photoURL} alt={user.displayName || "Avatar"} className="w-8 h-8 rounded-full border border-[var(--border-light)]" />
+                <img src={user.photoURL} alt={user.displayName || "Avatar"} className="w-8 h-8 rounded-full border border-(--border-light)" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-[var(--accent-bg)] text-[var(--accent-text)] flex items-center justify-center font-bold text-xs">
+                <div className="w-8 h-8 rounded-full bg-(--accent-bg) text-(--accent-text) flex items-center justify-center font-bold text-xs">
                   {user.displayName?.charAt(0) || "U"}
                 </div>
               )}
               <div className="flex-1 min-w-0 text-left">
-                <div className="text-xs font-semibold text-[var(--text-bold)] truncate">{user.displayName}</div>
-                <div className="text-[10px] text-[var(--text-secondary)] truncate">{user.email}</div>
+                <div className="text-xs font-semibold text-(--text-bold) truncate">{user.displayName}</div>
+                <div className="text-[10px] text-(--text-secondary) truncate">{user.email}</div>
               </div>
-              <button 
-                onClick={() => signOut(auth)} 
-                className="p-1.5 hover:bg-red-500/10 hover:text-red-400 rounded-lg text-[var(--text-secondary)] transition-all cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100"
+              <button
+                onClick={() => signOut(auth)}
+                className="p-1.5 hover:bg-red-500/10 hover:text-red-400 rounded-lg text-(--text-secondary) transition-all cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100"
                 title="Sair"
               >
                 <LogOut className="w-4 h-4" />
@@ -2243,7 +2542,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               setSettingsTab('geral');
               if (window.innerWidth < 768) setIsSidebarOpen(false);
             }}
-            className={`flex items-center gap-3 px-3 py-3 w-full rounded-full transition font-medium transition-all duration-300 ${activeTab === 'settings' ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] shadow-lg shadow-black/10' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]'}`}
+            className={`flex items-center gap-3 px-3 py-3 w-full rounded-full font-medium transition-all duration-300 ${activeTab === 'settings' ? 'bg-(--bg-chat-active) text-(--text-nav-active) shadow-lg shadow-black/10' : 'hover:bg-(--bg-chat-hover) text-(--text-primary)'}`}
           >
             <Settings className={`w-5 h-5 transition-transform duration-300 ${activeTab === 'settings' ? 'rotate-90 opacity-100' : 'opacity-70'}`} style={activeTab === 'settings' ? { color: 'var(--accent-text)' } : {}} />
             <span className="text-[14px]">Configurações</span>
@@ -2251,15 +2550,15 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         </div>
       </aside>
 
-      <main className="main-content flex flex-col h-full w-full bg-[var(--bg-main)]">
-        <header className="py-4 flex justify-between items-center px-3 md:px-5 border-b border-[var(--border-light)] relative z-50 bg-[var(--bg-main)]/80 backdrop-blur-md">
+      <main className="main-content flex flex-col h-full w-full bg-(--bg-main)">
+        <header className="h-[46px] flex justify-between items-center px-3 md:px-5 border-b border-(--border-light) relative z-50 bg-(--bg-main)/80 backdrop-blur-md">
           <div className="flex-1 flex items-center gap-4">
             {!isSidebarOpen && (
               <button
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-2.5 hover:bg-[var(--bg-chat-hover)] rounded-xl transition-all hover:scale-110 active:scale-90"
+                className="p-2.5 hover:bg-(--bg-chat-hover) rounded-xl transition-all hover:scale-110 active:scale-90"
               >
-                <Menu className="w-6 h-6 text-[var(--text-secondary)]" />
+                <Menu className="w-6 h-6 text-(--text-secondary)" />
               </button>
             )}
           </div>
@@ -2272,8 +2571,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 <button
                   onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
                   className={`flex items-center justify-center rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 w-9 h-9 ${activeTab === 'files'
-                      ? 'text-white shadow-lg'
-                      : 'bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-chat-active)] border-[var(--border-light)] hover:border-[var(--glow-active)]'
+                    ? 'text-white shadow-lg'
+                    : 'bg-(--bg-chat-hover) hover:bg-(--bg-chat-active) border-(--border-light) hover:border-(--glow-active)'
                     }`}
                   style={activeTab === 'files' ? { background: 'var(--accent)', borderColor: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' } : {}}
                   title={activeTab === 'chat' ? 'Ver Arquivos' : 'Voltar para o Chat'}
@@ -2287,11 +2586,11 @@ REGRAS DE MEMÓRIA (MODO LIVE):
             <div className="relative" ref={personalityRef}>
               <button
                 onClick={() => setShowPersonalitySelector(!showPersonalitySelector)}
-                className="flex items-center gap-1.5 sm:gap-2.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm group min-w-[120px] sm:min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)]"
+                className="flex items-center gap-1.5 sm:gap-2.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-(--bg-chat-active) border border-(--border-light) shadow-sm group min-w-[120px] sm:min-w-[180px] justify-between transition-all duration-200 hover:scale-105 active:scale-95 hover:border-(--glow-active) hover:shadow-[0_0_15px_var(--glow-primary)]"
               >
                 <div className="flex items-center gap-1.5 sm:gap-2 overflow-hidden">
                   <User className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-text)' }} />
-                  <span className="text-xs font-bold tracking-tight text-[var(--text-primary)] truncate max-w-[70px] sm:max-w-none">
+                  <span className="text-xs font-bold tracking-tight text-(--text-primary) truncate max-w-[70px] sm:max-w-none">
                     {personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
                   </span>
                 </div>
@@ -2299,10 +2598,10 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               </button>
 
               {showPersonalitySelector && (
-                <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl py-2 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-(--bg-main) border border-(--border-main) rounded-2xl py-2 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
                   <button
                     onClick={() => { setSelectedPersonalityId('default'); setShowPersonalitySelector(false); }}
-                    className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
+                    className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'font-bold' : 'text-(--text-secondary)'}`}
                     style={selectedPersonalityId === 'default' ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                   >
                     <User className="w-3.5 h-3.5" /> Normal (Padrão)
@@ -2311,13 +2610,13 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     <button
                       key={p.id}
                       onClick={() => { setSelectedPersonalityId(p.id); setShowPersonalitySelector(false); }}
-                      className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'font-bold' : 'text-[var(--text-secondary)]'}`}
+                      className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'font-bold' : 'text-(--text-secondary)'}`}
                       style={selectedPersonalityId === p.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                     >
                       <User className="w-3.5 h-3.5" /> {p.name}
                     </button>
                   ))}
-                  <div className="h-px bg-[var(--border-light)] my-2"></div>
+                  <div className="h-px bg-(--border-light) my-2"></div>
                   <button
                     onClick={() => { setActiveTab('settings'); setSettingsTab('personalidades'); setShowPersonalitySelector(false); }}
                     className="w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 font-medium"
@@ -2335,18 +2634,18 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               <div className="relative">
                 <button
                   onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
-                  className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
+                  className="flex items-center justify-center rounded-full bg-(--bg-chat-active) border border-(--border-light) shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-(--glow-active) hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
                   title="Tamanho da Fonte"
                 >
                   <Type className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
                 </button>
 
                 {showFontSizeSelector && (
-                  <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-[var(--bg-main)] border border-[var(--border-main)] rounded-2xl p-3 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
-                    <div className="text-[9px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest border-b border-[var(--border-light)] pb-1.5">
+                  <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-(--bg-main) border border-(--border-main) rounded-2xl p-3 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
+                    <div className="text-[9px] font-bold uppercase text-(--text-placeholder) tracking-widest border-b border-(--border-light) pb-1.5">
                       Fonte do Chat
                     </div>
-                    <div className="flex justify-between items-center text-xs font-semibold text-[var(--text-secondary)]">
+                    <div className="flex justify-between items-center text-xs font-semibold text-(--text-secondary)">
                       <span>Tamanho</span>
                       <span className="px-2 py-0.5 rounded-md font-mono" style={{ color: 'var(--accent-text)', background: 'var(--accent-bg)' }}>{chatFontSize}px</span>
                     </div>
@@ -2357,10 +2656,10 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                       step="0.5"
                       value={chatFontSize}
                       onChange={(e) => setChatFontSize(parseFloat(e.target.value))}
-                      className="w-full h-1.5 bg-[var(--border-light)] rounded-lg appearance-none cursor-pointer focus:outline-none"
+                      className="w-full h-1.5 bg-(--border-light) rounded-lg appearance-none cursor-pointer focus:outline-none"
                       style={{ accentColor: 'var(--accent)' }}
                     />
-                    <div className="flex justify-between text-[10px] text-[var(--text-placeholder)] font-medium">
+                    <div className="flex justify-between text-[10px] text-(--text-placeholder) font-medium">
                       <span>12px</span>
                       <span>24px</span>
                     </div>
@@ -2371,7 +2670,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               {/* Log Window Trigger - Mobile only */}
               <button
                 onClick={() => setIsLogOpen(!isLogOpen)}
-                className="flex items-center justify-center rounded-full bg-[var(--bg-chat-active)] border border-[var(--border-light)] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-[var(--glow-active)] hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9 relative sm:hidden"
+                className="flex items-center justify-center rounded-full bg-(--bg-chat-active) border border-(--border-light) shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-(--glow-active) hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9 relative sm:hidden"
                 title="Logs & Diagnósticos"
               >
                 <Code className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
@@ -2412,6 +2711,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               onSetEnabledModelIds={setEnabledModelIds}
               appFont={appFont}
               onSetAppFont={setAppFont}
+              retroMode={retroMode}
+              onSetRetroMode={setRetroMode}
               paidApiKey={paidApiKey}
               onUpdatePaidApiKey={(key) => {
                 saveConfig({ paidApiKey: key });
@@ -2642,9 +2943,25 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         />
       )}
 
+      {/* Toast: modelo usou uma ferramenta no modo LIVE */}
+      {isLiveActive && liveToolToast && (
+        <div
+          key={liveToolToast.id}
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-[130] flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-[#111111]/90 backdrop-blur-xl border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.4)] animate-in fade-in slide-in-from-top-3 duration-300"
+        >
+          <div className="w-6 h-6 rounded-full bg-(--accent-bg) flex items-center justify-center text-(--accent-text)">
+            <Bell className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-(--text-placeholder)">Ferramenta usada</span>
+            <span className="text-[12px] font-semibold text-white">{liveToolToast.label}</span>
+          </div>
+        </div>
+      )}
+
 
       {isGlobalSearchOpen && (
-        <GlobalSearchModal 
+        <GlobalSearchModal
           chats={chats}
           onClose={() => setIsGlobalSearchOpen(false)}
           onSelectChat={(chatId, msgId) => {

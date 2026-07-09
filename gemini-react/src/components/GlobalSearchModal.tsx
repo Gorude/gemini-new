@@ -117,7 +117,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
   // Helper to highlight matching text
   const highlightText = (text: string, searchStr: string) => {
     if (!searchStr.trim()) return <span>{text}</span>;
-    const escapedSearch = searchStr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const escapedSearch = searchStr.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
     const regex = new RegExp(`(${escapedSearch})`, 'gi');
     const parts = text.split(regex);
     
@@ -140,22 +140,22 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
       <div 
         ref={modalRef}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl bg-[var(--bg-modal)] backdrop-blur-3xl rounded-3xl border border-[var(--border-main)] shadow-[0_25px_60px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300"
+        className="w-full max-w-xl bg-(--bg-modal) backdrop-blur-3xl rounded-3xl border border-(--border-main) shadow-[0_25px_60px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300"
       >
         {/* Search Input Bar */}
-        <div className="flex items-center px-3.5 py-3 border-b border-[var(--border-light)] gap-3 bg-[var(--bg-sidebar)]/10">
-          <Search className="w-5 h-5 text-[var(--text-placeholder)] shrink-0" />
+        <div className="flex items-center px-3.5 py-3 border-b border-(--border-light) gap-3 bg-(--bg-sidebar)/10">
+          <Search className="w-5 h-5 text-(--text-placeholder) shrink-0" />
           <input
             ref={inputRef}
             type="text"
             placeholder="Pesquisar títulos ou conteúdos nas conversas..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-transparent border-none text-[var(--text-primary)] outline-none text-sm placeholder-[var(--text-placeholder)]"
+            className="w-full bg-transparent border-none text-(--text-primary) outline-none text-sm placeholder-(--text-placeholder)"
           />
           <button 
             onClick={onClose}
-            className="p-1 hover:bg-[var(--bg-chat-hover)] rounded-lg text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition"
+            className="p-1 hover:bg-(--bg-chat-hover) rounded-lg text-(--text-placeholder) hover:text-(--text-primary) transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -164,11 +164,11 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
         {/* Results Body */}
         <div className="max-h-[350px] overflow-y-auto custom-scrollbar p-2">
           {!query.trim() ? (
-            <div className="py-12 text-center text-xs text-[var(--text-placeholder)] font-medium">
+            <div className="py-12 text-center text-xs text-(--text-placeholder) font-medium">
               Digite algo para buscar em suas conversas ativas ou arquivadas.
             </div>
           ) : results.length === 0 ? (
-            <div className="py-12 text-center text-xs text-[var(--text-placeholder)] font-medium">
+            <div className="py-12 text-center text-xs text-(--text-placeholder) font-medium">
               Nenhum resultado encontrado para "{query}".
             </div>
           ) : (
@@ -182,8 +182,8 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
                     onMouseEnter={() => setSelectedIndex(idx)}
                     className={`flex items-start gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 select-none ${
                       isSelected 
-                        ? 'bg-[var(--bg-chat-active)] text-[var(--text-nav-active)] scale-[1.01]' 
-                        : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-primary)]'
+                        ? 'bg-(--bg-chat-active) text-(--text-nav-active) scale-[1.01]' 
+                        : 'hover:bg-(--bg-chat-hover) text-(--text-primary)'
                     }`}
                   >
                     {/* Icon Column */}
@@ -207,14 +207,14 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
                           }
                         </span>
                         {res.isArchived && (
-                          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase bg-[var(--accent-bg)] text-[var(--accent-text)] border border-[var(--accent-border)] tracking-widest">
+                          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase bg-(--accent-bg) text-(--accent-text) border border-(--accent-border) tracking-widest">
                             <Archive className="w-2 h-2" /> Arquivada
                           </span>
                         )}
                       </div>
 
                       {res.matchType === 'message' && res.msgText && (
-                        <p className="text-[10px] text-[var(--text-secondary)] mt-1 line-clamp-2 leading-relaxed">
+                        <p className="text-[10px] text-(--text-secondary) mt-1 line-clamp-2 leading-relaxed">
                           {highlightText(getSnippet(res.msgText, query), query)}
                         </p>
                       )}
@@ -227,7 +227,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
         </div>
 
         {/* Footer shortcuts helper */}
-        <div className="px-3.5 py-2.5 border-t border-[var(--border-light)] bg-[var(--bg-sidebar)]/20 text-[9px] text-[var(--text-placeholder)] flex justify-between font-medium">
+        <div className="px-3.5 py-2.5 border-t border-(--border-light) bg-(--bg-sidebar)/20 text-[9px] text-(--text-placeholder) flex justify-between font-medium">
           <span>Use ↑ ↓ para navegar e Enter para abrir</span>
           <span>Esc para fechar</span>
         </div>

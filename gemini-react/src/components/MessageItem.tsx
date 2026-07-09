@@ -191,22 +191,27 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
 
   const forceRender = !msg.text || msg.isSearching || msg.isVerifying || (msg.role === 'ai' && isLoading);
 
+  // Placeholder de virtualização: fora da tela, renderiza um espaço com a altura já
+  // medida. A altura fica em ref (não em state) de propósito, para não disparar
+  // re-renders a cada resize durante o streaming — daí a leitura do ref no render.
+  /* eslint-disable react-hooks/refs */
   if (!isVisible && !forceRender && heightRef.current > 0) {
     return (
-      <div 
+      <div
         ref={containerRef}
-        id={`msg-${msg.id}`} 
+        id={`msg-${msg.id}`}
         className={`w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'}`}
         style={{ height: `${heightRef.current}px` }}
       />
     );
   }
+  /* eslint-enable react-hooks/refs */
 
   return (
     <div ref={containerRef} id={`msg-${msg.id}`} className={`group/msg relative flex flex-col w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300 animate-message-entrance`}>
       {/* Context Indicator Line */}
       {isContext && (
-        <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-[var(--accent)] opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
+        <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-(--accent) opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
       )}
 
       {msg.role === 'ai' ? (
@@ -260,7 +265,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                    return (
                      <a 
                        key={i} href={src.uri} target="_blank" rel="noopener noreferrer"
-                       className="relative inline-block w-5 h-5 rounded-full border border-[var(--border-light)] bg-white overflow-hidden hover:scale-110 hover:z-10 transition-transform animate-in zoom-in-50 fade-in duration-300 shadow-sm"
+                       className="relative inline-block w-5 h-5 rounded-full border border-(--border-light) bg-white overflow-hidden hover:scale-110 hover:z-10 transition-transform animate-in zoom-in-50 fade-in duration-300 shadow-sm"
                        title={src.title} style={{ animationDelay: `${i * 100}ms` }}
                      >
                        <img 
@@ -275,24 +280,24 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                    );
                  })}
                   {msg.sources && msg.sources.length > 4 && (
-                    <button onClick={(e) => { e.stopPropagation(); onToggleSources(expandedSourcesMsgId === msg.id ? null : msg.id); }} className="relative inline-block w-5 h-5 rounded-full border border-[var(--border-light)] bg-[var(--bg-chat-active)] flex items-center justify-center text-[8px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-user-bubble)] transition z-20">
+                    <button onClick={(e) => { e.stopPropagation(); onToggleSources(expandedSourcesMsgId === msg.id ? null : msg.id); }} className="relative inline-flex w-5 h-5 rounded-full border border-(--border-light) bg-(--bg-chat-active) items-center justify-center text-[8px] font-bold text-(--text-secondary) hover:bg-(--bg-user-bubble) transition z-20">
                       +{msg.sources.length - 4}
                     </button>
                   )}
                 </div>
                 
                 {msg.sources && msg.sources.length > 0 && (
-                  <button onClick={(e) => { e.stopPropagation(); onToggleSources(expandedSourcesMsgId === msg.id ? null : msg.id); }} className="text-[10px] font-bold text-[var(--text-secondary)] tracking-tight opacity-80 uppercase hover:text-[var(--text-primary)] transition flex items-center gap-1">
+                  <button onClick={(e) => { e.stopPropagation(); onToggleSources(expandedSourcesMsgId === msg.id ? null : msg.id); }} className="text-[10px] font-bold text-(--text-secondary) tracking-tight opacity-80 uppercase hover:text-(--text-primary) transition flex items-center gap-1">
                     {msg.sources.length} {msg.sources.length === 1 ? 'fonte' : 'fontes'}
                     <ChevronDown className={`w-2.5 h-2.5 transition-transform ${expandedSourcesMsgId === msg.id ? 'rotate-180' : ''}`} />
                   </button>
                 )}
 
                 {expandedSourcesMsgId === msg.id && msg.sources && (
-                  <div onClick={(e) => e.stopPropagation()} className="absolute top-10 left-10 bg-[var(--bg-main)] shadow-2xl rounded-2xl p-3 min-w-[320px] max-w-[400px] z-[60] border border-[var(--border-light)] animate-in fade-in zoom-in-95 duration-200">
+                  <div onClick={(e) => e.stopPropagation()} className="absolute top-10 left-10 bg-(--bg-main) shadow-2xl rounded-2xl p-3 min-w-[320px] max-w-[400px] z-[60] border border-(--border-light) animate-in fade-in zoom-in-95 duration-200">
                     <div className="flex justify-between items-center mb-2 px-1">
-                      <h5 className="text-[10px] font-bold uppercase text-[var(--text-placeholder)] tracking-widest">Todas as Referências</h5>
-                      <button onClick={() => onToggleSources(null)} className="text-[var(--text-placeholder)] hover:text-white"><X className="w-3.5 h-3.5" /></button>
+                      <h5 className="text-[10px] font-bold uppercase text-(--text-placeholder) tracking-widest">Todas as Referências</h5>
+                      <button onClick={() => onToggleSources(null)} className="text-(--text-placeholder) hover:text-white"><X className="w-3.5 h-3.5" /></button>
                     </div>
                     <div className="max-h-[250px] overflow-y-auto space-y-1 custom-scrollbar px-1">
                       {msg.sources.map((src, idx) => {
@@ -311,8 +316,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                           <a key={idx} href={src.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition group">
                             <img src={`https://www.google.com/s2/favicons?domain=${d}&sz=64`} className="w-4 h-4 rounded-sm shrink-0" alt="" />
                             <div className="flex flex-col min-w-0">
-                              <span className="text-xs text-[var(--text-primary)] font-medium truncate group-hover:text-[var(--accent-text)] transition-colors">{src.title || 'Página da Web'}</span>
-                              <span className="text-[9px] text-[var(--text-placeholder)] truncate">{src.uri}</span>
+                              <span className="text-xs text-(--text-primary) font-medium truncate group-hover:text-(--accent-text) transition-colors">{src.title || 'Página da Web'}</span>
+                              <span className="text-[9px] text-(--text-placeholder) truncate">{src.uri}</span>
                             </div>
                           </a>
                         );
@@ -340,7 +345,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
 
           {msg.thoughts && msg.thoughts.trim() && (
             <details className="thinking-drawer mb-3 group/think">
-              <summary className="flex items-center gap-2 cursor-pointer text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition select-none py-1.5 px-3 rounded-lg hover:bg-[var(--bg-user-bubble)]/50 w-fit">
+              <summary className="flex items-center gap-2 cursor-pointer text-xs text-(--text-secondary) hover:text-(--text-primary) transition select-none py-1.5 px-3 rounded-lg hover:bg-(--bg-user-bubble)/50 w-fit">
                 <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
                 <span className="font-medium">Mostrar Raciocínio</span>
                 <ChevronRight className="w-3 h-3 transition-transform group-open/think:rotate-90" />
@@ -359,13 +364,13 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           ) : msg.text ? (
             <div 
               onMouseUp={handleMouseUp}
-              className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em]"
+              className="response-body text-(--text-primary) antialiased min-h-[1.5em]"
               dangerouslySetInnerHTML={{ __html: parsedHtml }}
             />
           ) : null}
 
           {msg.pendingMemoryUpdates && msg.pendingMemoryUpdates.length > 0 && (
-            <div className="mt-4 bg-[var(--bg-sidebar)]/30 border border-[var(--border-light)] rounded-[0.75rem] p-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="mt-4 bg-(--bg-sidebar)/30 border border-(--border-light) rounded-[0.75rem] p-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-start gap-2.5 mb-2.5">
                 <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400 shrink-0">
                   <Brain className="w-3.5 h-3.5" />
@@ -374,7 +379,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                   <h4 className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: 'var(--accent-text)' }}>
                     Atualizar DNA de Memória?
                   </h4>
-                  <p className="text-[9.5px] text-[var(--text-secondary)] mt-0.5 leading-normal">
+                  <p className="text-[9.5px] text-(--text-secondary) mt-0.5 leading-normal">
                     Identifiquei uma contradição ou nova informação sobre você. Deseja atualizar seu DNA?
                   </p>
                 </div>
@@ -384,24 +389,24 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 {msg.pendingMemoryUpdates.map((upd, idx) => {
                   const isResolved = !!upd.resolved;
                   return (
-                    <div key={idx} className="bg-[var(--bg-main)]/40 border border-[var(--border-light)]/50 rounded-xl p-3 text-[10.5px]">
+                    <div key={idx} className="bg-(--bg-main)/40 border border-(--border-light)/50 rounded-xl p-3 text-[10.5px]">
                       <div className="font-bold text-[8px] uppercase tracking-wider opacity-50 mb-1">
                         Categoria: {upd.category}
                       </div>
-                      <div className="line-through text-red-400/80 mb-1.5 break-words">
+                      <div className="line-through text-red-400/80 mb-1.5 wrap-break-word">
                         Antigo: "{upd.oldText}"
                       </div>
-                      <div className="text-green-400 font-semibold break-words">
+                      <div className="text-green-400 font-semibold wrap-break-word">
                         Novo: "{upd.newText}"
                       </div>
                       {isResolved && (
-                        <div className="mt-2.5 pt-2 border-t border-[var(--border-light)]/30 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider">
+                        <div className="mt-2.5 pt-2 border-t border-(--border-light)/30 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider">
                           {upd.resolved === 'accepted' ? (
                             <span className="text-green-400 flex items-center gap-1">
                               <Check className="w-3.5 h-3.5" /> DNA Atualizado
                             </span>
                           ) : (
-                            <span className="text-[var(--text-placeholder)] flex items-center gap-1">
+                            <span className="text-(--text-placeholder) flex items-center gap-1">
                               <AlertCircle className="w-3.5 h-3.5" /> Ignorado
                             </span>
                           )}
@@ -421,7 +426,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                         onResolveMemoryUpdate?.(msg.id, upd.id, 'ignored');
                       });
                     }}
-                    className="px-3 py-1.5 rounded-xl font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] transition-all cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl font-semibold text-(--text-secondary) hover:bg-(--bg-chat-hover) transition-all cursor-pointer"
                   >
                     Ignorar
                   </button>
@@ -444,7 +449,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           {msg.continuationText ? (
             <div 
               onMouseUp={handleMouseUp}
-              className="response-body text-[var(--text-primary)] antialiased min-h-[1.5em] mt-4"
+              className="response-body text-(--text-primary) antialiased min-h-[1.5em] mt-4"
               dangerouslySetInnerHTML={{ __html: parsedContinuationHtml }}
             />
           ) : null}
@@ -452,7 +457,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           {msg.files && msg.files.length > 0 && (
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               {msg.files.map((file, i) => (
-                <div key={i} className="relative group/img rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-light)] bg-black/20">
+                <div key={i} className="relative group/img rounded-2xl overflow-hidden shadow-2xl border border-(--border-light) bg-black/20">
                   <img src={`data:${file.mimeType};base64,${file.data}`} className="w-full h-auto object-contain block max-h-[500px]" alt="Imagem Gerada" />
                   <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex justify-between items-center">
                     <span className="text-[10px] text-white/70 font-medium">IMAGE GEN · {MODEL_LIMITS[imagenModel]?.name}</span>
@@ -474,13 +479,13 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           )}
 
           <div className="flex items-center gap-4 mt-3 opacity-0 group-hover/msg:opacity-100 transition-opacity translate-y-1 group-hover/msg:translate-y-0 duration-300">
-             <button onClick={() => onRegenerate(msg.id)} disabled={isLoading} className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition">
+             <button onClick={() => onRegenerate(msg.id)} disabled={isLoading} className="text-(--text-placeholder) hover:text-(--text-primary) transition">
                <RotateCcw className={`w-4 h-4 ${isLoading && !msg.text ? 'animate-spin' : ''}`} />
              </button>
-             <button onClick={() => onCopy(msg.text, msg.id + '-copy')} className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition">
+             <button onClick={() => onCopy(msg.text, msg.id + '-copy')} className="text-(--text-placeholder) hover:text-(--text-primary) transition">
                {copiedId === msg.id + '-copy' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
              </button>
-             <button onClick={() => onCopy(`\`\`\`markdown\n${msg.text}\n\`\`\``, msg.id + '-md')} className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition">
+             <button onClick={() => onCopy(`\`\`\`markdown\n${msg.text}\n\`\`\``, msg.id + '-md')} className="text-(--text-placeholder) hover:text-(--text-primary) transition">
                {copiedId === msg.id + '-md' ? <Check className="w-4 h-4 text-green-500" /> : <FileText className="w-4 h-4" />}
              </button>
              <button 
@@ -495,9 +500,9 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 disabled={isLoading && !msg.isVerifying} 
                 onMouseEnter={() => msg.isVerifying && setIsTimerHovered(true)}
                 onMouseLeave={() => setIsTimerHovered(false)}
-                className={`text-[var(--text-placeholder)] hover:text-[var(--accent-text)] transition flex items-center gap-1.5 ${
+                className={`text-(--text-placeholder) hover:text-(--accent-text) transition flex items-center gap-1.5 ${
                   msg.isVerifying 
-                    ? (isTimerHovered ? 'text-red-500 hover:text-red-600 font-bold scale-105' : 'text-[var(--accent-text)] font-semibold') 
+                    ? (isTimerHovered ? 'text-red-500 hover:text-red-600 font-bold scale-105' : 'text-(--accent-text) font-semibold') 
                     : ''
                 }`}
                 title={msg.isVerifying ? "Cancelar checagem de fatos" : "Checar fatos na web"}
@@ -510,8 +515,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                     </>
                   ) : (
                     <>
-                      <Clock className="w-3.5 h-3.5 text-[var(--accent-text)] animate-pulse" />
-                      <span className="text-[10px] font-bold text-[var(--accent-text)]">{verifySeconds.toFixed(1)}s</span>
+                      <Clock className="w-3.5 h-3.5 text-(--accent-text) animate-pulse" />
+                      <span className="text-[10px] font-bold text-(--accent-text)">{verifySeconds.toFixed(1)}s</span>
                     </>
                   )
                 ) : (
@@ -523,11 +528,11 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                   </>
                 )}
               </button>
-             <button onClick={() => onDelete(msg.id)} disabled={isLoading} className="text-[var(--text-placeholder)] hover:text-red-400 transition" >
+             <button onClick={() => onDelete(msg.id)} disabled={isLoading} className="text-(--text-placeholder) hover:text-red-400 transition" >
                <Trash2 className="w-3.5 h-3.5" />
              </button>
              {msg.duration !== undefined && (
-               <span className="text-[10px] font-normal text-[var(--text-placeholder)] opacity-60 ml-auto">
+               <span className="text-[10px] font-normal text-(--text-placeholder) opacity-60 ml-auto">
                  {msg.duration.toFixed(1)}s
                </span>
              )}
@@ -538,12 +543,12 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
            {msg.files && msg.files.length > 0 && (
              <div className="flex gap-2 mb-2 flex-wrap justify-end">
                {msg.files.map((f, i) => (
-                 <div key={i} className="w-24 h-24 rounded-lg bg-[var(--bg-chat-active)] overflow-hidden border border-[var(--border-main)] opacity-90 relative group">
+                 <div key={i} className="w-24 h-24 rounded-lg bg-(--bg-chat-active) overflow-hidden border border-(--border-main) opacity-90 relative group">
                    {f.mimeType.startsWith('image/') ? (
                      <img src={`data:${f.mimeType};base64,${f.data}`} className="object-cover w-full h-full" alt="upload" />
                    ) : (
-                     <div className="flex flex-col items-center justify-center w-full h-full text-[10px] break-words p-2 text-center text-[var(--text-secondary)] bg-[var(--bg-sidebar)]">
-                       <FileText className="w-6 h-6 mb-2 text-[var(--accent-text)] opacity-80" />
+                     <div className="flex flex-col items-center justify-center w-full h-full text-[10px] wrap-break-word p-2 text-center text-(--text-secondary) bg-(--bg-sidebar)">
+                       <FileText className="w-6 h-6 mb-2 text-(--accent-text) opacity-80" />
                        <span className="truncate w-full">{f.name}</span>
                      </div>
                    )}
@@ -553,24 +558,24 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
            )}
            
            {isEditing ? (
-             <div className="w-full flex flex-col gap-2 bg-[var(--bg-sidebar)] p-3 rounded-3xl border border-[var(--accent-border)] shadow-2xl">
-               <textarea autoFocus className="w-full bg-transparent border-none outline-none text-[var(--text-primary)] resize-none" rows={3} value={editingMsgText} onChange={(e) => onSetEditingMsgText(e.target.value)} />
+             <div className="w-full flex flex-col gap-2 bg-(--bg-sidebar) p-3 rounded-3xl border border-(--accent-border) shadow-2xl">
+               <textarea autoFocus className="w-full bg-transparent border-none outline-none text-(--text-primary) resize-none" rows={3} value={editingMsgText} onChange={(e) => onSetEditingMsgText(e.target.value)} />
                <div className="flex justify-end gap-2">
-                 <button onClick={onCancelEdit} className="px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">Cancelar</button>
-                 <button onClick={() => onSaveEdit(msg.id)} className="px-3 py-1.5 text-xs font-medium bg-[var(--accent)] text-white rounded-full hover:bg-[var(--accent-hover)] transition shadow-lg">Salvar e Enviar</button>
+                 <button onClick={onCancelEdit} className="px-3 py-1.5 text-xs font-medium text-(--text-secondary) hover:text-(--text-primary) transition">Cancelar</button>
+                 <button onClick={() => onSaveEdit(msg.id)} className="px-3 py-1.5 text-xs font-medium bg-(--accent) text-white rounded-full hover:bg-(--accent-hover) transition shadow-lg">Salvar e Enviar</button>
                </div>
              </div>
            ) : (
               <div className="relative group/user bubble-container">
                 <div className="user-msg text-white shadow-xl">{msg.text}</div>
                 <div className="flex items-center gap-3 mt-2 justify-end opacity-0 group-hover/user:opacity-100 transition-opacity">
-                 <button onClick={() => onEditPrompt(msg.id, msg.text)} className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition" title="Editar prompt" >
+                 <button onClick={() => onEditPrompt(msg.id, msg.text)} className="text-(--text-placeholder) hover:text-(--text-primary) transition" title="Editar prompt" >
                    <Edit2 className="w-3.5 h-3.5" />
                  </button>
-                 <button onClick={() => onCopy(msg.text, msg.id)} className="text-[var(--text-placeholder)] hover:text-[var(--text-primary)] transition" title="Copiar prompt" >
+                 <button onClick={() => onCopy(msg.text, msg.id)} className="text-(--text-placeholder) hover:text-(--text-primary) transition" title="Copiar prompt" >
                    {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                  </button>
-                 <button onClick={() => onDelete(msg.id)} disabled={isLoading} className="text-[var(--text-placeholder)] hover:text-red-400 transition" title="Deletar mensagem" >
+                 <button onClick={() => onDelete(msg.id)} disabled={isLoading} className="text-(--text-placeholder) hover:text-red-400 transition" title="Deletar mensagem" >
                    <Trash2 className="w-3.5 h-3.5" />
                  </button>
                </div>

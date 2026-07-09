@@ -51,7 +51,7 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
             <button 
               disabled={isConnecting}
               onClick={() => onConfirm(useMemory)}
-              className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-xl shadow-black/40 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="w-full py-3 bg-(--accent) hover:bg-(--accent-hover) text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-xl shadow-black/40 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               {isConnecting ? (
                 <>
@@ -77,7 +77,7 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
 
         {isConnecting && (
           <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10">
-            <div className="h-full bg-[var(--accent)] animate-[loading-bar_2s_ease-in-out_infinite] shadow-[0_0_10px_var(--accent-glow)]"></div>
+            <div className="h-full bg-(--accent) animate-[loading-bar_2s_ease-in-out_infinite] shadow-[0_0_10px_var(--accent-glow)]"></div>
           </div>
         )}
       </div>

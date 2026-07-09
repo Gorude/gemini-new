@@ -67,45 +67,47 @@
    fundo quente escuro + acento terracota (#d97757). */
 :root[data-theme="claude"] {
   --bg-main: #262624;
-  --bg-main-grad: linear-gradient(135deg, #262624 0%, #1f1e1d 100%);
-  --bg-sidebar: rgba(31, 30, 29, 0.65);
-  --bg-chat-hover: rgba(255, 255, 255, 0.05);
-  --bg-chat-active: rgba(217, 119, 87, 0.12);
-  --bg-nav-active: rgba(217, 119, 87, 0.16);
-  --text-nav-active: #f0eee6;
-  --bg-user-bubble: linear-gradient(135deg, #3a3936 0%, #30302e 100%);
-  --bg-input: rgba(48, 48, 46, 0.6);
-  --bg-modal: rgba(38, 38, 36, 0.9);
-  --border-main: rgba(255, 255, 255, 0.1);
-  --border-light: rgba(255, 255, 255, 0.06);
-  --text-primary: #e8e6dc;
-  --text-bold: #faf9f5;
-  --text-user-regular: rgba(240, 238, 230, 0.9);
-  --text-user-bold: #faf9f5;
-  --text-secondary: #b7b5a9;
-  --text-placeholder: #6f6d63;
-  --code-bg: #1f1e1d;
-  --inline-code-bg: #30302e;
-  --code-border: rgba(255, 255, 255, 0.08);
+  --bg-main-grad: linear-gradient(135deg, #2a2825 0%, #201e1c 100%);
+  --bg-sidebar: rgba(33, 31, 28, 0.7);
+  /* Overlays em tom quente (terroso/creme) em vez de branco neutro: é o que dá
+     o "calor" característico do Claude e evita a sensação de cinza puro. */
+  --bg-chat-hover: rgba(217, 119, 87, 0.07);
+  --bg-chat-active: rgba(217, 119, 87, 0.15);
+  --bg-nav-active: rgba(217, 119, 87, 0.18);
+  --text-nav-active: #f5f0e8;
+  --bg-user-bubble: linear-gradient(135deg, #3d3a35 0%, #322f2b 100%);
+  --bg-input: rgba(45, 42, 39, 0.6);
+  --bg-modal: rgba(38, 36, 33, 0.92);
+  --border-main: rgba(233, 224, 212, 0.11);
+  --border-light: rgba(233, 224, 212, 0.06);
+  --text-primary: #ece9e0;
+  --text-bold: #faf8f3;
+  --text-user-regular: rgba(245, 240, 232, 0.9);
+  --text-user-bold: #faf8f3;
+  --text-secondary: #b8b4a8;
+  --text-placeholder: #737065;
+  --code-bg: #201e1c;
+  --inline-code-bg: #322f2b;
+  --code-border: rgba(233, 224, 212, 0.08);
   --scrollbar-track: transparent;
-  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
-  --glass-bg: rgba(38, 38, 36, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.07);
+  --scrollbar-thumb: rgba(217, 119, 87, 0.22);
+  --scrollbar-thumb-hover: rgba(217, 119, 87, 0.4);
+  --glass-bg: rgba(40, 38, 35, 0.7);
+  --glass-border: rgba(233, 224, 212, 0.08);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
-  --glow-primary: rgba(217, 119, 87, 0.08);
+  --glow-primary: rgba(217, 119, 87, 0.1);
   --glow-active: rgba(217, 119, 87, 0.35);
   --message-bold-weight: 500;
   --nemon-logo-fill: #d97757;
   --nemon-logo-stroke: #d97757;
   --accent: #d97757;
-  --accent-hover: #c15f3c;
+  --accent-hover: #c96442;
   --accent-text: #e0855f;
-  --accent-bg: rgba(217, 119, 87, 0.12);
-  --accent-bg-strong: rgba(217, 119, 87, 0.18);
-  --accent-border: rgba(217, 119, 87, 0.3);
+  --accent-bg: rgba(217, 119, 87, 0.13);
+  --accent-bg-strong: rgba(217, 119, 87, 0.2);
+  --accent-border: rgba(217, 119, 87, 0.32);
   --accent-glow: rgba(217, 119, 87, 0.25);
-  --bg-sidebar-solid: #1f1e1d;
+  --bg-sidebar-solid: #201e1c;
 }
 
 :root[data-theme="claro"] {
@@ -235,6 +237,46 @@
   --accent-border: rgba(168, 85, 247, 0.3);
   --accent-glow: rgba(168, 85, 247, 0.3);
   --bg-sidebar-solid: #12102a;
+}
+
+/* ============================ MODO RETRÔ ============================
+   Estética 8-bit/pixelada: ícones com bordas duras, degradês achatados,
+   cantos quadrados e balões com sombra dura. Ativado por data-retro="on". */
+:root[data-retro="on"] {
+  /* Achata os degradês baseados em variáveis (fundo e balão do usuário). */
+  --bg-main-grad: var(--bg-main);
+  --bg-user-bubble: var(--accent);
+}
+
+/* Ícones (SVG) com bordas duras/serrilhadas — sem anti-aliasing = visual pixelado. */
+:root[data-retro="on"] svg {
+  shape-rendering: crispEdges;
+}
+
+/* Imagens raster pixeladas. */
+:root[data-retro="on"] img {
+  image-rendering: pixelated;
+}
+
+/* Cantos quadrados em tudo (pixel-art não tem cantos arredondados). */
+:root[data-retro="on"] * {
+  border-radius: 0 !important;
+}
+
+/* Remove degradês de utilitários Tailwind e de estilos inline. */
+:root[data-retro="on"] [class*="gradient"] {
+  background-image: none !important;
+}
+:root[data-retro="on"] [style*="gradient"] {
+  background-image: none !important;
+  background-color: var(--accent) !important;
+}
+
+/* Balão do usuário "pixelado": cor chapada, borda grossa e sombra dura deslocada. */
+:root[data-retro="on"] .user-msg {
+  background: var(--accent) !important;
+  border: 2px solid var(--text-bold) !important;
+  box-shadow: 4px 4px 0 0 rgba(0, 0, 0, 0.45) !important;
 }
 
 body {

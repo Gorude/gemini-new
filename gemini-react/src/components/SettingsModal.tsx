@@ -12,7 +12,8 @@ import {
   Loader2,
   AlertCircle,
   Server,
-  Type
+  Type,
+  Gamepad2
 } from 'lucide-react';
 import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS, FONT_OPTIONS } from '../constants';
 import NemonIcon from './NemonIcon';
@@ -30,6 +31,8 @@ interface SettingsModalProps {
   onSetEnabledModelIds: (ids: string[]) => void;
   appFont: string;
   onSetAppFont: (id: string) => void;
+  retroMode: boolean;
+  onSetRetroMode: (v: boolean) => void;
   paidApiKey: string;
   onUpdatePaidApiKey: (key: string) => void;
   defaultApiKey: string;
@@ -59,6 +62,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetEnabledModelIds,
   appFont,
   onSetAppFont,
+  retroMode,
+  onSetRetroMode,
   paidApiKey,
   onUpdatePaidApiKey,
   defaultApiKey,
@@ -181,52 +186,52 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   ];
 
   const renderContent = () => (
-    <div className={`w-full h-full flex flex-col md:flex-row overflow-hidden ${inline ? 'bg-[var(--bg-main)]' : 'relative w-full max-w-2xl glass-modal rounded-[1rem] shadow-2xl h-[600px] animate-in zoom-in-95 duration-300'}`}>
+    <div className={`w-full h-full flex flex-col md:flex-row overflow-hidden ${inline ? 'bg-(--bg-main)' : 'relative w-full max-w-2xl glass-modal rounded-[1rem] shadow-2xl h-[600px] animate-in zoom-in-95 duration-300'}`}>
 
       {/* Sidebar Tabs */}
-      <div className="w-full md:w-64 bg-[var(--bg-sidebar)]/30 border-b md:border-b-0 md:border-r border-[var(--border-light)] p-3 md:p-5 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible gap-2 md:gap-8 shrink-0 scrollbar-hidden">
+      <div className="w-full md:w-64 bg-(--bg-sidebar)/30 border-b md:border-b-0 md:border-r border-(--border-light) p-3 md:p-5 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible gap-2 md:gap-8 shrink-0 scrollbar-hidden">
         <div className="hidden md:flex items-center gap-3 px-2">
           <div className="p-2 rounded-xl text-white shadow-lg" style={{ background: 'var(--accent)', boxShadow: '0 10px 15px -3px var(--accent-glow)' }}>
             <Settings size={20} />
           </div>
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">Configurações</h2>
+          <h2 className="text-lg font-bold text-(--text-primary)">Configurações</h2>
         </div>
 
         <nav className="flex flex-row md:flex-col gap-2 shrink-0 md:shrink">
           <button
             onClick={() => setActiveTab('geral')}
-            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'geral' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
+            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'geral' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-(--text-secondary) hover:bg-(--bg-chat-hover) hover:text-(--text-primary) md:hover:translate-x-1'}`}
             style={activeTab === 'geral' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
             <Layout size={15} /> Geral
           </button>
           <button
             onClick={() => setActiveTab('modelos')}
-            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'modelos' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
+            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'modelos' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-(--text-secondary) hover:bg-(--bg-chat-hover) hover:text-(--text-primary) md:hover:translate-x-1'}`}
             style={activeTab === 'modelos' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
             <NemonIcon themed={false} size={15} /> Modelos
           </button>
           <button
             onClick={() => setActiveTab('api')}
-            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'api' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
+            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'api' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-(--text-secondary) hover:bg-(--bg-chat-hover) hover:text-(--text-primary) md:hover:translate-x-1'}`}
             style={activeTab === 'api' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
             <Shield size={15} /> API
           </button>
 
-          <div className="hidden md:block h-px bg-[var(--border-light)] my-2 opacity-50"></div>
+          <div className="hidden md:block h-px bg-(--border-light) my-2 opacity-50"></div>
 
           <button
             onClick={() => setActiveTab('personalidades')}
-            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'personalidades' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
+            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'personalidades' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-(--text-secondary) hover:bg-(--bg-chat-hover) hover:text-(--text-primary) md:hover:translate-x-1'}`}
             style={activeTab === 'personalidades' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
             <User size={15} style={{ color: activeTab === 'personalidades' ? 'white' : 'var(--accent-text)' }} /> Personalidades
           </button>
           <button
             onClick={() => setActiveTab('dna')}
-            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'dna' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] md:hover:translate-x-1'}`}
+            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'dna' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-(--text-secondary) hover:bg-(--bg-chat-hover) hover:text-(--text-primary) md:hover:translate-x-1'}`}
             style={activeTab === 'dna' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
             <Zap size={15} className="text-emerald-400" /> DNA de Memória
@@ -236,27 +241,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="p-4 md:p-5 flex justify-between items-center bg-[var(--bg-sidebar)]/30 border-b border-[var(--border-light)] backdrop-blur-md">
+        <header className="p-4 md:p-5 flex justify-between items-center bg-(--bg-sidebar)/30 border-b border-(--border-light) backdrop-blur-md">
           <div>
             <h3 className="text-xs md:text-sm font-black uppercase tracking-[0.2em]" style={{ color: 'var(--accent-text)' }}>
               {activeTab === 'geral' ? 'Preferências de Interface' : activeTab === 'modelos' ? 'Gerenciamento de IA' : activeTab === 'api' ? 'Configurações de API' : activeTab === 'personalidades' ? 'Comportamento da IA' : 'Inteligência Coletiva Persistente'}
             </h3>
-            <p className="text-[10px] md:text-xs text-[var(--text-secondary)] mt-1">
+            <p className="text-[10px] md:text-xs text-(--text-secondary) mt-1">
               {activeTab === 'geral' ? 'Ajuste o visual e o layout do sistema.' : activeTab === 'modelos' ? 'Escolha quais modelos estarão disponíveis no chat.' : activeTab === 'api' ? 'Configurações de API e Chaves de Acesso.' : activeTab === 'personalidades' ? 'Defina diretrizes de instrução e perfis do sistema.' : 'DNA de Memória - Visualização e Edição de Fatos.'}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl text-[var(--text-placeholder)] transition-colors hover:scale-105 active:scale-95 duration-200">
+          <button onClick={onClose} className="p-2 hover:bg-(--bg-chat-hover) rounded-xl text-(--text-placeholder) transition-colors hover:scale-105 active:scale-95 duration-200">
             <X size={20} />
           </button>
         </header>
 
-        <div className={`flex-1 ${activeTab === 'dna' ? 'overflow-hidden flex flex-col bg-[var(--bg-sidebar)]/10' : 'overflow-y-auto p-4 md:p-5 custom-scrollbar bg-[var(--bg-sidebar)]/10'}`}>
+        <div className={`flex-1 min-w-0 ${activeTab === 'dna' ? 'overflow-hidden flex flex-col bg-(--bg-sidebar)/10' : 'overflow-y-auto overflow-x-hidden p-4 md:p-5 custom-scrollbar bg-(--bg-sidebar)/10'}`}>
           {activeTab === 'geral' && (
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
 
               {/* Theme Selector */}
               <section className="space-y-4">
-                <div className="flex items-center gap-3 text-[var(--text-primary)]">
+                <div className="flex items-center gap-3 text-(--text-primary)">
                   <Palette size={18} className="text-amber-400" />
                   <h4 className="text-sm font-bold">Tema Visual</h4>
                 </div>
@@ -268,7 +273,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       <button
                         key={t.id}
                         onClick={() => onSetTheme(t.id)}
-                        className={`flex items-center justify-between p-3 rounded-2xl border transition-all duration-300 active:scale-95 ${isSelected ? '' : 'bg-[var(--bg-main)]/50 border-[var(--border-light)] text-[var(--text-secondary)] hover:border-[var(--border-main)] hover:scale-105'}`}
+                        className={`flex items-center justify-between p-3 rounded-2xl border transition-all duration-300 active:scale-95 ${isSelected ? '' : 'bg-(--bg-main)/50 border-(--border-light) text-(--text-secondary) hover:border-(--border-main) hover:scale-105'}`}
                         style={isSelected ? { boxShadow: `0 0 20px var(--accent-glow)`, borderColor: 'var(--accent)', background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                       >
                         <div className="flex items-center gap-3">
@@ -284,7 +289,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Font Selector */}
               <section className="space-y-4">
-                <div className="flex items-center gap-3 text-[var(--text-primary)]">
+                <div className="flex items-center gap-3 text-(--text-primary)">
                   <Type size={18} className="text-sky-400" />
                   <h4 className="text-sm font-bold">Fonte do Sistema</h4>
                 </div>
@@ -298,11 +303,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         style={isSelected
                           ? { fontFamily: f.stack, boxShadow: `0 0 20px var(--accent-glow)`, borderColor: 'var(--accent)', background: 'var(--accent-bg)', color: 'var(--accent-text)' }
                           : { fontFamily: f.stack }}
-                        className={`flex items-center justify-between gap-2 p-3 rounded-2xl border text-left transition-all duration-300 active:scale-95 ${isSelected ? '' : 'bg-[var(--bg-main)]/50 border-[var(--border-light)] text-[var(--text-secondary)] hover:border-[var(--border-main)] hover:scale-105'}`}
+                        className={`flex items-center justify-between gap-2 p-3 rounded-2xl border text-left transition-all duration-300 active:scale-95 ${isSelected ? '' : 'bg-(--bg-main)/50 border-(--border-light) text-(--text-secondary) hover:border-(--border-main) hover:scale-105'}`}
                       >
                         <div className="min-w-0">
                           <div className="text-sm font-bold truncate">{f.name}</div>
-                          <div className="text-[10px] text-[var(--text-placeholder)] truncate">{f.desc}</div>
+                          <div className="text-[10px] text-(--text-placeholder) truncate">{f.desc}</div>
                           <div className="text-xs mt-1 opacity-80">Ag 123</div>
                         </div>
                         {isSelected && <Check size={16} className="shrink-0" />}
@@ -310,6 +315,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     );
                   })}
                 </div>
+              </section>
+
+              {/* Modo Retrô */}
+              <section className="space-y-4">
+                <div className="flex items-center gap-3 text-(--text-primary)">
+                  <Gamepad2 size={18} className="text-emerald-400" />
+                  <h4 className="text-sm font-bold">Aparência</h4>
+                </div>
+                <button
+                  onClick={() => onSetRetroMode(!retroMode)}
+                  className={`w-full flex items-center justify-between gap-3 p-3 rounded-2xl border transition-all duration-300 active:scale-95 ${retroMode ? '' : 'bg-(--bg-main)/50 border-(--border-light) hover:border-(--border-main)'}`}
+                  style={retroMode ? { borderColor: 'var(--accent)', background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
+                >
+                  <div className="flex items-center gap-3 text-left min-w-0">
+                    <Gamepad2 size={18} className="shrink-0" style={{ color: retroMode ? 'var(--accent-text)' : 'var(--text-secondary)' }} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold">Modo Retrô</div>
+                      <div className="text-[10px] text-(--text-placeholder) truncate">Ícones pixelados, sem degradês, balões e cantos quadrados.</div>
+                    </div>
+                  </div>
+                  <div className={`relative w-12 h-6 rounded-full transition-all duration-300 flex items-center shrink-0 ${retroMode ? '' : 'bg-gray-600'}`} style={retroMode ? { background: 'var(--accent-hover)' } : {}}>
+                    <div className={`absolute w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 ${retroMode ? 'left-7' : 'left-1'}`}></div>
+                  </div>
+                </button>
               </section>
             </div>
           )}
@@ -320,19 +349,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               {MODEL_OPTIONS.map(opt => (
                 <div
                   key={opt.id}
-                  className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${enabledModelIds.includes(opt.id) ? '' : 'bg-[var(--bg-main)]/30 border-[var(--border-light)] opacity-60 grayscale-[0.5]'}`}
+                  className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${enabledModelIds.includes(opt.id) ? '' : 'bg-(--bg-main)/30 border-(--border-light) opacity-60 grayscale-[0.5]'}`}
                   style={enabledModelIds.includes(opt.id) ? { background: 'var(--accent-bg)', borderColor: 'var(--accent-border)' } : {}}
                 >
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className={`p-3 rounded-xl transition-colors ${enabledModelIds.includes(opt.id) ? 'text-white' : 'bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'}`} style={enabledModelIds.includes(opt.id) ? { background: 'var(--accent)' } : {}}>
+                    <div className={`p-3 rounded-xl transition-colors ${enabledModelIds.includes(opt.id) ? 'text-white' : 'bg-(--bg-chat-hover) text-(--text-placeholder)'}`} style={enabledModelIds.includes(opt.id) ? { background: 'var(--accent)' } : {}}>
                       <NemonIcon themed={false} size={20} />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-[var(--text-primary)] truncate">{opt.name}</span>
+                        <span className="text-sm font-bold text-(--text-primary) truncate">{opt.name}</span>
                         {opt.hasSearch && <Globe size={12} className="shrink-0 text-blue-400" />}
                       </div>
-                      <p className="text-xs text-[var(--text-secondary)] truncate">{opt.desc}</p>
+                      <p className="text-xs text-(--text-secondary) truncate">{opt.desc}</p>
                     </div>
                   </div>
 
@@ -352,29 +381,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <section className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-[var(--text-primary)]">
+                  <div className="flex items-center gap-3 text-(--text-primary)">
                     <Zap size={15} style={{ color: 'var(--accent-text)' }} />
                     <h4 className="text-sm font-bold">Configuração de APIs</h4>
                   </div>
                 </div>
 
-                <div className="bg-[var(--bg-main)] p-4 rounded-2xl border border-[var(--border-light)] space-y-8">
+                <div className="bg-(--bg-main) p-4 rounded-2xl border border-(--border-light) space-y-8">
                   {/* Default API Key */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Chave de API Padrão (AI Studio)</label>
+                      <label className="text-[10px] font-bold text-(--text-secondary) uppercase tracking-widest">Chave de API Padrão (AI Studio)</label>
                       <div className="flex items-center gap-2">
                         {valDefaultStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
                         {valDefaultStatus === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> ATIVA</div>}
                         {valDefaultStatus === 'error' && <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> ERRO</div>}
-                        {valDefaultStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-[var(--text-placeholder)] font-bold bg-[var(--bg-sidebar)] px-2 py-0.5 rounded-md">Padrão</div>}
+                        {valDefaultStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-(--text-placeholder) font-bold bg-(--bg-sidebar) px-2 py-0.5 rounded-md">Padrão</div>}
                       </div>
                     </div>
                     <div className="relative">
                       <input
                         type="password"
                         placeholder="Cole sua chave padrão do Google AI Studio..."
-                        className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-3 px-3 text-sm text-[var(--text-primary)] outline-none transition-all pr-24"
+                        className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 px-3 text-sm text-(--text-primary) outline-none transition-all pr-24"
                         style={{ '--tw-ring-color': 'var(--accent)' } as React.CSSProperties}
                         onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
                         onBlur={(e) => e.currentTarget.style.borderColor = ''}
@@ -392,29 +421,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         SALVAR
                       </button>
                     </div>
-                    <p className="text-[10px] text-[var(--text-placeholder)] mt-2">
+                    <p className="text-[10px] text-(--text-placeholder) mt-2">
                       Esta chave padrão é usada para todos os modelos de texto, bate-papo, processamento de áudio e ferramentas da aplicação.
                     </p>
                   </div>
 
-                  <div className="h-px bg-[var(--border-light)] opacity-35"></div>
+                  <div className="h-px bg-(--border-light) opacity-35"></div>
 
                   {/* Premium / Imagen API Key */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Chave de API Imagen (Premium)</label>
+                      <label className="text-[10px] font-bold text-(--text-secondary) uppercase tracking-widest">Chave de API Imagen (Premium)</label>
                       <div className="flex items-center gap-2">
                         {valPaidStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
                         {valPaidStatus === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> ATIVA</div>}
                         {valPaidStatus === 'error' && <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> ERRO</div>}
-                        {valPaidStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-[var(--text-placeholder)] font-bold bg-[var(--bg-sidebar)] px-2 py-0.5 rounded-md">Opcional</div>}
+                        {valPaidStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-(--text-placeholder) font-bold bg-(--bg-sidebar) px-2 py-0.5 rounded-md">Opcional</div>}
                       </div>
                     </div>
                     <div className="relative">
                       <input
                         type="password"
                         placeholder="Cole sua chave Imagen paga aqui..."
-                        className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-3 px-3 text-sm text-[var(--text-primary)] outline-none transition-all pr-24"
+                        className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 px-3 text-sm text-(--text-primary) outline-none transition-all pr-24"
                         style={{ '--tw-ring-color': 'var(--accent)' } as React.CSSProperties}
                         onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
                         onBlur={(e) => e.currentTarget.style.borderColor = ''}
@@ -432,17 +461,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         SALVAR
                       </button>
                     </div>
-                    <p className="text-[10px] text-[var(--text-placeholder)] mt-2">
+                    <p className="text-[10px] text-(--text-placeholder) mt-2">
                       Esta chave é usada exclusivamente para geração de imagens (modelo Imagen 3/4). Se não fornecida, a geração de imagens usará a chave padrão.
                     </p>
                   </div>
 
-                  <div className="h-px bg-[var(--border-light)] opacity-35"></div>
+                  <div className="h-px bg-(--border-light) opacity-35"></div>
 
                   {/* Endpoint do Modelo Local (llama.cpp + ngrok) */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <label className="flex items-center gap-2 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">
+                      <label className="flex items-center gap-2 text-[10px] font-bold text-(--text-secondary) uppercase tracking-widest">
                         <Server className="w-3.5 h-3.5" style={{ color: 'var(--accent-text)' }} />
                         Modelo Local (llama.cpp via ngrok)
                       </label>
@@ -450,7 +479,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         {valLocalStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
                         {valLocalStatus === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> ONLINE</div>}
                         {valLocalStatus === 'error' && <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> SEM RESPOSTA</div>}
-                        {valLocalStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-[var(--text-placeholder)] font-bold bg-[var(--bg-sidebar)] px-2 py-0.5 rounded-md">Opcional</div>}
+                        {valLocalStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-(--text-placeholder) font-bold bg-(--bg-sidebar) px-2 py-0.5 rounded-md">Opcional</div>}
                       </div>
                     </div>
                     <div className="relative">
@@ -460,7 +489,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         autoCapitalize="off"
                         autoCorrect="off"
                         placeholder="https://seu-tunel.ngrok-free.app"
-                        className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-3 px-3 text-sm text-[var(--text-primary)] outline-none transition-all pr-24"
+                        className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 px-3 text-sm text-(--text-primary) outline-none transition-all pr-24"
                         onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
                         onBlur={(e) => e.currentTarget.style.borderColor = ''}
                         value={tempLocalEndpoint}
@@ -477,16 +506,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         SALVAR
                       </button>
                     </div>
-                    <p className="text-[10px] text-[var(--text-placeholder)] mt-2">
+                    <p className="text-[10px] text-(--text-placeholder) mt-2">
                       Cole a URL pública do ngrok que aponta para o servidor do llama.cpp (<code>llama-server</code>). O app usará o endpoint compatível com OpenAI <code>/v1/chat/completions</code>. Depois é só escolher "Modelo Local" no seletor de modelos do chat.
                     </p>
                   </div>
 
-                  <div className="h-px bg-[var(--border-light)] opacity-35"></div>
+                  <div className="h-px bg-(--border-light) opacity-35"></div>
 
                   {/* Seção de Modelos LIVE */}
                   <div className="space-y-4">
-                    <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest block">Modelo LIVE Ativo</label>
+                    <label className="text-[10px] font-bold text-(--text-secondary) uppercase tracking-widest block">Modelo LIVE Ativo</label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {LIVE_MODEL_OPTIONS.map(opt => {
                         const isSelected = liveModel === opt.id;
@@ -494,11 +523,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           <button
                             key={opt.id}
                             onClick={() => onSetLiveModel(opt.id)}
-                            className={`flex flex-col items-start p-3 rounded-2xl border text-left transition-all duration-300 active:scale-95 w-full ${isSelected ? '' : 'bg-[var(--bg-main)]/50 border-[var(--border-light)] text-[var(--text-secondary)] hover:border-[var(--border-main)] hover:scale-[1.02]'}`}
+                            className={`flex flex-col items-start p-3 rounded-2xl border text-left transition-all duration-300 active:scale-95 w-full ${isSelected ? '' : 'bg-(--bg-main)/50 border-(--border-light) text-(--text-secondary) hover:border-(--border-main) hover:scale-[1.02]'}`}
                             style={isSelected ? { boxShadow: `0 0 20px var(--accent-glow)`, borderColor: 'var(--accent)', background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                           >
-                            <span className="text-xs font-bold uppercase tracking-widest text-[var(--text-primary)]">{opt.name}</span>
-                            <span className="text-[10px] text-[var(--text-placeholder)] mt-1">{opt.desc}</span>
+                            <span className="text-xs font-bold uppercase tracking-widest text-(--text-primary)">{opt.name}</span>
+                            <span className="text-[10px] text-(--text-placeholder) mt-1">{opt.desc}</span>
                           </button>
                         );
                       })}

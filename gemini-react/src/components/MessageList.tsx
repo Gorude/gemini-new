@@ -82,7 +82,7 @@ const MessageList: React.FC<MessageListProps> = ({
     if (chatWindowRef.current && !isInitialLoading) {
       chatWindowRef.current.scrollTop = 999999 + chatWindowRef.current.scrollHeight;
     }
-  }, [messages.length, activeChatId, isInitialLoading, isLoading]);
+  }, [messages.length, activeChatId, isInitialLoading, isLoading, chatWindowRef]);
 
   // Enquanto estiver carregando o histórico inicial, não mostramos nada (ou um loader)
   if (isInitialLoading) {
@@ -114,45 +114,45 @@ const MessageList: React.FC<MessageListProps> = ({
         !hasFreeApiKey ? (
           <div className="max-w-2xl mx-auto bg-white/5 backdrop-blur-md border border-white/10 rounded-[16px] p-5 md:p-10 shadow-2xl text-left space-y-6 my-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center gap-4 border-b border-white/10 pb-3.5">
-              <div className="p-3 bg-[var(--accent)] rounded-2xl text-white shadow-lg shadow-[var(--accent-glow)]">
+              <div className="p-3 bg-(--accent) rounded-2xl text-white shadow-lg shadow-(--accent-glow)">
                 <Zap size={28} className="animate-pulse" />
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
                   Configure sua Chave de API Grátis
                 </h1>
-                <p className="text-xs text-[var(--text-secondary)] mt-1 uppercase tracking-wider font-semibold">
+                <p className="text-xs text-(--text-secondary) mt-1 uppercase tracking-wider font-semibold">
                   Google AI Studio &amp; Gemini
                 </p>
               </div>
             </div>
 
-            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+            <p className="text-sm text-(--text-secondary) leading-relaxed">
               Para começar a conversar com o <strong>Nemon</strong> e utilizar todos os recursos inteligentes (incluindo o modo LIVE por voz), você precisa de uma chave de API gratuita do Google AI Studio. Siga o tutorial rápido abaixo para obter a sua:
             </p>
 
             <div className="space-y-4">
               {/* Passo 1 */}
               <div className="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center font-bold text-sm text-[var(--accent-text)]">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-(--accent-bg) border border-(--accent-border) flex items-center justify-center font-bold text-sm text-(--accent-text)">
                   1
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-white">Acesse o Google AI Studio</h3>
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                    Entre no site oficial do <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-text)] hover:underline font-bold inline-flex items-center gap-1">Google AI Studio <ExternalLink size={12} /></a> e faça login usando qualquer conta Google gratuita.
+                  <p className="text-xs text-(--text-secondary) leading-relaxed">
+                    Entre no site oficial do <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-(--accent-text) hover:underline font-bold inline-flex items-center gap-1">Google AI Studio <ExternalLink size={12} /></a> e faça login usando qualquer conta Google gratuita.
                   </p>
                 </div>
               </div>
 
               {/* Passo 2 */}
               <div className="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center font-bold text-sm text-[var(--accent-text)]">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-(--accent-bg) border border-(--accent-border) flex items-center justify-center font-bold text-sm text-(--accent-text)">
                   2
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-white">Obtenha sua Chave de API</h3>
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  <p className="text-xs text-(--text-secondary) leading-relaxed">
                     No painel do Google AI Studio, clique no botão azul <strong>"Get API Key"</strong> no canto superior esquerdo da tela.
                   </p>
                 </div>
@@ -160,12 +160,12 @@ const MessageList: React.FC<MessageListProps> = ({
 
               {/* Passo 3 */}
               <div className="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center font-bold text-sm text-[var(--accent-text)]">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-(--accent-bg) border border-(--accent-border) flex items-center justify-center font-bold text-sm text-(--accent-text)">
                   3
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-white">Gere e Copie o Token</h3>
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  <p className="text-xs text-(--text-secondary) leading-relaxed">
                     Selecione ou crie um projeto e clique em <strong>"Create API Key"</strong>. Uma vez gerada a chave, copie o código completo (ele começa com <code>AIzaSy...</code>).
                   </p>
                 </div>
@@ -173,12 +173,12 @@ const MessageList: React.FC<MessageListProps> = ({
 
               {/* Passo 4 */}
               <div className="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center font-bold text-sm text-[var(--accent-text)]">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-(--accent-bg) border border-(--accent-border) flex items-center justify-center font-bold text-sm text-(--accent-text)">
                   4
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-white">Cole no Nemon e Salve</h3>
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  <p className="text-xs text-(--text-secondary) leading-relaxed">
                     Clique no botão abaixo para abrir as configurações na aba de API, cole sua chave no campo <strong>"Chave de API Padrão (AI Studio)"</strong> e clique em <strong>"SALVAR"</strong>.
                   </p>
                 </div>
@@ -200,7 +200,7 @@ const MessageList: React.FC<MessageListProps> = ({
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#0052d4] via-[#4364f7] to-[#6fb1fc]">
               Olá, Conselheiro
             </h1>
-            <p className="text-lg text-[var(--text-secondary)] max-w-md mx-auto leading-relaxed opacity-80">
+            <p className="text-lg text-(--text-secondary) max-w-md mx-auto leading-relaxed opacity-80">
               Como posso ajudar você a construir algo incrível hoje?
             </p>
           </div>
@@ -209,7 +209,7 @@ const MessageList: React.FC<MessageListProps> = ({
         <>
           {visibleMessagesCount < messages.length && (
             <div className="flex justify-center py-3 opacity-50 mb-4 transition-opacity">
-              <Loader2 className="w-5 h-5 text-[var(--text-secondary)] animate-spin" />
+              <Loader2 className="w-5 h-5 text-(--text-secondary) animate-spin" />
             </div>
           )}
           {visibleMessages.map((msg) => {

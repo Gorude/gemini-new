@@ -45,32 +45,32 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       {/* Sub-Header / Back Button */}
-      <div className="flex items-center gap-3 bg-[var(--bg-main)]/30 p-3 rounded-2xl border border-[var(--border-light)] justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 bg-(--bg-main)/30 p-3 rounded-2xl border border-(--border-light) justify-between">
+        <div className="flex items-center gap-3 min-w-0">
           {isEditing && (
-            <button 
-              onClick={() => setIsEditing(false)} 
-              className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-xl transition mr-1"
+            <button
+              onClick={() => setIsEditing(false)}
+              className="p-2 hover:bg-(--bg-chat-hover) rounded-xl transition mr-1 shrink-0"
               type="button"
             >
-              <ArrowLeft className="w-5 h-5 text-[var(--accent-text)]" />
+              <ArrowLeft className="w-5 h-5 text-(--accent-text)" />
             </button>
           )}
-          <div>
-            <h4 className="text-sm font-bold text-[var(--text-primary)]">
+          <div className="min-w-0">
+            <h4 className="text-sm font-bold text-(--text-primary) truncate">
               {isEditing ? (currentPersonality ? 'Editar Personalidade' : 'Nova Personalidade') : 'Gerenciamento de Perfis'}
             </h4>
-            <p className="text-[10px] text-[var(--text-placeholder)] mt-0.5">
+            <p className="text-[10px] text-(--text-placeholder) mt-0.5 truncate">
               {isEditing ? 'Ajuste as diretrizes de instrução para este perfil' : 'Defina regras customizadas para o comportamento da IA'}
             </p>
           </div>
         </div>
         {!isEditing && (
-          <button 
+          <button
             onClick={handleAddNew}
-            className="flex items-center gap-2 px-3 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition shadow-lg shadow-[var(--accent-glow)]"
+            className="flex items-center gap-2 px-3 py-2 bg-(--accent) hover:bg-(--accent-hover) text-white rounded-xl text-xs font-bold transition shadow-lg shadow-(--accent-glow) shrink-0"
           >
             <Plus className="w-4 h-4" /> Novo Perfil
           </button>
@@ -80,31 +80,31 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
       {/* Main Content */}
       <div className="min-h-0 flex-1">
         {isEditing ? (
-          <form onSubmit={handleSubmit} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 bg-[var(--bg-main)]/20 border border-[var(--border-light)] p-4 rounded-2xl">
+          <form onSubmit={handleSubmit} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 bg-(--bg-main)/20 border border-(--border-light) p-4 rounded-2xl">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-placeholder)]">Nome da Personalidade</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">Nome da Personalidade</label>
               <input 
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Especialista em TypeScript"
-                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-3 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-border)] transition"
+                className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl px-3 py-3 text-sm text-(--text-primary) outline-none focus:border-(--accent-border) transition"
                 required
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-placeholder)]">Instrução do Sistema (Prompt)</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">Instrução do Sistema (Prompt)</label>
               <textarea 
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Ex: Você é um programador experiente que preza pela simplicidade e clareza no código..."
-                className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl px-3 py-3 outline-none focus:border-[var(--accent-border)] transition h-48 resize-none text-sm leading-relaxed text-[var(--text-primary)]"
+                className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl px-3 py-3 outline-none focus:border-(--accent-border) transition h-48 resize-none text-sm leading-relaxed text-(--text-primary)"
                 required
               />
             </div>
             <button 
               type="submit"
-              className="w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
+              className="w-full bg-(--accent) hover:bg-(--accent-hover) text-white font-bold py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
             >
               <Save className="w-5 h-5" /> Salvar Personalidade
             </button>
@@ -112,26 +112,26 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
         ) : (
           <div className="space-y-3 animate-in fade-in duration-300">
             {personalities.length === 0 ? (
-              <div className="text-center py-16 bg-[var(--bg-main)]/10 rounded-2xl border border-dashed border-[var(--border-light)]">
-                <div className="w-16 h-16 bg-[var(--bg-chat-hover)] rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="text-center py-16 bg-(--bg-main)/10 rounded-2xl border border-dashed border-(--border-light)">
+                <div className="w-16 h-16 bg-(--bg-chat-hover) rounded-full flex items-center justify-center mx-auto mb-4">
                   <User className="w-8 h-8 opacity-20" />
                 </div>
-                <p className="opacity-40 italic text-sm text-[var(--text-secondary)]">Nenhuma personalidade personalizada criada ainda.</p>
+                <p className="opacity-40 italic text-sm text-(--text-secondary)">Nenhuma personalidade personalizada criada ainda.</p>
               </div>
             ) : (
               personalities.map((p) => (
-                <div key={p.id} className="group flex items-center gap-4 p-3 bg-[var(--bg-main)]/35 rounded-2xl border border-[var(--border-light)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-chat-active)] transition duration-200">
-                  <div className="w-10 h-10 rounded-xl bg-[var(--accent-bg)] flex items-center justify-center shrink-0">
-                    <User className="w-5 h-5 text-[var(--accent-text)] opacity-60" />
+                <div key={p.id} className="group flex items-center gap-4 p-3 min-w-0 bg-(--bg-main)/35 rounded-2xl border border-(--border-light) hover:border-(--accent-border) hover:bg-(--bg-chat-active) transition duration-200">
+                  <div className="w-10 h-10 rounded-xl bg-(--accent-bg) flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5 text-(--accent-text) opacity-60" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-[var(--text-primary)] text-sm">{p.name}</h4>
-                    <p className="text-xs text-[var(--text-secondary)] truncate mt-0.5">{p.prompt}</p>
+                    <h4 className="font-bold text-(--text-primary) text-sm truncate">{p.name}</h4>
+                    <p className="text-xs text-(--text-secondary) mt-0.5 line-clamp-2 wrap-break-word">{p.prompt}</p>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition duration-200">
+                  <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition duration-200">
                     <button 
                       onClick={() => handleEdit(p)}
-                      className="p-2 hover:bg-[var(--accent-bg-strong)] rounded-lg text-[var(--accent-text)] transition"
+                      className="p-2 hover:bg-(--accent-bg-strong) rounded-lg text-(--accent-text) transition"
                       title="Editar"
                     >
                       <Edit2 className="w-4 h-4" />

@@ -158,7 +158,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <footer 
-      className="p-3 bg-[var(--bg-main)] relative z-10 chat-container-responsive"
+      className="p-3 bg-(--bg-main) relative z-10 chat-container-responsive"
       style={{ 
         paddingLeft: `calc(${margin}% + 1rem)`, 
         paddingRight: `calc(${margin}% + 1rem)` 
@@ -168,16 +168,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
         {pendingFiles.length > 0 && (
           <div className="flex gap-2 mb-2 px-2 flex-wrap">
             {pendingFiles.map((f, i) => (
-              <div key={i} className="relative w-16 h-16 rounded-xl bg-[var(--bg-chat-active)] overflow-hidden border border-[var(--border-light)] shadow-lg group">
+              <div key={i} className="relative w-16 h-16 rounded-xl bg-(--bg-chat-active) overflow-hidden border border-(--border-light) shadow-lg group">
                 {f.mimeType.startsWith('image/') ? (
                   <img src={`data:${f.mimeType};base64,${f.data}`} className="object-cover w-full h-full" alt="pendente" />
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-[9px] p-1 text-center bg-[var(--bg-sidebar)] text-[var(--text-secondary)]">
+                  <div className="flex flex-col items-center justify-center h-full text-[9px] p-1 text-center bg-(--bg-sidebar) text-(--text-secondary)">
                     <FileText className="w-4 h-4 mb-1" style={{ color: 'var(--accent-text)' }} />
                     <span className="truncate w-full">{f.name}</span>
                   </div>
                 )}
-                <button onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-black/60 rounded-bl-lg w-5 h-5 flex items-center justify-center hover:bg-black transition text-[var(--text-primary)]">
+                <button onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-0 right-0 bg-black/60 rounded-bl-lg w-5 h-5 flex items-center justify-center hover:bg-black transition text-(--text-primary)">
                   <X className="w-3 h-3" />
                 </button>
               </div>
@@ -185,11 +185,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
         
-        <div className={`input-wrapper p-3 shadow-2xl relative bg-[var(--bg-input)] rounded-[12px] border transition-all duration-500 ${isLoading ? 'generating-glow' : isLiveActive ? 'border-zinc-500 shadow-[0_0_20px_rgba(255,255,255,0.15)]' : 'border-[var(--border-light)]'}`} style={isLoading ? { borderColor: 'color-mix(in srgb, var(--accent) 50%, transparent)', boxShadow: '0 0 15px var(--accent-glow)' } : {}}>
+        <div className={`input-wrapper p-3 shadow-2xl relative bg-(--bg-input) rounded-[12px] border transition-all duration-500 ${isLoading ? 'generating-glow' : isLiveActive ? 'border-zinc-500 shadow-[0_0_20px_rgba(255,255,255,0.15)]' : 'border-(--border-light)'}`} style={isLoading ? { borderColor: 'color-mix(in srgb, var(--accent) 50%, transparent)', boxShadow: '0 0 15px var(--accent-glow)' } : {}}>
           {showScrollButton && (
             <button 
               onClick={onScrollToBottom}
-              className="absolute -top-14 left-0 right-0 mx-auto w-fit bg-[var(--bg-sidebar-solid)] hover:bg-[var(--bg-chat-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-light)] shadow-xl rounded-full px-3.5 py-1.5 text-xs font-semibold flex items-center gap-2 hover-glow scroll-to-bottom-btn animate-scroll-button whitespace-nowrap"
+              className="absolute -top-14 left-0 right-0 mx-auto w-fit bg-(--bg-sidebar-solid) hover:bg-(--bg-chat-hover) text-(--text-secondary) hover:text-(--text-primary) border border-(--border-light) shadow-xl rounded-full px-3.5 py-1.5 text-xs font-semibold flex items-center gap-2 hover-glow scroll-to-bottom-btn animate-scroll-button whitespace-nowrap"
             >
                <ChevronDown className="w-4 h-4 animate-bounce" />
               Ir para o final
@@ -204,15 +204,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onPaste={handlePaste}
             rows={1} 
             placeholder={`Pergunte ao Nemon${personalityName !== 'Normal' ? ` - ${personalityName}` : ''}...`} 
-            className="w-full bg-transparent border-none px-3 pt-2 pb-1 focus:outline-none resize-none text-[16px] text-[var(--text-primary)] placeholder-gray-500/70 max-h-[50vh] overflow-y-auto custom-scrollbar"
+            className="w-full bg-transparent border-none px-3 pt-2 pb-1 focus:outline-none resize-none text-[16px] text-(--text-primary) placeholder-gray-500/70 max-h-[50vh] overflow-y-auto custom-scrollbar"
           />
           
           <div className="flex flex-wrap justify-between items-center px-1 sm:px-2 mt-2 gap-2 max-sm:pr-12">
-            <div className="flex gap-0.5 sm:gap-1 text-[var(--text-secondary)] items-center">
+            <div className="flex gap-0.5 sm:gap-1 text-(--text-secondary) items-center">
               <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*,application/pdf" onChange={handleFileUpload} />
               <button 
                 onClick={() => fileInputRef.current?.click()} 
-                className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-[var(--bg-chat-hover)] hover:text-[var(--text-primary)] rounded-full transition-all hover:scale-110 active:scale-95 duration-200"
+                className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center hover:bg-(--bg-chat-hover) hover:text-(--text-primary) rounded-full transition-all hover:scale-110 active:scale-95 duration-200"
                 title="Anexar arquivo"
               >
                 <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -221,7 +221,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <button 
                 onClick={onToggleWebSearch} 
                 disabled={!canSearch}
-                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${webSearchEnabled ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'} disabled:opacity-20 disabled:grayscale`}
+                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${webSearchEnabled ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'hover:bg-(--bg-chat-hover) text-(--text-placeholder)'} disabled:opacity-20 disabled:grayscale`}
                 title={canSearch ? "Pesquisa na Web" : "Modelo não suporta pesquisa"}
               >
                 <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -230,7 +230,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
               <button 
                 onClick={onToggleThinking} 
-                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${thinkingEnabled ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'}`}
+                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${thinkingEnabled ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'hover:bg-(--bg-chat-hover) text-(--text-placeholder)'}`}
                 title="Pensamento (a IA raciocina antes de responder)"
               >
                 <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -239,7 +239,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
               <button 
                 onClick={onStartLive}
-                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${isLiveActive ? 'bg-zinc-700/20 text-zinc-300 animate-pulse border border-zinc-600/30' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'}`}
+                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${isLiveActive ? 'bg-zinc-700/20 text-zinc-300 animate-pulse border border-zinc-600/30' : 'hover:bg-(--bg-chat-hover) text-(--text-placeholder)'}`}
                 title={isLiveActive ? "Modo LIVE Ativo" : "Iniciar Modo LIVE"}
               >
                 <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -253,7 +253,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     onToggleImageGen();
                     if (!imageGenEnabled) setShowImagenSettings(true);
                   }} 
-                  className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${imageGenEnabled ? 'bg-zinc-700/20 text-zinc-300 border border-zinc-600/30' : 'hover:bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)]'}`}
+                  className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${imageGenEnabled ? 'bg-zinc-700/20 text-zinc-300 border border-zinc-600/30' : 'hover:bg-(--bg-chat-hover) text-(--text-placeholder)'}`}
                   title="Geração de Imagem (Imagen 4)"
                 >
                   <Image className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -261,15 +261,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 </button>
 
                 {imageGenEnabled && showImagenSettings && (
-                  <div onClick={(e) => e.stopPropagation()} className="absolute bottom-full mb-3 left-0 bg-[var(--bg-sidebar)]/95 backdrop-blur-2xl shadow-2xl rounded-3xl p-3 min-w-[280px] z-50 border border-[var(--border-light)] animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div onClick={(e) => e.stopPropagation()} className="absolute bottom-full mb-3 left-0 bg-(--bg-sidebar)/95 backdrop-blur-2xl shadow-2xl rounded-3xl p-3 min-w-[280px] z-50 border border-(--border-light) animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)]">Imagen 4 Config</h4>
-                      <button onClick={() => setShowImagenSettings(false)} className="text-[var(--text-placeholder)] hover:text-white"><X className="w-4 h-4" /></button>
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-(--text-secondary)">Imagen 4 Config</h4>
+                      <button onClick={() => setShowImagenSettings(false)} className="text-(--text-placeholder) hover:text-white"><X className="w-4 h-4" /></button>
                     </div>
                     
                     <div className="space-y-4">
                       <div>
-                        <label className="text-[10px] uppercase font-bold text-[var(--text-placeholder)] mb-2 block">Modelo</label>
+                        <label className="text-[10px] uppercase font-bold text-(--text-placeholder) mb-2 block">Modelo</label>
                         <div className="grid gap-2">
                           {IMAGEN_OPTIONS.map(opt => (
                             <button key={opt.id} onClick={() => onSetImagenModel(opt.id)} className={`text-left p-3 rounded-2xl border transition-all text-sm ${imagenModel === opt.id ? 'bg-zinc-700/20 border-zinc-600 text-zinc-200 shadow-[0_0_12px_rgba(255,255,255,0.08)] font-bold' : 'bg-black/20 border-transparent hover:border-white/10 hover:bg-black/35'}`}>
@@ -281,7 +281,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[10px] uppercase font-bold text-[var(--text-placeholder)] mb-2 block">Proporção (Aspect Ratio)</label>
+                        <label className="text-[10px] uppercase font-bold text-(--text-placeholder) mb-2 block">Proporção (Aspect Ratio)</label>
                         <div className="flex gap-2">
                           {(['1:1', '9:16', '16:9'] as const).map(ratio => (
                             <button key={ratio} onClick={() => onSetAspectRatio(ratio)} className={`flex-1 py-2.5 rounded-xl border text-[10px] font-bold transition-all ${aspectRatio === ratio ? 'bg-zinc-700/20 border-zinc-500 text-zinc-200 shadow-[0_0_10px_rgba(255,255,255,0.05)]' : 'bg-black/20 border-transparent hover:border-white/10'}`}>
@@ -300,7 +300,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <div className="relative flex items-center">
                 <button 
                   onClick={(e) => { e.stopPropagation(); setIsModelMenuOpen(!isModelMenuOpen); }}
-                  className="flex items-center gap-1 sm:gap-1.5 bg-[var(--bg-chat-hover)] hover:bg-[var(--bg-user-bubble)] hover:scale-105 active:scale-95 text-[10px] sm:text-xs text-[var(--text-primary)] transition-all rounded-xl px-2.5 py-2 sm:px-3 sm:py-2.5 font-medium border border-[var(--border-light)] shadow-sm whitespace-nowrap"
+                  className="flex items-center gap-1 sm:gap-1.5 bg-(--bg-chat-hover) hover:bg-(--bg-user-bubble) hover:scale-105 active:scale-95 text-[10px] sm:text-xs text-(--text-primary) transition-all rounded-xl px-2.5 py-2 sm:px-3 sm:py-2.5 font-medium border border-(--border-light) shadow-sm whitespace-nowrap"
                 >
                   <span className="truncate max-w-[65px] xs:max-w-[100px] sm:max-w-none">
                     {isLiveActive 
@@ -313,25 +313,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 {isModelMenuOpen && (
                   <div 
                     ref={modelMenuRef}
-                    className="absolute bottom-[115%] right-0 bg-[var(--bg-sidebar-solid)] border border-[var(--border-light)] shadow-2xl rounded-2xl py-2 min-w-64 z-50 overflow-hidden flex flex-col items-start origin-bottom-right animate-in fade-in zoom-in-95 duration-200 max-sm:fixed max-sm:bottom-28 max-sm:left-4 max-sm:right-4 max-sm:w-[calc(100vw-32px)] max-sm:min-w-0"
+                    className="absolute bottom-[115%] right-0 bg-(--bg-sidebar-solid) border border-(--border-light) shadow-2xl rounded-2xl py-2 min-w-64 z-50 overflow-hidden flex flex-col items-start origin-bottom-right animate-in fade-in zoom-in-95 duration-200 max-sm:fixed max-sm:bottom-28 max-sm:left-4 max-sm:right-4 max-sm:w-[calc(100vw-32px)] max-sm:min-w-0"
                   >
                     {isLiveActive ? (
                       LIVE_MODEL_OPTIONS.map(opt => (
                         <button key={opt.id} onClick={() => { onSetLiveModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${liveModel === opt.id ? 'font-bold' : ''}`} style={liveModel === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
                           <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-semibold text-[var(--text-primary)]">{opt.name}</span>
+                            <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
                           </div>
-                          <span className="text-[11px] text-[var(--text-placeholder)]">{opt.desc}</span>
+                          <span className="text-[11px] text-(--text-placeholder)">{opt.desc}</span>
                         </button>
                       ))
                     ) : (
                       MODEL_OPTIONS.filter(opt => enabledModelIds.includes(opt.id)).map(opt => (
                         <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
                           <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-semibold text-[var(--text-primary)]">{opt.name}</span>
+                            <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
                             {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-60 text-blue-400" />}
                           </div>
-                          <span className="text-[11px] text-[var(--text-placeholder)]">{opt.desc}</span>
+                          <span className="text-[11px] text-(--text-placeholder)">{opt.desc}</span>
                         </button>
                       ))
                     )}
@@ -344,7 +344,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 disabled={!isLoading && !isLiveSpeaking && !input.trim() && pendingFiles.length === 0} 
                 className={`p-2 sm:p-2.5 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-lg max-sm:absolute max-sm:bottom-3 max-sm:right-3 max-sm:w-10 max-sm:h-10 max-sm:m-0 max-sm:flex max-sm:items-center max-sm:justify-center ${
                   !isLoading && !isLiveSpeaking && !input.trim() && pendingFiles.length === 0 
-                    ? 'bg-[var(--bg-chat-hover)] text-[var(--text-placeholder)] cursor-not-allowed' 
+                    ? 'bg-(--bg-chat-hover) text-(--text-placeholder) cursor-not-allowed' 
                     : (isLoading || isLiveSpeaking)
                       ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/20' 
                       : 'text-white shadow-lg'

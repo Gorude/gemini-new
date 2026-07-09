@@ -12,6 +12,8 @@ export interface LiveSessionHandlers {
   // Executor de ferramentas customizadas (memória, controle do app, histórico, tempo, alarmes).
   // Recebe o nome da função e seus argumentos e devolve o objeto de resposta.
   onToolCall?: (name: string, args: any) => Promise<any>;
+  // Notificação de que o modelo acionou uma ferramenta (para feedback visual/sonoro na UI).
+  onToolUsed?: (name: string, args: any) => void;
 }
 
 // Declarações das ferramentas customizadas expostas ao modelo no modo LIVE.
@@ -108,6 +110,15 @@ export const LIVE_TOOL_DECLARATIONS = [
     }
   },
   {
+    name: "set_theme",
+    description: "Troca o tema de cores da interface. Escolhe o mais próximo do que o usuário pedir.",
+    parameters: {
+      type: "OBJECT",
+      properties: { name: { type: "STRING", description: "Tema desejado: Escuro, Claro, Areia, Galáxia ou Claude." } },
+      required: ["name"]
+    }
+  },
+  {
     name: "end_session",
     description: "Encerra a sessão do modo LIVE. Use apenas quando o usuário pedir explicitamente para encerrar/desligar.",
     parameters: { type: "OBJECT", properties: {} }
@@ -128,12 +139,48 @@ export const LIVE_TOOL_DECLARATIONS = [
     parameters: { type: "OBJECT", properties: {} }
   },
   {
+    name: "list_personalities",
+    description: "Lista as personalidades disponíveis no sistema (e qual está ativa). Use quando o usuário perguntar quais personalidades existem, ou antes de trocar se não tiver certeza dos nomes.",
+    parameters: { type: "OBJECT", properties: {} }
+  },
+  {
     name: "switch_personality",
-    description: "Troca a personalidade ativa do assistente pelo nome.",
+    description: "Troca a personalidade ativa, que muda COMO você fala (tom, voz, vocabulário). Não exige nome exato: escolhe a mais próxima do que o usuário pediu. Se não houver correspondência, retorna a lista para o usuário escolher. Após trocar, incorpore imediatamente a persona indicada no resultado.",
     parameters: {
       type: "OBJECT",
-      properties: { name: { type: "STRING", description: "Nome da personalidade a ativar." } },
+      properties: { name: { type: "STRING", description: "Nome (ou aproximação) da personalidade desejada." } },
       required: ["name"]
+    }
+  },
+  {
+    name: "create_personality",
+    description: "Cria uma NOVA personalidade (perfil de comportamento) no sistema, com nome e prompt de estilo. Use quando o usuário pedir para criar/adicionar uma personalidade. Se o usuário descrever o estilo de forma vaga, elabore um prompt claro e detalhado. Para ativá-la em seguida, use switch_personality.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        name: { type: "STRING", description: "Nome curto e único da personalidade. Ex: 'Professor', 'Pirata', 'Coach'." },
+        prompt: { type: "STRING", description: "Instruções de comportamento e estilo de fala (system prompt) que definem a personalidade." }
+      },
+      required: ["name", "prompt"]
+    }
+  },
+  {
+    name: "delete_personality",
+    description: "Exclui uma personalidade personalizada do sistema pelo nome (aproximado). Não é possível excluir a padrão 'Normal'.",
+    parameters: {
+      type: "OBJECT",
+      properties: { name: { type: "STRING", description: "Nome (ou aproximação) da personalidade a excluir." } },
+      required: ["name"]
+    }
+  },
+  // ---- Verificação de fatos ----
+  {
+    name: "fact_check",
+    description: "Verifica se uma afirmação é verdadeira, pesquisando fontes reais na web. Use quando o usuário pedir para checar/confirmar um fato ou perguntar 'isso é verdade?'.",
+    parameters: {
+      type: "OBJECT",
+      properties: { claim: { type: "STRING", description: "A afirmação/fato a ser verificado." } },
+      required: ["claim"]
     }
   },
   // ---- Tempo estendido ----
@@ -187,6 +234,29 @@ export const LIVE_TOOL_DECLARATIONS = [
       properties: { id: { type: "STRING", description: "ID do agendamento a cancelar." } },
       required: ["id"]
     }
+  },
+  // ---- Cálculo ----
+  {
+    name: "calculate",
+    description: "Calcula o resultado exato de uma expressão matemática. Use SEMPRE para qualquer conta em vez de calcular de cabeça. Converta porcentagens você mesmo (ex.: '18% de 4350' → '4350*0.18'). Use operadores padrão + - * / e ** para potência; funções: sqrt, abs, round, floor, ceil, min, max, log, ln, sin, cos, tan; constantes: pi, e.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        expression: { type: "STRING", description: "Expressão matemática limpa. Ex: '(3+5)*2', '4350*0.18', 'sqrt(144)', '2**10'." }
+      },
+      required: ["expression"]
+    }
+  },
+  // ---- Clima ----
+  {
+    name: "get_weather",
+    description: "Consulta o clima atual e a previsão do dia (temperatura, sensação, umidade, vento, chance de chuva) de uma cidade, via API Open-Meteo. Se nenhuma cidade for informada, tenta usar a localização atual do dispositivo.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        location: { type: "STRING", description: "Cidade/local. Ex: 'Naviraí, MS' ou 'São Paulo'. Vazio = localização atual do dispositivo." }
+      }
+    }
   }
 ];
 
@@ -198,6 +268,11 @@ export class GeminiLiveSession {
   private videoStream: MediaStream | null = null;
   private videoElement: HTMLVideoElement | null = null;
   private frameInterval: number | null = null;
+  // Último frame capturado (base64 JPEG), anexado aos turnos de texto para que o
+  // modelo "veja" a câmera/tela ao ser perguntado por texto (mic desligado).
+  private lastVideoFrame: string | null = null;
+  // Token de geração para evitar dois loops de captura em corrida.
+  private videoToken = 0;
   private handlers: LiveSessionHandlers;
   private personalityPrompt: string;
   private voice: string;
@@ -212,6 +287,8 @@ export class GeminiLiveSession {
   // Reconexão contida: poucas tentativas e mais espaçadas, para não reenviar o
   // setup muitas vezes por minuto (cada setup consome tokens da cota de 65K/min).
   private maxAttempts = 2;
+  // Debounce da notificação de uso do Google Search (grounding vem em vários chunks).
+  private lastSearchNotifyMs = 0;
 
   constructor(
     handlers: LiveSessionHandlers,
@@ -380,7 +457,7 @@ export class GeminiLiveSession {
             HORA ATUAL: ${new Date().toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
             REGRAS OBRIGATÓRIAS:
             1. Responda SEMPRE ao usuário de forma audível. NUNCA fique em silêncio.
-            2. Use as ferramentas disponíveis quando fizer sentido: 'get_current_time' para a hora; 'google_search' para fatos atuais/reais; ferramentas de memória para lembrar do usuário; controle do app e alarmes/lembretes/cronômetros.
+            2. Use as ferramentas disponíveis quando fizer sentido: 'get_current_time' para a hora; 'google_search' para fatos atuais/reais; 'calculate' para QUALQUER conta matemática; 'get_weather' para clima/previsão; ferramentas de memória para lembrar do usuário; controle do app e alarmes/lembretes/cronômetros.
             3. Ao salvar memória, use 'save_memory' para fatos novos e 'update_memory' apenas quando um fato antigo for contradito. Um fato atômico por chamada.
             4. Quando um alarme, cronômetro ou lembrete disparar, você receberá uma mensagem de [SISTEMA]. Avise o usuário em voz alta imediatamente, de forma natural.
             5. Seja direto, natural e amigável. Se não entender algo, peça para repetir, mas responda.` }]
@@ -441,9 +518,16 @@ export class GeminiLiveSession {
   sendText(text: string) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       // Entrada de texto por turno completo, que dispara a resposta do modelo de forma confiável.
+      // Se houver câmera/tela ativa, anexa o frame mais recente para o modelo "ver"
+      // o que está sendo perguntado (o canal realtimeInput não entra no turno de texto).
+      const parts: any[] = [];
+      if (this.lastVideoFrame) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: this.lastVideoFrame } });
+      }
+      parts.push({ text });
       this.ws.send(JSON.stringify({
         clientContent: {
-          turns: [{ role: "user", parts: [{ text }] }],
+          turns: [{ role: "user", parts }],
           turnComplete: true
         }
       }));
@@ -460,27 +544,53 @@ export class GeminiLiveSession {
 
   private async startVideo(isScreen: boolean) {
     this.stopVideo();
+    const token = ++this.videoToken;
     try {
-      this.videoStream = isScreen 
+      const stream = isScreen
         ? await navigator.mediaDevices.getDisplayMedia({ video: true })
         : await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-      
+
+      // Se outra chamada de start/stop ocorreu enquanto aguardávamos, aborta esta.
+      if (token !== this.videoToken) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+      this.videoStream = stream;
+
       this.videoElement = document.createElement('video');
       this.videoElement.srcObject = this.videoStream;
-      this.videoElement.play();
+      this.videoElement.muted = true;
+      this.videoElement.playsInline = true;
+      // Anexa ao DOM fora da tela: muitos navegadores suspendem a DECODIFICAÇÃO de
+      // um <video> desconectado do DOM (ou com display:none), então ele nunca chega
+      // a readyState>=2 e nenhum frame é capturado. Off-screen (não display:none)
+      // mantém a decodificação ativa para o drawImage funcionar.
+      this.videoElement.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1;';
+      document.body.appendChild(this.videoElement);
+      // play() pode rejeitar; ignoramos pois é stream de câmera em fluxo iniciado pelo usuário.
+      this.videoElement.play().catch(() => {});
 
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
+      let framesSent = 0;
 
       this.frameInterval = window.setInterval(() => {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.videoElement || !ctx) return;
-        
-        // Capturar frame a cada ~1 segundo (1 FPS é o ideal para Gemini Live Vision no momento)
-        canvas.width = 640;
-        canvas.height = 480;
-        ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
-        
+
+        // Só captura quando o vídeo já tem um frame decodificado; caso contrário
+        // desenharíamos um quadro preto e o modelo não conseguiria "ver" nada.
+        const vw = this.videoElement.videoWidth;
+        const vh = this.videoElement.videoHeight;
+        if (this.videoElement.readyState < 2 || vw === 0 || vh === 0) return;
+
+        // Capturar frame a cada ~1 segundo (1 FPS é o ideal para Gemini Live Vision no momento),
+        // preservando a proporção real do vídeo (evita distorção).
+        canvas.width = vw;
+        canvas.height = vh;
+        ctx.drawImage(this.videoElement, 0, 0, vw, vh);
+
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+        this.lastVideoFrame = base64;
 
         // Frames de imagem seguem pelo campo realtimeInput.video no formato atual da API.
         this.ws.send(JSON.stringify({
@@ -491,6 +601,11 @@ export class GeminiLiveSession {
             }
           }
         }));
+
+        framesSent++;
+        if (framesSent === 1 || framesSent % 10 === 0) {
+          console.log(`[LIVE] 📹 Frame de vídeo enviado (#${framesSent}, ${vw}x${vh}, ${base64.length} bytes b64).`);
+        }
       }, 1000);
 
       this.videoStream.getTracks()[0].onended = () => this.stopVideo();
@@ -504,19 +619,30 @@ export class GeminiLiveSession {
   }
 
   stopVideo() {
+    // Invalida qualquer startVideo em andamento (corrida de duplo loop).
+    this.videoToken++;
     if (this.frameInterval) clearInterval(this.frameInterval);
     this.videoStream?.getTracks().forEach(t => t.stop());
+    if (this.videoElement) {
+      this.videoElement.pause();
+      this.videoElement.srcObject = null;
+      this.videoElement.remove();
+    }
     this.videoStream = null;
     this.videoElement = null;
     this.frameInterval = null;
+    this.lastVideoFrame = null;
     this.handlers.onStream(null);
   }
 
   private handleServerMessage(msg: any) {
     if (!msg) return;
     
-    // LOG ABSOLUTO: Ver tudo que chega no console para depuração real
-    console.log("[LIVE] RAW MSG:", JSON.stringify(msg));
+    // Log completo das mensagens do servidor — silencioso por padrão para não
+    // poluir os logs. Ative com `window.__LIVE_DEBUG = true` no console quando precisar.
+    if ((window as any).__LIVE_DEBUG) {
+      console.log("[LIVE] RAW MSG:", JSON.stringify(msg));
+    }
 
     // Sucesso REAL da sessão: só aqui zeramos o contador de tentativas.
     if (msg.setupComplete || msg.setup_complete) {
@@ -543,6 +669,26 @@ export class GeminiLiveSession {
           this.handlers.onAudioData(float32);
         }
       });
+    }
+
+    // Detectar uso do Google Search (ferramenta nativa): chega como grounding
+    // metadata, não como function call. Debounce para não notificar em cada chunk.
+    const grounding =
+      serverContent?.groundingMetadata || serverContent?.grounding_metadata ||
+      modelTurn?.groundingMetadata || modelTurn?.grounding_metadata ||
+      serverContent?.candidates?.[0]?.groundingMetadata || serverContent?.candidates?.[0]?.grounding_metadata;
+    if (grounding) {
+      const queries = grounding.webSearchQueries || grounding.web_search_queries;
+      const chunks = grounding.groundingChunks || grounding.grounding_chunks;
+      const entry = grounding.searchEntryPoint || grounding.search_entry_point;
+      if ((queries && queries.length) || (chunks && chunks.length) || entry) {
+        const nowMs = Date.now();
+        if (nowMs - this.lastSearchNotifyMs > 4000) {
+          this.lastSearchNotifyMs = nowMs;
+          console.log("[LIVE] 🔍 Google Search usado.", queries || '');
+          this.handlers.onToolUsed?.('google_search', { queries });
+        }
+      }
     }
 
     // Tratar Transcrições
@@ -584,6 +730,9 @@ export class GeminiLiveSession {
       const fcId = fc.id || fc.call_id;
       const args = fc.args || fc.arguments || {};
       let responsePayload: any;
+
+      // Feedback para a UI: o modelo acionou esta ferramenta.
+      this.handlers.onToolUsed?.(fc.name, args);
 
       try {
         if (fc.name === 'get_current_time') {

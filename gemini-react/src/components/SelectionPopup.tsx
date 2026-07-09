@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Send, X, ShieldCheck } from 'lucide-react';
 
@@ -25,6 +25,11 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
   const [isClosing, setIsClosing] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
 
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(onClose, 200);
+  }, [onClose]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
@@ -33,12 +38,7 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(onClose, 200);
-  };
+  }, [handleClose]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +55,7 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
   return createPortal(
     <div 
       ref={popupRef}
-      className={`fixed z-[9999] rounded-full border border-[var(--border-light)] shadow-2xl backdrop-blur-xl transition-all duration-200 animate-in zoom-in-95 fade-in duration-200 ${
+      className={`fixed z-[9999] rounded-full border border-(--border-light) shadow-2xl backdrop-blur-xl transition-all duration-200 animate-in zoom-in-95 fade-in duration-200 ${
         isClosing ? 'animate-out zoom-out-95 fade-out' : ''
       }`}
       style={{ 
@@ -74,13 +74,13 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Perguntar ao Nemon..."
-            className="bg-transparent border-none text-[11px] text-[var(--text-primary)] focus:ring-0 placeholder:text-[var(--text-placeholder)] py-1.5 w-full"
+            className="bg-transparent border-none text-[11px] text-(--text-primary) focus:ring-0 placeholder:text-(--text-placeholder) py-1.5 w-full"
           />
           <div className="flex items-center gap-0.5">
             <button 
               type="button"
               onClick={() => { onFactCheck(text); handleClose(); }}
-              className="p-1.5 text-[var(--accent-text)] hover:bg-[var(--accent-bg)] rounded-full transition-all group"
+              className="p-1.5 text-(--accent-text) hover:bg-(--accent-bg) rounded-full transition-all group"
               title="Checar Fato"
             >
               <ShieldCheck className="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -88,18 +88,18 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
             <button 
               type="submit"
               disabled={!question.trim() || isChecking}
-              className="p-1.5 text-[var(--accent-text)] hover:bg-[var(--accent-bg)] rounded-full disabled:opacity-30 transition-all"
+              className="p-1.5 text-(--accent-text) hover:bg-(--accent-bg) rounded-full disabled:opacity-30 transition-all"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
           </div>
         </form>
 
-        <div className="w-px h-4 bg-[var(--border-light)] opacity-20 mx-0.5"></div>
+        <div className="w-px h-4 bg-(--border-light) opacity-20 mx-0.5"></div>
 
         <button 
           onClick={handleClose} 
-          className="p-1.5 hover:bg-white/5 rounded-full transition-colors text-[var(--text-placeholder)]"
+          className="p-1.5 hover:bg-white/5 rounded-full transition-colors text-(--text-placeholder)"
         >
           <X className="w-3.5 h-3.5" />
         </button>

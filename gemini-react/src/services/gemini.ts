@@ -83,7 +83,7 @@ function escapeInnerQuotes(jsonStr: string): string {
               isStructuralClose = true;
             } else if (/^\s*,/.test(rest)) {
               const afterComma = rest.replace(/^\s*,/, '');
-              isStructuralClose = /^\s*["}\]0-9tfn{\[]/.test(afterComma);
+              isStructuralClose = /^\s*["}\]0-9tfn{[]/.test(afterComma);
             }
           }
           
@@ -114,7 +114,7 @@ function escapeInnerQuotes(jsonStr: string): string {
           } else if (/^\s*,/.test(rest)) {
             // Verify it's a valid structural comma (followed by key start, value start, or end of container)
             const afterComma = rest.replace(/^\s*,/, '');
-            isStructuralClose = /^\s*["}\]0-9tfn{\[]/.test(afterComma);
+            isStructuralClose = /^\s*["}\]0-9tfn{[]/.test(afterComma);
           }
         }
         
@@ -210,7 +210,7 @@ export function safeMarkdown(content: string): string {
 
   // 1. Collapse all variations of multiple newlines (2+) into a single newline
   // This forces "tight" mode for almost everything by default.
-  let tightenedContent = content.replace(/(\n\s*){2,}/g, '\n\n');
+  const tightenedContent = content.replace(/(\n\s*){2,}/g, '\n\n');
 
   let html = marked.parse(tightenedContent) as string;
 

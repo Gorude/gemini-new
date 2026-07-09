@@ -15,7 +15,7 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
 
       const rect = rulerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      let percentage = (x / rect.width) * 100;
+      const percentage = (x / rect.width) * 100;
       
       let finalMargin = 0;
       if (activeHandle === 'left') {
@@ -44,21 +44,21 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
   }, [activeHandle, onMarginChange]);
 
   return (
-    <div className="w-full flex justify-center bg-[var(--bg-main)]">
+    <div className="w-full flex justify-center bg-(--bg-main)">
       <div 
         ref={rulerRef}
         className="relative h-6 w-full flex items-center opacity-30 hover:opacity-100 transition-opacity duration-300 select-none cursor-default group"
       >
         {/* The Ruler Line and Ticks */}
-        <div className="absolute inset-x-0 bottom-1 h-[1px] bg-[var(--border-light)] mx-1"></div>
+        <div className="absolute inset-x-0 bottom-1 h-[1px] bg-(--border-light) mx-1"></div>
         {Array.from({ length: 51 }).map((_, i) => (
           <div 
             key={i} 
-            className={`absolute bottom-1 w-[1px] bg-[var(--border-light)] ${i % 5 === 0 ? 'h-2' : 'h-1'}`}
+            className={`absolute bottom-1 w-[1px] bg-(--border-light) ${i % 5 === 0 ? 'h-2' : 'h-1'}`}
             style={{ left: `${i * 2}%` }}
           >
             {i % 10 === 0 && i !== 0 && i !== 50 && (
-              <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] text-[var(--text-placeholder)] font-mono">
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] text-(--text-placeholder) font-mono">
                 {i}
               </span>
             )}
