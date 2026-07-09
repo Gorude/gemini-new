@@ -66,7 +66,7 @@ const SelectionPopup: React.FC<SelectionPopupProps> = ({
           : 'rgba(15, 15, 15, 0.9)',
       }}
     >
-      <div className="flex items-center gap-1.5 p-1 pb-1 pl-4 pr-1">
+      <div className="flex items-center gap-1.5 p-1 pb-1 pl-3 pr-1">
         <form onSubmit={handleSubmit} className="flex items-center gap-0.5 min-w-[220px]">
           <input 
             autoFocus

@@ -352,7 +352,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           )}
           
           {msg.text.includes('❌ **Erro:**') ? (
-             <div className="flex items-center gap-2 text-red-400 bg-red-900/20 p-4 border border-red-500/30 rounded-lg text-sm">
+             <div className="flex items-center gap-2 text-red-400 bg-red-900/20 p-3 border border-red-500/30 rounded-lg text-sm">
                <AlertCircle className="w-5 h-5 shrink-0" />
                <div dangerouslySetInnerHTML={{ __html: parsedHtml }} />
              </div>
@@ -365,7 +365,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           ) : null}
 
           {msg.pendingMemoryUpdates && msg.pendingMemoryUpdates.length > 0 && (
-            <div className="mt-4 bg-[var(--bg-sidebar)]/30 border border-[var(--border-light)] rounded-[1.5rem] p-4.5 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="mt-4 bg-[var(--bg-sidebar)]/30 border border-[var(--border-light)] rounded-[0.75rem] p-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-start gap-2.5 mb-2.5">
                 <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400 shrink-0">
                   <Brain className="w-3.5 h-3.5" />
@@ -454,7 +454,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
               {msg.files.map((file, i) => (
                 <div key={i} className="relative group/img rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-light)] bg-black/20">
                   <img src={`data:${file.mimeType};base64,${file.data}`} className="w-full h-auto object-contain block max-h-[500px]" alt="Imagem Gerada" />
-                  <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex justify-between items-center">
+                  <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex justify-between items-center">
                     <span className="text-[10px] text-white/70 font-medium">IMAGE GEN · {MODEL_LIMITS[imagenModel]?.name}</span>
                     <button 
                       onClick={() => {
@@ -553,11 +553,11 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
            )}
            
            {isEditing ? (
-             <div className="w-full flex flex-col gap-2 bg-[var(--bg-sidebar)] p-4 rounded-3xl border border-[var(--accent-border)] shadow-2xl">
+             <div className="w-full flex flex-col gap-2 bg-[var(--bg-sidebar)] p-3 rounded-3xl border border-[var(--accent-border)] shadow-2xl">
                <textarea autoFocus className="w-full bg-transparent border-none outline-none text-[var(--text-primary)] resize-none" rows={3} value={editingMsgText} onChange={(e) => onSetEditingMsgText(e.target.value)} />
                <div className="flex justify-end gap-2">
-                 <button onClick={onCancelEdit} className="px-4 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">Cancelar</button>
-                 <button onClick={() => onSaveEdit(msg.id)} className="px-4 py-1.5 text-xs font-medium bg-[var(--accent)] text-white rounded-full hover:bg-[var(--accent-hover)] transition shadow-lg">Salvar e Enviar</button>
+                 <button onClick={onCancelEdit} className="px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">Cancelar</button>
+                 <button onClick={() => onSaveEdit(msg.id)} className="px-3 py-1.5 text-xs font-medium bg-[var(--accent)] text-white rounded-full hover:bg-[var(--accent-hover)] transition shadow-lg">Salvar e Enviar</button>
                </div>
              </div>
            ) : (

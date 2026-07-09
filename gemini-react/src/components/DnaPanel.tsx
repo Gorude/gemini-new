@@ -56,7 +56,7 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
       )}
 
       {/* Control Bar */}
-      <div className="p-3 sm:p-4 md:p-6 bg-[var(--bg-main)]/30 border-b border-[var(--border-light)] flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 sm:gap-4 shrink-0">
+      <div className="p-3 sm:p-3 md:p-4 bg-[var(--bg-main)]/30 border-b border-[var(--border-light)] flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 sm:gap-4 shrink-0">
         
         {/* Search */}
         <div className="relative flex-1 max-w-md">
@@ -66,7 +66,7 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
             placeholder="Buscar no DNA..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-1.5 sm:py-2 pl-10 pr-4 text-xs sm:text-sm focus:outline-none focus:border-[var(--accent-border)] transition text-[var(--text-primary)]"
+            className="w-full bg-[var(--bg-sidebar)] border border-[var(--border-light)] rounded-xl py-1.5 sm:py-2 pl-10 pr-3 text-xs sm:text-sm focus:outline-none focus:border-[var(--accent-border)] transition text-[var(--text-primary)]"
           />
         </div>
 
@@ -102,7 +102,7 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
           <button 
             onClick={onAutoCategorize}
             disabled={isCategorizing || memoryFacts.length === 0}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[10px] sm:text-xs font-bold transition shadow-lg shrink-0 ${isCategorizing ? 'bg-zinc-800 text-white/50 cursor-not-allowed' : 'bg-[var(--bg-sidebar)] border border-[var(--border-light)] text-[var(--text-primary)] hover:bg-[var(--bg-chat-hover)] hover:border-[var(--border-main)]'}`}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3 sm:py-2 rounded-xl text-[10px] sm:text-xs font-bold transition shadow-lg shrink-0 ${isCategorizing ? 'bg-zinc-800 text-white/50 cursor-not-allowed' : 'bg-[var(--bg-sidebar)] border border-[var(--border-light)] text-[var(--text-primary)] hover:bg-[var(--bg-chat-hover)] hover:border-[var(--border-main)]'}`}
             title="Auto-organizar memórias com IA"
           >
             {isCategorizing ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
@@ -115,7 +115,7 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
 
           <button 
             onClick={() => setEditingFact({ id: '', text: '', category: 'Diversos', connections: [], timestamp: Date.now() })}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-[10px] sm:text-xs font-bold transition shadow-lg shadow-[var(--accent-glow)] shrink-0"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3 sm:py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-[10px] sm:text-xs font-bold transition shadow-lg shadow-[var(--accent-glow)] shrink-0"
           >
             <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> ADICIONAR
           </button>
@@ -125,7 +125,7 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
       {/* Content */}
       <div className="flex-1 overflow-hidden relative">
         {activeTab === 'lista' ? (
-          <div className="h-full overflow-y-auto p-6 space-y-8 custom-scrollbar">
+          <div className="h-full overflow-y-auto p-4 space-y-8 custom-scrollbar">
             {Object.keys(filteredGroups).length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-[var(--text-secondary)] italic text-sm py-16">
                  Nenhum fato encontrado na memória.
@@ -145,7 +145,7 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
                       const factId = isString ? `legacy-${idx}` : fact.id;
 
                       return (
-                        <div key={isString ? idx : fact.id} className="group p-4 bg-[var(--bg-main)]/35 rounded-2xl border border-[var(--border-light)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-chat-active)] transition duration-200 flex flex-col gap-3 shadow-sm">
+                        <div key={isString ? idx : fact.id} className="group p-3 bg-[var(--bg-main)]/35 rounded-2xl border border-[var(--border-light)] hover:border-[var(--accent-border)] hover:bg-[var(--bg-chat-active)] transition duration-200 flex flex-col gap-3 shadow-sm">
                           <p className="text-sm leading-relaxed text-[var(--text-primary)] flex-1">{factText}</p>
                           <div className="flex justify-between items-center mt-2 pt-3 border-t border-[var(--border-light)]">
                             <span className="text-[9px] text-[var(--text-secondary)] uppercase font-mono">ID: {factId.substring(0, 8)}</span>
@@ -181,19 +181,19 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
 
       {/* Edit/Add Modal Overlay */}
       {editingFact && (
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[120] p-6 animate-in zoom-in-95 duration-200">
-          <div className="bg-[var(--bg-modal)] w-full max-w-lg rounded-[24px] border border-[var(--border-main)] overflow-hidden shadow-2xl flex flex-col">
-            <div className="p-6 border-b border-[var(--border-light)] flex justify-between items-center">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[120] p-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-[var(--bg-modal)] w-full max-w-lg rounded-[12px] border border-[var(--border-main)] overflow-hidden shadow-2xl flex flex-col">
+            <div className="p-4 border-b border-[var(--border-light)] flex justify-between items-center">
               <h4 className="text-lg font-bold text-[var(--text-bold)]">{editingFact.id ? 'Editar Fato' : 'Novo Fato'}</h4>
               <button onClick={() => setEditingFact(null)} className="p-2 hover:bg-[var(--bg-chat-hover)] rounded-full text-[var(--text-secondary)]"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-6">
+            <div className="p-4 space-y-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest">Conteúdo do Fato</label>
                 <textarea 
                   value={editingFact.text}
                   onChange={(e) => setEditingFact({...editingFact, text: e.target.value})}
-                  className="w-full h-32 bg-[var(--bg-input)] border border-[var(--border-light)] rounded-xl p-4 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-border)] transition resize-none"
+                  className="w-full h-32 bg-[var(--bg-input)] border border-[var(--border-light)] rounded-xl p-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-border)] transition resize-none"
                   placeholder="O que o sistema deve lembrar?"
                 />
               </div>
@@ -220,11 +220,11 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
                 </div>
               </div>
             </div>
-            <div className="p-6 bg-[var(--bg-main)]/50 flex justify-end gap-3 mt-auto">
-              <button onClick={() => setEditingFact(null)} className="px-6 py-2.5 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">CANCELAR</button>
+            <div className="p-4 bg-[var(--bg-main)]/50 flex justify-end gap-3 mt-auto">
+              <button onClick={() => setEditingFact(null)} className="px-4 py-2.5 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">CANCELAR</button>
               <button 
                 onClick={() => { onSave(editingFact); setEditingFact(null); }}
-                className="px-8 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition shadow-lg shadow-[var(--accent-glow)]"
+                className="px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition shadow-lg shadow-[var(--accent-glow)]"
               >
                 SALVAR MEMÓRIA
               </button>

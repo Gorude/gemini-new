@@ -209,7 +209,9 @@ export class GeminiLiveSession {
   private active = false;
   private reconnectTimeout: any = null;
   private attemptCount = 0;
-  private maxAttempts = 4;
+  // Reconexão contida: poucas tentativas e mais espaçadas, para não reenviar o
+  // setup muitas vezes por minuto (cada setup consome tokens da cota de 65K/min).
+  private maxAttempts = 2;
 
   constructor(
     handlers: LiveSessionHandlers,

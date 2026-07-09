@@ -284,12 +284,12 @@ const LiveView: React.FC<LiveViewProps> = ({
           transform: `translate(${positionRef.current.x}px, ${positionRef.current.y}px)`,
           zIndex: 100 
         }}
-        className="w-[320px] rounded-[24px] bg-[#111111]/90 backdrop-blur-xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-300 select-none"
+        className="w-[320px] rounded-[12px] bg-[#111111]/90 backdrop-blur-xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-300 select-none"
       >
         {/* Header (Drag Handle) */}
         <div 
           onMouseDown={handleMouseDown}
-          className="px-4 py-3 bg-white/5 border-b border-white/5 flex justify-between items-center cursor-move"
+          className="px-3 py-3 bg-white/5 border-b border-white/5 flex justify-between items-center cursor-move"
         >
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]'}`}></div>
@@ -314,7 +314,7 @@ const LiveView: React.FC<LiveViewProps> = ({
         </div>
 
         {/* Visualizer / Video Preview */}
-        <div className="p-4 pb-2">
+        <div className="p-3 pb-2">
           <div className="h-24 bg-black/40 rounded-2xl overflow-hidden flex items-center justify-center relative border border-white/5">
             {visionType && videoStream ? (
               <>
@@ -347,7 +347,7 @@ const LiveView: React.FC<LiveViewProps> = ({
         </div>
 
         {/* Controls and Input */}
-        <div className="p-4 pt-0 flex flex-col gap-3">
+        <div className="p-3 pt-0 flex flex-col gap-3">
           {/* Controls Bar */}
           <div className="flex justify-between items-center bg-white/5 p-1 rounded-xl border border-white/5">
             <div className="flex gap-0.5">
@@ -442,7 +442,7 @@ const LiveView: React.FC<LiveViewProps> = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-4 pr-10 text-[11px] text-[var(--text-primary)] outline-none focus:border-[var(--accent-border)] transition"
+              className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-3 pr-10 text-[11px] text-[var(--text-primary)] outline-none focus:border-[var(--accent-border)] transition"
             />
             <button 
               onClick={handleSendText}
@@ -458,7 +458,7 @@ const LiveView: React.FC<LiveViewProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-hidden animate-in fade-in zoom-in-95 duration-700">
+    <div className="flex-1 flex flex-col items-center justify-center p-4 relative overflow-hidden animate-in fade-in zoom-in-95 duration-700">
       
       {/* Dynamic Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
@@ -540,7 +540,7 @@ const LiveView: React.FC<LiveViewProps> = ({
         </button>
       </div>
 
-      <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-[var(--bg-sidebar)]/50 backdrop-blur-md px-4 py-2 rounded-2xl border border-[var(--border-light)]">
+      <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-[var(--bg-sidebar)]/50 backdrop-blur-md px-3 py-2 rounded-2xl border border-[var(--border-light)]">
         <div className={`w-2.5 h-2.5 rounded-full ${status === 'connected' ? 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]'}`}></div>
         <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-primary)]">
           Modo LIVE Conectado
@@ -602,7 +602,7 @@ const LiveView: React.FC<LiveViewProps> = ({
             {/* Subtitles Area */}
             <div 
               ref={scrollRef}
-              className="w-full max-w-2xl h-48 overflow-y-auto custom-scrollbar space-y-4 p-6 bg-white/5 rounded-[32px] border border-white/10 backdrop-blur-sm self-center mt-8"
+              className="w-full max-w-2xl h-48 overflow-y-auto custom-scrollbar space-y-4 p-4 bg-white/5 rounded-[16px] border border-white/10 backdrop-blur-sm self-center mt-8"
             >
               {transcript.length === 0 && (
                 <div className="h-full flex items-center justify-center">
@@ -611,7 +611,7 @@ const LiveView: React.FC<LiveViewProps> = ({
               )}
               {transcript.map((line, i) => (
                 <div key={i} className={`flex ${line.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                  <div className={`max-w-[85%] px-5 py-3 rounded-2xl text-sm leading-relaxed shadow-lg ${line.role === 'user' ? 'bg-[var(--bg-user-bubble)] text-white font-medium' : 'bg-white/10 text-[var(--text-primary)] border border-white/5'}`}>
+                  <div className={`max-w-[85%] px-3.5 py-3 rounded-2xl text-sm leading-relaxed shadow-lg ${line.role === 'user' ? 'bg-[var(--bg-user-bubble)] text-white font-medium' : 'bg-white/10 text-[var(--text-primary)] border border-white/5'}`}>
                     {line.text}
                   </div>
                 </div>

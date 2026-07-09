@@ -11,11 +11,11 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
   const [useMemory, setUseMemory] = React.useState(true);
 
   return (
-    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[120] p-4 backdrop-blur-xl animate-in fade-in duration-500">
+    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[120] p-3 backdrop-blur-xl animate-in fade-in duration-500">
       <div className="bg-[#111111] w-full max-w-[380px] rounded-2xl overflow-hidden shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col relative animate-in zoom-in-95 duration-300">
         
         {/* Header */}
-        <div className="p-10 pb-6 text-center">
+        <div className="p-10 pb-4 text-center">
           <div className="w-24 h-24 rounded-2xl bg-zinc-800 flex items-center justify-center text-zinc-400 mx-auto mb-8 shadow-inner">
             <Headphones className="w-12 h-12" />
           </div>
@@ -29,7 +29,7 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
         <div className="px-10 pb-10 space-y-8">
           <div 
             onClick={() => setUseMemory(!useMemory)}
-            className={`p-5 rounded-xl transition-all cursor-pointer flex items-center gap-5 ${useMemory ? 'bg-zinc-800/80 border border-zinc-700/50' : 'bg-white/5 hover:bg-white/10'}`}
+            className={`p-3.5 rounded-xl transition-all cursor-pointer flex items-center gap-5 ${useMemory ? 'bg-zinc-800/80 border border-zinc-700/50' : 'bg-white/5 hover:bg-white/10'}`}
           >
             <div className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all ${useMemory ? 'bg-zinc-700 text-white shadow-lg shadow-black/30' : 'bg-white/10 text-white/30'}`}>
               <User className="w-6 h-6" />
@@ -51,7 +51,7 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
             <button 
               disabled={isConnecting}
               onClick={() => onConfirm(useMemory)}
-              className="w-full py-4 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-xl shadow-black/40 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-xl shadow-black/40 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               {isConnecting ? (
                 <>

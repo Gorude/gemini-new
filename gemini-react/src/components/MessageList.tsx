@@ -104,7 +104,7 @@ const MessageList: React.FC<MessageListProps> = ({
     <section 
       ref={chatWindowRef} 
       onScroll={onScroll}
-      className="flex-1 overflow-y-auto py-6 space-y-6 custom-scrollbar chat-container-responsive"
+      className="flex-1 overflow-y-auto py-4 space-y-6 custom-scrollbar chat-container-responsive"
       style={{ 
         paddingLeft: `calc(${margin}% + 1rem)`, 
         paddingRight: `calc(${margin}% + 1rem)` 
@@ -112,8 +112,8 @@ const MessageList: React.FC<MessageListProps> = ({
     >
       {messages.length === 0 && !isLoading ? (
         !hasFreeApiKey ? (
-          <div className="max-w-2xl mx-auto bg-white/5 backdrop-blur-md border border-white/10 rounded-[32px] p-8 md:p-10 shadow-2xl text-left space-y-6 my-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center gap-4 border-b border-white/10 pb-5">
+          <div className="max-w-2xl mx-auto bg-white/5 backdrop-blur-md border border-white/10 rounded-[16px] p-5 md:p-10 shadow-2xl text-left space-y-6 my-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center gap-4 border-b border-white/10 pb-3.5">
               <div className="p-3 bg-[var(--accent)] rounded-2xl text-white shadow-lg shadow-[var(--accent-glow)]">
                 <Zap size={28} className="animate-pulse" />
               </div>
@@ -133,7 +133,7 @@ const MessageList: React.FC<MessageListProps> = ({
 
             <div className="space-y-4">
               {/* Passo 1 */}
-              <div className="flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
+              <div className="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center font-bold text-sm text-[var(--accent-text)]">
                   1
                 </div>
@@ -146,7 +146,7 @@ const MessageList: React.FC<MessageListProps> = ({
               </div>
 
               {/* Passo 2 */}
-              <div className="flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
+              <div className="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center font-bold text-sm text-[var(--accent-text)]">
                   2
                 </div>
@@ -159,7 +159,7 @@ const MessageList: React.FC<MessageListProps> = ({
               </div>
 
               {/* Passo 3 */}
-              <div className="flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
+              <div className="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center font-bold text-sm text-[var(--accent-text)]">
                   3
                 </div>
@@ -172,7 +172,7 @@ const MessageList: React.FC<MessageListProps> = ({
               </div>
 
               {/* Passo 4 */}
-              <div className="flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
+              <div className="flex gap-4 p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--accent-bg)] border border-[var(--accent-border)] flex items-center justify-center font-bold text-sm text-[var(--accent-text)]">
                   4
                 </div>
@@ -185,10 +185,10 @@ const MessageList: React.FC<MessageListProps> = ({
               </div>
             </div>
 
-            <div className="pt-4 flex justify-center">
+            <div className="pt-3 flex justify-center">
               <button
                 onClick={() => onOpenSettings('api')}
-                className="px-6 py-3 font-bold text-xs text-white uppercase tracking-widest rounded-2xl transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2 shadow-lg"
+                className="px-4 py-3 font-bold text-xs text-white uppercase tracking-widest rounded-2xl transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-2 shadow-lg"
                 style={{ background: 'linear-gradient(to right, var(--accent), var(--accent-hover))', boxShadow: '0 10px 20px -5px var(--accent-glow)' }}
               >
                 <Key size={14} /> Configurar Chave de API
@@ -196,7 +196,7 @@ const MessageList: React.FC<MessageListProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center animate-in fade-in duration-500">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] px-3 text-center animate-in fade-in duration-500">
             <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-[#0052d4] via-[#4364f7] to-[#6fb1fc]">
               Olá, Conselheiro
             </h1>
@@ -208,7 +208,7 @@ const MessageList: React.FC<MessageListProps> = ({
       ) : (
         <>
           {visibleMessagesCount < messages.length && (
-            <div className="flex justify-center py-4 opacity-50 mb-4 transition-opacity">
+            <div className="flex justify-center py-3 opacity-50 mb-4 transition-opacity">
               <Loader2 className="w-5 h-5 text-[var(--text-secondary)] animate-spin" />
             </div>
           )}

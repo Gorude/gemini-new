@@ -1,5 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&family=Inter:wght@400;500;600&family=Roboto:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap');
 @import "tailwindcss";
+
+/* Escala de arredondamento global — reduzida para um visual menos circular.
+   Todas as utilidades rounded-* (exceto rounded-full) herdam destes valores. */
+@theme {
+  --radius-xs: 0.0625rem;  /* 1px  (era 2px)  */
+  --radius-sm: 0.125rem;   /* 2px  (era 4px)  */
+  --radius-md: 0.25rem;    /* 4px  (era 6px)  */
+  --radius-lg: 0.3125rem;  /* 5px  (era 8px)  */
+  --radius-xl: 0.4375rem;  /* 7px  (era 12px) */
+  --radius-2xl: 0.5rem;    /* 8px  (era 16px) */
+  --radius-3xl: 0.75rem;   /* 12px (era 24px) */
+  --radius-4xl: 1rem;      /* 16px (era 32px) */
+
+  /* Escala de espaçamento global — reduzida a 75% do padrão (0.25rem).
+     Afeta proporcionalmente padding, gaps, margens, larguras e alturas
+     de TODAS as utilidades (p-*, gap-*, w-*, h-*, ...), encolhendo a
+     proporção geral das divs do programa sem mexer no texto. */
+  --spacing: 0.1875rem;    /* era 0.25rem */
+}
 
 :root[data-theme="escuro"] {
   --bg-main: #0d0d0d;
@@ -42,6 +61,51 @@
   --accent-border: rgba(255, 255, 255, 0.15);
   --accent-glow: rgba(255, 255, 255, 0.08);
   --bg-sidebar-solid: #121212;
+}
+
+/* Tema "Claude" — réplica das cores do Claude.ai (modo escuro):
+   fundo quente escuro + acento terracota (#d97757). */
+:root[data-theme="claude"] {
+  --bg-main: #262624;
+  --bg-main-grad: linear-gradient(135deg, #262624 0%, #1f1e1d 100%);
+  --bg-sidebar: rgba(31, 30, 29, 0.65);
+  --bg-chat-hover: rgba(255, 255, 255, 0.05);
+  --bg-chat-active: rgba(217, 119, 87, 0.12);
+  --bg-nav-active: rgba(217, 119, 87, 0.16);
+  --text-nav-active: #f0eee6;
+  --bg-user-bubble: linear-gradient(135deg, #3a3936 0%, #30302e 100%);
+  --bg-input: rgba(48, 48, 46, 0.6);
+  --bg-modal: rgba(38, 38, 36, 0.9);
+  --border-main: rgba(255, 255, 255, 0.1);
+  --border-light: rgba(255, 255, 255, 0.06);
+  --text-primary: #e8e6dc;
+  --text-bold: #faf9f5;
+  --text-user-regular: rgba(240, 238, 230, 0.9);
+  --text-user-bold: #faf9f5;
+  --text-secondary: #b7b5a9;
+  --text-placeholder: #6f6d63;
+  --code-bg: #1f1e1d;
+  --inline-code-bg: #30302e;
+  --code-border: rgba(255, 255, 255, 0.08);
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+  --glass-bg: rgba(38, 38, 36, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --glow-primary: rgba(217, 119, 87, 0.08);
+  --glow-active: rgba(217, 119, 87, 0.35);
+  --message-bold-weight: 500;
+  --nemon-logo-fill: #d97757;
+  --nemon-logo-stroke: #d97757;
+  --accent: #d97757;
+  --accent-hover: #c15f3c;
+  --accent-text: #e0855f;
+  --accent-bg: rgba(217, 119, 87, 0.12);
+  --accent-bg-strong: rgba(217, 119, 87, 0.18);
+  --accent-border: rgba(217, 119, 87, 0.3);
+  --accent-glow: rgba(217, 119, 87, 0.25);
+  --bg-sidebar-solid: #1f1e1d;
 }
 
 :root[data-theme="claro"] {
@@ -173,9 +237,12 @@
   --bg-sidebar-solid: #12102a;
 }
 
-body { 
-  font-family: 'Google Sans', sans-serif; 
-  background: var(--bg-main-grad); 
+body {
+  font-family: var(--app-font, 'Google Sans', sans-serif);
+  /* Base para textos sem classe de tamanho explícita (ex.: abas das configurações),
+     que antes herdavam os 16px padrão do navegador e ficavam grandes demais. */
+  font-size: 13px;
+  background: var(--bg-main-grad);
   background-attachment: fixed;
   color: var(--text-primary); 
   transition: background 0.3s ease, color 0.3s ease; 
@@ -275,7 +342,7 @@ body {
   background: var(--bg-input); 
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-radius: 24px; 
+  border-radius: 12px; 
   border: 1px solid var(--border-light); 
   transition: background 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
 }
@@ -287,8 +354,8 @@ body {
 
 .user-msg { 
   background: var(--bg-user-bubble); 
-  border-radius: 20px 20px 4px 20px; 
-  padding: 14px 22px; 
+  border-radius: 12px 12px 3px 12px; 
+  padding: 11px 17px; 
   margin-left: auto; 
   max-width: 85%; 
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
@@ -318,8 +385,8 @@ body {
 .response-body li { margin-bottom: 7px !important; padding-left: 0.25rem; }
 .response-body li:last-child { margin-bottom: 0 !important; }
 .response-body li > ul, .response-body li > ol { margin-top: 6px !important; margin-bottom: 0 !important; }
-.response-body code { background: var(--inline-code-bg); padding: 2px 6px !important; border-radius: 6px; font-family: 'Consolas', monospace; font-size: 0.88em; color: var(--text-bold); border: 1px solid var(--code-border); transition: background 0.3s ease; }
-.response-body pre { background: var(--code-bg); padding: 18px !important; border-radius: 16px; margin: 16px 0 !important; overflow-x: auto; border: 1px solid var(--code-border); box-shadow: 0 4px 20px rgba(0,0,0,0.15); transition: background 0.3s ease, border-color 0.3s ease; }
+.response-body code { background: var(--inline-code-bg); padding: 2px 6px !important; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.88em; color: var(--text-bold); border: 1px solid var(--code-border); transition: background 0.3s ease; }
+.response-body pre { background: var(--code-bg); padding: 14px !important; border-radius: 10px; margin: 16px 0 !important; overflow-x: auto; border: 1px solid var(--code-border); box-shadow: 0 4px 20px rgba(0,0,0,0.15); transition: background 0.3s ease, border-color 0.3s ease; }
 .response-body pre code { background: transparent !important; padding: 0 !important; border: none !important; }
 
 .table-wrapper {
@@ -328,7 +395,7 @@ body {
   overflow-x: auto;
   margin: 20px 0;
   border: 1px solid var(--border-main);
-  border-radius: 16px;
+  border-radius: 10px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
 
@@ -341,7 +408,7 @@ body {
 }
 
 .response-body table th, .response-body table td {
-  padding: 14px 20px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-light);
   border-right: 1px solid var(--border-light);
   text-align: left;
@@ -374,8 +441,8 @@ body {
 }
 
 @keyframes slideUpFade {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 .animate-scroll-button {
@@ -401,8 +468,8 @@ body {
   background: var(--bg-sidebar); 
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-radius: 16px; 
-  padding: 16px; 
+  border-radius: 10px; 
+  padding: 12px; 
   margin-bottom: 20px; 
   border-left: 4px solid var(--glow-active); 
   box-shadow: 0 4px 15px rgba(0,0,0,0.05);
@@ -415,7 +482,7 @@ body {
 /* Scrollbar Customization */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 /* Custom Dark Select */
@@ -463,15 +530,21 @@ body {
   to { transform: rotate(360deg); }
 }
 
-.generating-glow {
-  position: relative;
+.generating-glow-border {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 0;
   overflow: hidden;
-  z-index: 1;
-  background-color: transparent !important; /* Allow the ::after background to show through */
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) border-box;
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) border-box;
+  mask-composite: exclude;
 }
 
-.generating-glow::before {
-  content: '';
+.generating-glow-rotating {
   position: absolute;
   top: -150%;
   left: -50%;
@@ -608,8 +681,8 @@ body {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-radius: 16px;
-  padding: 18px;
+  border-radius: 10px;
+  padding: 14px;
   margin-top: 8px;
   margin-bottom: 8px;
   border: 1px solid var(--glass-border);
@@ -628,6 +701,9 @@ body {
 }
 :root[data-theme="claro"] .thought-panel {
   border-left: 4px solid #27272a;
+}
+:root[data-theme="claude"] .thought-panel {
+  border-left: 4px solid #d97757;
 }
 
 /* Custom 4-dot breathing spinner */

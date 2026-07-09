@@ -109,25 +109,25 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
         >
           <button 
             onClick={(e) => { e.stopPropagation(); onSetEditingId(chat.id, chat.title); onToggleMenu(''); }} 
-            className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
+            className="w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
           >
             <Edit2 className="w-4 h-4 opacity-60" /> Renomear
           </button>
           <button 
             onClick={(e) => { onTogglePin(e, chat.id); onToggleMenu(''); }} 
-            className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
+            className="w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
           >
             <Pin className="w-4 h-4 opacity-60" /> {chat.pinned ? 'Desafixar' : 'Fixar'}
           </button>
           <button 
             onClick={() => { onArchive(chat.id); onToggleMenu(''); }} 
-            className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
+            className="w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
           >
             <Archive className="w-4 h-4 opacity-60" /> Arquivar
           </button>
           <button 
             onClick={(e) => { onDelete(e, chat.id); onToggleMenu(''); }} 
-            className="w-full text-left px-4 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2 text-red-400"
+            className="w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2 text-red-400"
           >
             <Trash2 className="w-4 h-4" /> Excluir
           </button>
