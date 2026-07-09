@@ -58,6 +58,7 @@ import {
   extractAndParseJson,
   setGlobalPaidApiKey,
   setGlobalDefaultApiKey,
+  listLiveModels,
   type Message
 } from './services/gemini';
 
@@ -89,7 +90,8 @@ import LogWindow from './components/LogWindow';
 import SettingsModal from './components/SettingsModal';
 import {
   MODEL_OPTIONS,
-  LIVE_MODEL_MAP
+  LIVE_MODEL_MAP,
+  DEFAULT_LIVE_MODEL
 } from './constants';
 
 const getPacificDate = () => {
@@ -188,7 +190,12 @@ function App() {
   const [proactiveIdleCount, setProactiveIdleCount] = useState(0); // 0: Idle, 1: Probed, 2: Retried (Stopped)
   const [paidApiKey, setPaidApiKey] = useState('');
   const [defaultApiKey, setDefaultApiKey] = useState('');
-  const [liveModel, setLiveModel] = useState(() => localStorage.getItem('nemon_live_model') || 'gemini-2.5-flash-live');
+  const [liveModel, setLiveModel] = useState(() => {
+    const saved = localStorage.getItem('nemon_live_model');
+    // Migra a chave antiga (gemini-3.1-flash-live) para o rótulo atual (gemini-3-flash-live).
+    if (saved === 'gemini-3.1-flash-live') return 'gemini-3-flash-live';
+    return saved || DEFAULT_LIVE_MODEL;
+  });
   const [useMemoryLive, setUseMemoryLive] = useState(true);
   const [isLiveDetached, setIsLiveDetached] = useState(false);
   const [isLiveMicEnabled, setIsLiveMicEnabled] = useState(() => {
@@ -249,6 +256,11 @@ function App() {
       logger.addLog('info', 'Sistema de rastreamento de logs ativado.');
       isLoggerInitialized = true;
     }
+
+    // Diagnóstico: rode listLiveModels() no console do navegador (F12) para ver
+    // quais modelos a sua chave pode usar na Live API. O resultado aparece no log.
+    (window as any).listLiveModels = () => listLiveModels()
+      .catch(e => console.error('[MODELS] Erro:', e?.message || e));
 
     return () => {
       console.log = originalLog;
@@ -314,6 +326,18 @@ function App() {
   const isPlayingRef = useRef(false);
   const nextAudioTimeRef = useRef<number>(0);
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  // Espelha o modelo LIVE selecionado para evitar closures desatualizadas em reinícios de sessão.
+  const liveModelRef = useRef<string>(liveModel);
+  // Espelhos de estado sempre atuais, usados pelo executor de ferramentas do modo LIVE.
+  const memoryFactsRef = useRef<MemoryFact[]>([]);
+  const chatsRef = useRef<ChatSession[]>([]);
+  const personalitiesRef = useRef<Personality[]>([]);
+  // Executor de ferramentas do LIVE (definido após os handlers; acessado via ref para evitar TDZ).
+  const liveToolExecutorRef = useRef<((name: string, args: any) => Promise<any>) | null>(null);
+  // Registro de alarmes/cronômetros/lembretes agendados no modo LIVE.
+  const scheduledAlarmsRef = useRef<Map<string, { id: string; kind: 'alarme' | 'cronômetro' | 'lembrete'; label: string; fireAtMs: number; timeoutId: number }>>(new Map());
+  // Espelho do tipo de visão ativa (câmera/tela), usado pelo executor de ferramentas.
+  const liveVisionTypeRef = useRef<'camera' | 'screen' | null>(null);
   const [liveAnalyser, setLiveAnalyser] = useState<AnalyserNode | null>(null);
   const [selectionData, setSelectionData] = useState<{ text: string, pos: { x: number, y: number }, messageId: string } | null>(null);
   const [isCheckingSegment] = useState(false);
@@ -330,6 +354,15 @@ function App() {
   useEffect(() => {
     localStorage.setItem('nemon_live_proactive', isLiveProactive.toString());
   }, [isLiveProactive]);
+
+  useEffect(() => {
+    liveModelRef.current = liveModel;
+  }, [liveModel]);
+
+  useEffect(() => { memoryFactsRef.current = memoryFacts; }, [memoryFacts]);
+  useEffect(() => { chatsRef.current = chats; }, [chats]);
+  useEffect(() => { personalitiesRef.current = personalities; }, [personalities]);
+  useEffect(() => { liveVisionTypeRef.current = liveVisionType; }, [liveVisionType]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--chat-font-size', `${chatFontSize}px`);
@@ -1190,6 +1223,9 @@ function App() {
     if (liveAudioContextRef.current) {
       liveAudioContextRef.current.close();
     }
+    // Zerar o cronograma de reprodução para não agendar áudio no "futuro" de um contexto novo.
+    nextAudioTimeRef.current = 0;
+    activeSourcesRef.current.clear();
     liveAudioContextRef.current = new AudioContext({ sampleRate: 24000 });
     const analyserNode = liveAudioContextRef.current.createAnalyser();
     analyserNode.fftSize = 256;
@@ -1215,12 +1251,19 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     const selectedPersonalityProfile = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
     const fullInstructionStr = `${selectedPersonalityProfile.prompt}${dnaContext}${memoryRules}\n\nResponda sempre de forma natural e conversacional.`;
 
-    const liveModelString = LIVE_MODEL_MAP[liveModel] || 'models/gemini-2.5-flash-native-audio-preview-12-2025';
+    // Usa o ref (sempre atual) para evitar closure desatualizada ao reiniciar após troca de modelo.
+    const activeLiveModel = liveModelRef.current;
+    const liveModelString = LIVE_MODEL_MAP[activeLiveModel] || LIVE_MODEL_MAP[DEFAULT_LIVE_MODEL];
 
     const session = new GeminiLiveSession({
       onStatusChange: (status) => setLiveStatus(status),
       onStream: (stream) => setLiveVideoStream(stream),
       onError: (err) => { alert(err); handleLiveStop(); },
+      onInterrupt: () => handleInterruptLive(),
+      onToolCall: (name, args) =>
+        liveToolExecutorRef.current
+          ? liveToolExecutorRef.current(name, args)
+          : Promise.resolve({ result: 'Ferramenta indisponível no momento.' }),
       onTranscript: (role, text) => {
         setLiveTranscript(prev => {
           if (prev.length > 0 && prev[prev.length - 1].role === role) {
@@ -1319,6 +1362,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
   const handleSetLiveModel = useCallback((newModel: string) => {
     setLiveModel(newModel);
+    // Atualização síncrona do ref para que um reinício imediato use o modelo correto,
+    // sem depender do timing do re-render/effect.
+    liveModelRef.current = newModel;
     localStorage.setItem('nemon_live_model', newModel);
     if (isLiveActive) {
       handleLiveStop();
@@ -1389,6 +1435,220 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
     resetProactivityState("Interrupção manual/VAD");
   }, [resetProactivityState]);
+
+  // "Acorda" o modelo LIVE injetando uma mensagem de sistema para ele falar imediatamente.
+  // Se não houver sessão ativa, cai para uma notificação do navegador.
+  const wakeLiveModel = useCallback((systemText: string) => {
+    if (liveSessionRef.current) {
+      resetProactivityState("Agendamento disparado");
+      liveSessionRef.current.sendText(systemText);
+    } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try {
+        new Notification('Nemon', { body: systemText.replace(/^\[SISTEMA:\s*/, '').replace(/\]$/, '') });
+      } catch { /* ignore */ }
+    }
+  }, [resetProactivityState]);
+
+  // Agenda um disparo (alarme/cronômetro/lembrete) que acorda o modelo na hora certa.
+  const scheduleWake = useCallback((
+    kind: 'alarme' | 'cronômetro' | 'lembrete',
+    fireAtMs: number,
+    label: string,
+    message: string
+  ): string => {
+    const nowMs = Date.now();
+    const delay = Math.max(0, fireAtMs - nowMs);
+    const id = `${kind}-${nowMs}-${Math.random().toString(36).slice(2, 7)}`;
+    const timeoutId = window.setTimeout(() => {
+      scheduledAlarmsRef.current.delete(id);
+      wakeLiveModel(`[SISTEMA: O ${kind} "${label}" chegou à hora AGORA. Avise o usuário em voz alta, de forma natural e imediata, sobre: ${message}]`);
+    }, delay);
+    scheduledAlarmsRef.current.set(id, { id, kind, label, fireAtMs, timeoutId });
+    return id;
+  }, [wakeLiveModel]);
+
+  // Executor central das ferramentas do modo LIVE. Acessa estado sempre atual via refs.
+  const handleLiveToolCall = useCallback(async (name: string, args: any): Promise<any> => {
+    const a = args || {};
+    switch (name) {
+      // ---------- Memória / DNA ----------
+      case 'save_memory': {
+        const text = (a.text || '').trim();
+        if (!text) return { result: 'Nenhum texto de memória informado.' };
+        const fact: MemoryFact = {
+          id: `${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+          text,
+          category: (a.category || 'Geral').trim(),
+          connections: [],
+          timestamp: Date.now()
+        };
+        const next = [...memoryFactsRef.current, fact];
+        memoryFactsRef.current = next;
+        setMemoryFacts(next);
+        saveMemoryFactsToFirestore(next);
+        return { result: `Memória salva: "${text}".` };
+      }
+      case 'update_memory': {
+        const id = String(a.id || '');
+        const text = (a.text || '').trim();
+        const exists = memoryFactsRef.current.some(f => f.id === id);
+        if (!exists) return { result: `Não encontrei uma memória com ID ${id}.` };
+        const next = memoryFactsRef.current.map(f => f.id === id ? { ...f, text: text || f.text, timestamp: Date.now() } : f);
+        memoryFactsRef.current = next;
+        setMemoryFacts(next);
+        saveMemoryFactsToFirestore(next);
+        return { result: `Memória ${id} atualizada.` };
+      }
+      case 'delete_memory': {
+        const id = String(a.id || '');
+        const exists = memoryFactsRef.current.some(f => f.id === id);
+        if (!exists) return { result: `Não encontrei uma memória com ID ${id}.` };
+        const next = memoryFactsRef.current.filter(f => f.id !== id);
+        memoryFactsRef.current = next;
+        setMemoryFacts(next);
+        saveMemoryFactsToFirestore(next);
+        return { result: `Memória ${id} removida.` };
+      }
+      case 'recall_memory': {
+        const q = (a.query || '').toLowerCase().trim();
+        const matches = memoryFactsRef.current.filter(f =>
+          !q || f.text.toLowerCase().includes(q) || f.category.toLowerCase().includes(q));
+        if (matches.length === 0) return { result: q ? `Nenhuma memória encontrada para "${a.query}".` : 'Nenhuma memória salva ainda.' };
+        return { result: matches.map(f => `[ID:${f.id}] (${f.category}) ${f.text}`).join(' | ') };
+      }
+
+      // ---------- Controle do app por voz ----------
+      case 'set_voice': {
+        const voices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
+        const voice = voices.find(v => v.toLowerCase() === String(a.voice || '').toLowerCase());
+        if (!voice) return { result: `Voz inválida. Opções: ${voices.join(', ')}.` };
+        setLiveVoice(voice);
+        localStorage.setItem('nemon_live_voice', voice);
+        return { result: `Voz definida como ${voice}. A mudança será aplicada ao reiniciar a sessão LIVE.` };
+      }
+      case 'toggle_camera': {
+        const isOn = liveVisionTypeRef.current === 'camera';
+        const want = a.enable === undefined ? !isOn : !!a.enable;
+        if (want !== isOn) await handleToggleCamera();
+        return { result: want ? 'Câmera ligada.' : 'Câmera desligada.' };
+      }
+      case 'toggle_screen_share': {
+        const isOn = liveVisionTypeRef.current === 'screen';
+        const want = a.enable === undefined ? !isOn : !!a.enable;
+        if (want !== isOn) await handleToggleScreen();
+        return { result: want ? 'Compartilhamento de tela ligado.' : 'Compartilhamento de tela desligado.' };
+      }
+      case 'toggle_proactivity': {
+        const enable = !!a.enable;
+        setIsLiveProactive(enable);
+        return { result: `Proatividade ${enable ? 'ativada' : 'desativada'}.` };
+      }
+      case 'open_settings': {
+        const allowed = ['geral', 'modelos', 'api', 'personalidades', 'dna'] as const;
+        const tab = (allowed as readonly string[]).includes(a.tab) ? a.tab : 'geral';
+        handleOpenSettings(tab);
+        return { result: `Configurações abertas na aba ${tab}.` };
+      }
+      case 'end_session': {
+        // Dá tempo do modelo se despedir antes de encerrar de fato.
+        window.setTimeout(() => handleLiveStop(), 1500);
+        return { result: 'Encerrando a sessão LIVE. Despeça-se do usuário.' };
+      }
+
+      // ---------- Histórico / conversas ----------
+      case 'search_history': {
+        const q = (a.query || '').toLowerCase().trim();
+        if (!q) return { result: 'Informe um termo de busca.' };
+        const hits: string[] = [];
+        for (const c of chatsRef.current) {
+          const inTitle = (c.title || '').toLowerCase().includes(q);
+          const msg = c.messages.find(m => (m.text || '').toLowerCase().includes(q));
+          if (inTitle || msg) {
+            const snippet = msg ? msg.text.slice(0, 120) : (c.messages[0]?.text || '').slice(0, 120);
+            hits.push(`"${c.title}": ${snippet}`);
+          }
+          if (hits.length >= 5) break;
+        }
+        return { result: hits.length ? hits.join(' | ') : `Nenhuma conversa encontrada para "${a.query}".` };
+      }
+      case 'create_new_chat': {
+        setActiveChatId('');
+        setActiveTab('chat');
+        return { result: 'Nova conversa criada.' };
+      }
+      case 'switch_personality': {
+        const wanted = String(a.name || '').toLowerCase().trim();
+        const p = personalitiesRef.current.find(pp => pp.name.toLowerCase() === wanted)
+          || personalitiesRef.current.find(pp => pp.name.toLowerCase().includes(wanted));
+        if (!p) return { result: `Personalidade "${a.name}" não encontrada.` };
+        setSelectedPersonalityId(p.id);
+        return { result: `Personalidade "${p.name}" ativada. Terá efeito pleno ao reiniciar a sessão LIVE.` };
+      }
+
+      // ---------- Tempo estendido ----------
+      case 'set_timer': {
+        const seconds = Number(a.seconds);
+        if (!seconds || seconds <= 0) return { result: 'Duração inválida.' };
+        const label = (a.label || 'cronômetro').trim();
+        scheduleWake('cronômetro', Date.now() + seconds * 1000, label, `o cronômetro de ${label} terminou`);
+        return { result: `Cronômetro de ${seconds}s iniciado (${label}).` };
+      }
+      case 'set_reminder': {
+        const minutes = Number(a.minutes);
+        const message = (a.message || '').trim();
+        if (!minutes || minutes <= 0) return { result: 'Tempo inválido.' };
+        if (!message) return { result: 'Informe o que devo lembrar.' };
+        scheduleWake('lembrete', Date.now() + minutes * 60000, message, message);
+        return { result: `Lembrete agendado para daqui a ${minutes} min: "${message}".` };
+      }
+
+      // ---------- Alarme ----------
+      case 'set_alarm': {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(String(a.time || '').trim());
+        if (!m) return { result: 'Horário inválido. Use o formato HH:MM (24h).' };
+        const h = Number(m[1]);
+        const min = Number(m[2]);
+        if (h > 23 || min > 59) return { result: 'Horário inválido.' };
+        const message = (a.message || 'seu alarme').trim();
+        const target = new Date();
+        target.setHours(h, min, 0, 0);
+        let amanha = false;
+        if (target.getTime() <= Date.now()) { target.setDate(target.getDate() + 1); amanha = true; }
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          Notification.requestPermission().catch(() => {});
+        }
+        scheduleWake('alarme', target.getTime(), message, message);
+        const hhmm = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        return { result: `Alarme definido para ${hhmm}${amanha ? ' de amanhã' : ''}: "${message}".` };
+      }
+      case 'list_alarms': {
+        const items = Array.from(scheduledAlarmsRef.current.values());
+        if (items.length === 0) return { result: 'Nenhum alarme, cronômetro ou lembrete agendado.' };
+        return {
+          result: items.map(it => {
+            const when = new Date(it.fireAtMs).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            return `[ID:${it.id}] ${it.kind} "${it.label}" às ${when}`;
+          }).join(' | ')
+        };
+      }
+      case 'cancel_alarm': {
+        const id = String(a.id || '');
+        const item = scheduledAlarmsRef.current.get(id);
+        if (!item) return { result: `Não encontrei um agendamento com ID ${id}.` };
+        clearTimeout(item.timeoutId);
+        scheduledAlarmsRef.current.delete(id);
+        return { result: `${item.kind} "${item.label}" cancelado.` };
+      }
+
+      default:
+        return { result: `Ferramenta desconhecida: ${name}.` };
+    }
+  }, [handleToggleCamera, handleToggleScreen, handleOpenSettings, handleLiveStop, saveMemoryFactsToFirestore, scheduleWake]);
+
+  // Mantém o ref do executor sempre apontando para a versão mais recente.
+  useEffect(() => {
+    liveToolExecutorRef.current = handleLiveToolCall;
+  }, [handleLiveToolCall]);
 
   const handleSend = useCallback((text: string, files: PendingFile[]) => {
     if (text.trim() === '' && files.length === 0) return;

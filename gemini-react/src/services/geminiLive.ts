@@ -8,7 +8,187 @@ export interface LiveSessionHandlers {
   onStatusChange: (status: 'connecting' | 'connected' | 'error' | 'disconnected') => void;
   onStream: (stream: MediaStream | null) => void;
   onError: (error: string) => void;
+  onInterrupt?: () => void;
+  // Executor de ferramentas customizadas (memória, controle do app, histórico, tempo, alarmes).
+  // Recebe o nome da função e seus argumentos e devolve o objeto de resposta.
+  onToolCall?: (name: string, args: any) => Promise<any>;
 }
+
+// Declarações das ferramentas customizadas expostas ao modelo no modo LIVE.
+// As nativas (googleSearch, codeExecution) são adicionadas separadamente no setup.
+export const LIVE_TOOL_DECLARATIONS = [
+  {
+    name: "get_current_time",
+    description: "Retorna a data e hora atual do sistema do usuário para precisão temporal (relógio em tempo real).",
+    parameters: { type: "OBJECT", properties: {} }
+  },
+  // ---- Memória / DNA ----
+  {
+    name: "save_memory",
+    description: "Salva um NOVO fato atômico e específico sobre o usuário na memória de longo prazo (DNA). Use um fato por chamada. NÃO use para atualizar fatos existentes.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        text: { type: "STRING", description: "O fato atômico. Ex: 'O usuário se chama José Gabriel'." },
+        category: { type: "STRING", description: "Categoria curta do fato. Ex: 'Identidade', 'Preferências', 'Trabalho'." }
+      },
+      required: ["text"]
+    }
+  },
+  {
+    name: "update_memory",
+    description: "Atualiza um fato existente na memória APENAS quando a informação antiga daquele ID for diretamente contradita/substituída (ex.: mudou de cidade ou idade).",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        id: { type: "STRING", description: "O ID do fato a atualizar." },
+        text: { type: "STRING", description: "O novo texto do fato." }
+      },
+      required: ["id", "text"]
+    }
+  },
+  {
+    name: "delete_memory",
+    description: "Remove um fato da memória de longo prazo pelo seu ID.",
+    parameters: {
+      type: "OBJECT",
+      properties: { id: { type: "STRING", description: "O ID do fato a remover." } },
+      required: ["id"]
+    }
+  },
+  {
+    name: "recall_memory",
+    description: "Busca fatos salvos na memória de longo prazo (DNA) por palavra-chave ou categoria. Use para lembrar detalhes sobre o usuário.",
+    parameters: {
+      type: "OBJECT",
+      properties: { query: { type: "STRING", description: "Termo de busca. Vazio retorna todos os fatos." } }
+    }
+  },
+  // ---- Controle do app por voz ----
+  {
+    name: "set_voice",
+    description: "Troca a voz da IA no modo LIVE.",
+    parameters: {
+      type: "OBJECT",
+      properties: { voice: { type: "STRING", description: "Uma de: Puck, Charon, Kore, Fenrir, Aoede." } },
+      required: ["voice"]
+    }
+  },
+  {
+    name: "toggle_camera",
+    description: "Liga ou desliga a câmera (webcam) para o modo de visão.",
+    parameters: {
+      type: "OBJECT",
+      properties: { enable: { type: "BOOLEAN", description: "true liga, false desliga. Omitido alterna." } }
+    }
+  },
+  {
+    name: "toggle_screen_share",
+    description: "Liga ou desliga o compartilhamento de tela para o modo de visão.",
+    parameters: {
+      type: "OBJECT",
+      properties: { enable: { type: "BOOLEAN", description: "true liga, false desliga. Omitido alterna." } }
+    }
+  },
+  {
+    name: "toggle_proactivity",
+    description: "Ativa ou desativa o modo proativo (a IA puxa assunto durante silêncios).",
+    parameters: {
+      type: "OBJECT",
+      properties: { enable: { type: "BOOLEAN", description: "true ativa, false desativa." } },
+      required: ["enable"]
+    }
+  },
+  {
+    name: "open_settings",
+    description: "Abre a tela de configurações do app numa aba específica.",
+    parameters: {
+      type: "OBJECT",
+      properties: { tab: { type: "STRING", description: "Uma de: geral, modelos, api, personalidades, dna." } }
+    }
+  },
+  {
+    name: "end_session",
+    description: "Encerra a sessão do modo LIVE. Use apenas quando o usuário pedir explicitamente para encerrar/desligar.",
+    parameters: { type: "OBJECT", properties: {} }
+  },
+  // ---- Histórico / conversas ----
+  {
+    name: "search_history",
+    description: "Procura em conversas anteriores do usuário por um termo e retorna os títulos e trechos relevantes.",
+    parameters: {
+      type: "OBJECT",
+      properties: { query: { type: "STRING", description: "Termo a procurar no histórico de conversas." } },
+      required: ["query"]
+    }
+  },
+  {
+    name: "create_new_chat",
+    description: "Cria uma nova conversa em branco e a torna ativa.",
+    parameters: { type: "OBJECT", properties: {} }
+  },
+  {
+    name: "switch_personality",
+    description: "Troca a personalidade ativa do assistente pelo nome.",
+    parameters: {
+      type: "OBJECT",
+      properties: { name: { type: "STRING", description: "Nome da personalidade a ativar." } },
+      required: ["name"]
+    }
+  },
+  // ---- Tempo estendido ----
+  {
+    name: "set_timer",
+    description: "Inicia um cronômetro. Quando o tempo acabar, o sistema acorda a IA para avisar o usuário.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        seconds: { type: "NUMBER", description: "Duração total em segundos." },
+        label: { type: "STRING", description: "Rótulo opcional do cronômetro. Ex: 'macarrão'." }
+      },
+      required: ["seconds"]
+    }
+  },
+  {
+    name: "set_reminder",
+    description: "Agenda um lembrete relativo (daqui a X minutos). Quando chegar a hora, o sistema acorda a IA para avisar.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        minutes: { type: "NUMBER", description: "Em quantos minutos a partir de agora." },
+        message: { type: "STRING", description: "O que lembrar o usuário." }
+      },
+      required: ["minutes", "message"]
+    }
+  },
+  // ---- Alarme ----
+  {
+    name: "set_alarm",
+    description: "Agenda um alarme para um HORÁRIO específico do dia. Quando der a hora, o programa acorda a IA e ela avisa o usuário em voz alta sobre o alarme.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        time: { type: "STRING", description: "Horário no formato 24h HH:MM. Ex: '14:30'. Se já passou hoje, será agendado para amanhã." },
+        message: { type: "STRING", description: "Mensagem/assunto do alarme. Ex: 'reunião com a equipe'." }
+      },
+      required: ["time", "message"]
+    }
+  },
+  {
+    name: "list_alarms",
+    description: "Lista os alarmes, cronômetros e lembretes atualmente agendados, com seus IDs.",
+    parameters: { type: "OBJECT", properties: {} }
+  },
+  {
+    name: "cancel_alarm",
+    description: "Cancela um alarme, cronômetro ou lembrete agendado pelo seu ID (obtido via list_alarms).",
+    parameters: {
+      type: "OBJECT",
+      properties: { id: { type: "STRING", description: "ID do agendamento a cancelar." } },
+      required: ["id"]
+    }
+  }
+];
 
 export class GeminiLiveSession {
   private ws: WebSocket | null = null;
@@ -29,13 +209,14 @@ export class GeminiLiveSession {
   private active = false;
   private reconnectTimeout: any = null;
   private attemptCount = 0;
+  private maxAttempts = 4;
 
   constructor(
     handlers: LiveSessionHandlers,
     personalityPrompt: string = "",
     voice: string = "Charon",
     apiKey: string = "",
-    modelName: string = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+    modelName: string = "models/gemini-3.1-flash-live-preview"
   ) {
     this.handlers = handlers;
     this.personalityPrompt = personalityPrompt;
@@ -83,8 +264,10 @@ export class GeminiLiveSession {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
-        console.log(`[LIVE] Conectado com sucesso (tentativa ${this.attemptCount + 1})`);
-        this.attemptCount = 0;
+        // O handshake do WebSocket sempre abre; o sucesso REAL é o setupComplete.
+        // Por isso NÃO zeramos attemptCount aqui (senão o cap de reconexão nunca acumula
+        // quando o servidor fecha logo após o setup, ex.: cota excedida).
+        console.log(`[LIVE] WebSocket aberto (tentativa ${this.attemptCount + 1}). Enviando setup...`);
         this.handlers.onStatusChange('connected');
         this.sendSetup(modelName);
       };
@@ -109,21 +292,41 @@ export class GeminiLiveSession {
       };
 
       this.ws.onclose = (event) => {
-        console.log(`[LIVE] Conexão fechada. Código: ${event.code}. Ativo: ${this.active}`);
+        // event.reason costuma trazer a mensagem exata do servidor (ex.: schema inválido).
+        const reason = event.reason || '(sem motivo informado)';
+        console.log(`[LIVE] Conexão fechada. Código: ${event.code}. Motivo: "${reason}". Ativo: ${this.active}`);
         this.handlers.onStatusChange('disconnected');
         this.cleanupConnection();
-        
+
         if (this.active) {
-          if (event.code === 1008) {
-            console.error("[LIVE] Conexão rejeitada pelo servidor (1008 Policy Violation). Chave de API ou modelo inválido.");
-            this.handlers.onError("Conexão rejeitada pelo servidor. Verifique se a sua chave de API é válida e se o modelo selecionado é suportado.");
+          const lowerReason = reason.toLowerCase();
+
+          // Cota/billing excedidos: reconectar não resolve e só consome mais cota. Encerra.
+          if (lowerReason.includes('quota') || lowerReason.includes('exceeded') || lowerReason.includes('billing')) {
+            console.error(`[LIVE] Cota da API excedida. Motivo: ${reason}`);
+            this.handlers.onError("Cota da API do Gemini excedida (limite do plano). Aguarde a renovação da cota ou configure uma chave de API paga nas Configurações.");
             this.stop();
             return;
           }
-          
+
+          if (event.code === 1008) {
+            console.error(`[LIVE] Conexão rejeitada (1008 Policy Violation). Motivo: ${reason}`);
+            this.handlers.onError(`Conexão rejeitada pelo servidor (1008): ${reason}. Verifique a chave de API e o modelo.`);
+            this.stop();
+            return;
+          }
+
           this.attemptCount++;
+          // Cap de tentativas: evita loop infinito quando o setup é inválido (ex.: 1011).
+          if (this.attemptCount > this.maxAttempts) {
+            console.error(`[LIVE] Falha persistente após ${this.maxAttempts} tentativas. Código ${event.code}. Motivo: ${reason}`);
+            this.handlers.onError(`Não foi possível manter a conexão LIVE (código ${event.code}): ${reason}`);
+            this.stop();
+            return;
+          }
+
           const delay = Math.min(1000 * Math.pow(1.5, this.attemptCount), 8000);
-          console.log(`[LIVE] Reconectando em ${delay}ms... (Tentativa ${this.attemptCount})`);
+          console.log(`[LIVE] Reconectando em ${delay}ms... (Tentativa ${this.attemptCount}/${this.maxAttempts})`);
           this.reconnectTimeout = window.setTimeout(() => {
             this.connect();
           }, delay);
@@ -163,29 +366,22 @@ export class GeminiLiveSession {
         },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
+        // NOTA: Code Execution NÃO é suportado pela Live API (causa rejeição 1008).
+        // Apenas Google Search + function calling podem ser combinados aqui.
         tools: [
-          {
-            functionDeclarations: [
-              {
-                name: "get_current_time",
-                description: "Retorna a data e hora atual do sistema do usuário para precisão temporal (relógio em tempo real).",
-                parameters: {
-                  type: "OBJECT",
-                  properties: {}
-                }
-              }
-            ]
-          }
+          { functionDeclarations: LIVE_TOOL_DECLARATIONS },
+          { googleSearch: {} }
         ],
         systemInstruction: {
           role: "system",
-          parts: [{ text: `Você é o Nemon no modo LIVE. ${this.personalityPrompt}. 
+          parts: [{ text: `Você é o Nemon no modo LIVE. ${this.personalityPrompt}.
             HORA ATUAL: ${new Date().toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
             REGRAS OBRIGATÓRIAS:
             1. Responda SEMPRE ao usuário de forma audível. NUNCA fique em silêncio.
-            2. Use a ferramenta 'get_current_time' se precisar da hora exata agora.
-            3. Seja direto, natural e amigável.
-            4. Se não entender algo, peça para o usuário repetir, mas responda.` }]
+            2. Use as ferramentas disponíveis quando fizer sentido: 'get_current_time' para a hora; 'google_search' para fatos atuais/reais; ferramentas de memória para lembrar do usuário; controle do app e alarmes/lembretes/cronômetros.
+            3. Ao salvar memória, use 'save_memory' para fatos novos e 'update_memory' apenas quando um fato antigo for contradito. Um fato atômico por chamada.
+            4. Quando um alarme, cronômetro ou lembrete disparar, você receberá uma mensagem de [SISTEMA]. Avise o usuário em voz alta imediatamente, de forma natural.
+            5. Seja direto, natural e amigável. Se não entender algo, peça para repetir, mas responda.` }]
         }
       }
     };
@@ -210,12 +406,15 @@ export class GeminiLiveSession {
       this.workletNode.port.onmessage = (event) => {
         if (this.ws?.readyState === WebSocket.OPEN && this.micEnabled) {
           const pcm64 = floatToPcm16(event.data);
+          // Formato atual da Live API: realtimeInput.audio (objeto único).
+          // O formato legado realtimeInput.mediaChunks é rejeitado pelos modelos
+          // live 3.x com fechamento 1007 (Invalid Frame Payload Data).
           this.ws.send(JSON.stringify({
             realtimeInput: {
-              mediaChunks: [{
+              audio: {
                 mimeType: "audio/pcm;rate=16000",
                 data: pcm64
-              }]
+              }
             }
           }));
         }
@@ -239,9 +438,11 @@ export class GeminiLiveSession {
 
   sendText(text: string) {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      // Entrada de texto por turno completo, que dispara a resposta do modelo de forma confiável.
       this.ws.send(JSON.stringify({
-        realtimeInput: {
-          text: text
+        clientContent: {
+          turns: [{ role: "user", parts: [{ text }] }],
+          turnComplete: true
         }
       }));
     }
@@ -278,13 +479,14 @@ export class GeminiLiveSession {
         ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
         
         const base64 = canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-        
+
+        // Frames de imagem seguem pelo campo realtimeInput.video no formato atual da API.
         this.ws.send(JSON.stringify({
           realtimeInput: {
-            mediaChunks: [{
+            video: {
               mimeType: "image/jpeg",
               data: base64
-            }]
+            }
           }
         }));
       }, 1000);
@@ -313,6 +515,13 @@ export class GeminiLiveSession {
     
     // LOG ABSOLUTO: Ver tudo que chega no console para depuração real
     console.log("[LIVE] RAW MSG:", JSON.stringify(msg));
+
+    // Sucesso REAL da sessão: só aqui zeramos o contador de tentativas.
+    if (msg.setupComplete || msg.setup_complete) {
+      console.log("[LIVE] ✅ Setup concluído. Sessão pronta.");
+      this.attemptCount = 0;
+      return;
+    }
 
     // Normalizar chaves (Suporte a camelCase e snake_case recebidos)
     const serverContent = msg.serverContent || msg.server_content;
@@ -350,46 +559,63 @@ export class GeminiLiveSession {
     if (toolCall) {
       console.log("[LIVE] 🛠️ Tool Call detectado:", toolCall);
       const functionCalls = toolCall.functionCalls || toolCall.function_calls;
-      const functionResponses: any[] = [];
-      
-      if (functionCalls) {
-        functionCalls.forEach((fc: any) => {
-          if (fc.name === 'get_current_time') {
-            const now = new Date();
-            const timeStr = now.toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const fcId = fc.id || fc.call_id;
-
-            const response = {
-              name: fc.name,
-              id: fcId,
-              response: {
-                result: timeStr
-              }
-            };
-            functionResponses.push(response);
-            console.log(`[LIVE] ✅ Respondendo ${fc.name} (ID: ${fcId}) com: ${timeStr}`);
-          }
-        });
-      }
-
-      if (functionResponses.length > 0) {
-        const toolResponseMessage = {
-          toolResponse: {
-            functionResponses: functionResponses
-          }
-        };
-        console.log("[LIVE] 📤 Enviando Tool Response:", JSON.stringify(toolResponseMessage));
-        try {
-          this.ws?.send(JSON.stringify(toolResponseMessage));
-        } catch (err) {
-          console.error("[LIVE] ❌ Erro ao enviar Tool Response:", err);
-        }
+      if (functionCalls && functionCalls.length > 0) {
+        // Resolve as chamadas de função (algumas são assíncronas) e responde ao modelo.
+        this.resolveFunctionCalls(functionCalls);
       }
     }
 
-    // Tratar interrupção
-    if (serverContent?.interrupted) {
-      // Opcional
+    // (Tool calls tratados por resolveFunctionCalls.)
+
+    // Tratar interrupção (barge-in): o usuário falou por cima da IA.
+    // O servidor sinaliza que devemos descartar o áudio já enfileirado/tocando.
+    if (serverContent?.interrupted || serverContent?.interrupted === true) {
+      console.log("[LIVE] ✋ Interrupção detectada pelo servidor. Limpando fila de áudio.");
+      this.handlers.onInterrupt?.();
+    }
+  }
+
+  private async resolveFunctionCalls(functionCalls: any[]) {
+    const functionResponses: any[] = [];
+
+    for (const fc of functionCalls) {
+      const fcId = fc.id || fc.call_id;
+      const args = fc.args || fc.arguments || {};
+      let responsePayload: any;
+
+      try {
+        if (fc.name === 'get_current_time') {
+          // Resolvido localmente para evitar round-trip.
+          const now = new Date();
+          responsePayload = {
+            result: now.toLocaleString('pt-BR', {
+              weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric',
+              hour: '2-digit', minute: '2-digit'
+            })
+          };
+        } else if (this.handlers.onToolCall) {
+          const result = await this.handlers.onToolCall(fc.name, args);
+          // Garante que a resposta seja sempre um objeto (exigência da API).
+          responsePayload = (result && typeof result === 'object') ? result : { result: String(result ?? 'ok') };
+        } else {
+          responsePayload = { result: `Ferramenta '${fc.name}' indisponível.` };
+        }
+      } catch (err: any) {
+        console.error(`[LIVE] ❌ Erro ao executar ferramenta ${fc.name}:`, err);
+        responsePayload = { result: `Erro ao executar '${fc.name}': ${err?.message || 'desconhecido'}` };
+      }
+
+      functionResponses.push({ name: fc.name, id: fcId, response: responsePayload });
+      console.log(`[LIVE] ✅ Respondendo ${fc.name} (ID: ${fcId})`, responsePayload);
+    }
+
+    if (functionResponses.length > 0 && this.ws?.readyState === WebSocket.OPEN) {
+      const toolResponseMessage = { toolResponse: { functionResponses } };
+      try {
+        this.ws.send(JSON.stringify(toolResponseMessage));
+      } catch (err) {
+        console.error("[LIVE] ❌ Erro ao enviar Tool Response:", err);
+      }
     }
   }
 

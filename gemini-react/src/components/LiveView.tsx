@@ -388,7 +388,7 @@ const LiveView: React.FC<LiveViewProps> = ({
                 className={`px-2 py-1 text-[10px] font-semibold rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white transition flex items-center gap-1`}
                 title="Modelo LIVE"
               >
-                <span>{liveModel === 'gemini-2.5-flash-live' ? '2.5 Live' : '3.1 Live'}</span>
+                <span>{liveModel === 'gemini-2.5-flash-live' ? '2.5 Live' : '3 Live'}</span>
                 <ChevronDown className="w-3 h-3 opacity-60" />
               </button>
               {showModelMenu && (
@@ -402,7 +402,7 @@ const LiveView: React.FC<LiveViewProps> = ({
                       }}
                       className={`w-full text-left px-2 py-1.5 rounded-lg transition ${liveModel === opt.id ? 'bg-[var(--accent-bg)] text-[var(--accent-text)] font-bold' : 'hover:bg-white/5 text-[var(--text-secondary)] hover:text-white'}`}
                     >
-                      <div className="text-[10px] font-semibold text-[var(--text-primary)]">{opt.name === 'Gemini 2.5 Flash Live' ? '2.5 Live' : '3.1 Live'}</div>
+                      <div className="text-[10px] font-semibold text-[var(--text-primary)]">{opt.name === 'Gemini 2.5 Flash Live' ? '2.5 Live' : '3 Live'}</div>
                       <div className="text-[8px] text-[var(--text-placeholder)] mt-0.5 leading-tight">{opt.desc}</div>
                     </button>
                   ))}

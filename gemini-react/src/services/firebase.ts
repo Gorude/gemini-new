@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBFE7bj7kPu8Ml4Zkl6dRwr_-2bo12hDmo",
@@ -16,5 +16,14 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+// ignoreUndefinedProperties: campos com valor undefined (ex.: pendingMemoryUpdates
+// vazio nas transcrições do modo LIVE) são ignorados em vez de quebrar o setDoc().
+// try/catch torna idempotente sob HMR (initializeFirestore lança se já inicializado).
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, { ignoreUndefinedProperties: true });
+} catch {
+  firestoreDb = getFirestore(app);
+}
+export const db = firestoreDb;
 export default app;

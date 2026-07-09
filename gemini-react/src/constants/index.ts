@@ -17,14 +17,18 @@ export const IMAGEN_OPTIONS = [
   { id: 'imagen-4.0-ultra-generate-001', name: 'Ultra Generate', desc: 'Fidelidade máxima e realismo' }
 ];
 
+export const DEFAULT_LIVE_MODEL = 'gemini-3-flash-live';
+
 export const LIVE_MODEL_OPTIONS = [
-  { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live', desc: 'Modelo padrão otimizado para baixa latência em conversas por voz.' },
-  { id: 'gemini-3.1-flash-live', name: 'Gemini 3.1 Flash Live', desc: 'Modelo experimental avançado com processamento aprimorado.' }
+  { id: 'gemini-3-flash-live', name: 'Gemini 3 Flash Live', desc: 'Modelo padrão nativo de áudio da família Gemini 3, baixa latência.' },
+  { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live', desc: 'Modelo estável alternativo otimizado para conversas por voz.' }
 ];
 
+// O id de API real do "Gemini 3 Flash Live" é gemini-3.1-flash-live-preview
+// (confirmado via ListModels da conta; é o único modelo Live da geração 3).
 export const LIVE_MODEL_MAP: Record<string, string> = {
   'gemini-2.5-flash-live': 'models/gemini-2.5-flash-native-audio-preview-12-2025',
-  'gemini-3.1-flash-live': 'models/gemini-3.1-flash-live-preview'
+  'gemini-3-flash-live': 'models/gemini-3.1-flash-live-preview'
 };
 
 

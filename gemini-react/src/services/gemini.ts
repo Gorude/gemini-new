@@ -307,6 +307,31 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
   throw new Error("Chave de API do Google AI Studio padrão não configurada. Vá em Configurações > API para configurar.");
 }
 
+/**
+ * Diagnóstico: lista os modelos que a chave atual pode usar, destacando os que
+ * suportam a Live API (método 'bidiGenerateContent'). Útil para descobrir o id
+ * exato do modelo LIVE disponível para a conta.
+ */
+export async function listLiveModels(manualApiKey?: string): Promise<{ live: string[]; all: string[] }> {
+  const key = await getApiKey(manualApiKey);
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1000`);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[MODELS] Falha ao listar modelos (${res.status}): ${errText}`);
+    throw new Error(`Falha ao listar modelos: ${res.status}`);
+  }
+  const data = await res.json();
+  const models: any[] = data.models || [];
+  const strip = (n: string) => (n || '').replace(/^models\//, '');
+  const live = models
+    .filter(m => (m.supportedGenerationMethods || []).includes('bidiGenerateContent'))
+    .map(m => strip(m.name));
+  const all = models.map(m => strip(m.name));
+  console.log(`[MODELS] 🎙️ Modelos com suporte à Live API (bidiGenerateContent): ${live.length ? live.join(', ') : 'NENHUM'}`);
+  console.log(`[MODELS] 📋 Todos os modelos disponíveis para esta chave: ${all.join(', ')}`);
+  return { live, all };
+}
+
 export async function* streamGeminiContent(
   text: string,
   model: string,

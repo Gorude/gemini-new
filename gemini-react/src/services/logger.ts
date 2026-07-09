@@ -26,8 +26,15 @@ class Logger {
     if (this.logs.length > 500) {
       this.logs.shift();
     }
-    
-    this.listeners.forEach(listener => listener([...this.logs]));
+
+    // Notifica os ouvintes fora do ciclo de render atual. Como console.* é
+    // interceptado e roteado para cá, uma chamada de log durante o render de um
+    // componente dispararia setState em outro (LogWindow) no meio do render,
+    // gerando o aviso "Cannot update a component while rendering...".
+    const snapshot = [...this.logs];
+    queueMicrotask(() => {
+      this.listeners.forEach(listener => listener(snapshot));
+    });
   }
 
   subscribe(listener: LogListener) {
