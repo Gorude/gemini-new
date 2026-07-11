@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { User, Plus, Trash2, Edit2, Save, ArrowLeft } from 'lucide-react';
+import { User, Plus, Trash2, Edit2, Save, ArrowLeft, Volume2 } from 'lucide-react';
 import { type Personality } from '../types';
+import { LIVE_VOICES } from '../constants';
 
 interface PersonalitiesPanelProps {
   personalities: Personality[];
@@ -17,11 +18,14 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
   const [currentPersonality, setCurrentPersonality] = useState<Personality | null>(null);
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
+  // Voz padrão do modo LIVE desta personalidade ('' = manter a voz atual).
+  const [voice, setVoice] = useState('');
 
   const handleAddNew = () => {
     setCurrentPersonality(null);
     setName('');
     setPrompt('');
+    setVoice('');
     setIsEditing(true);
   };
 
@@ -29,6 +33,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
     setCurrentPersonality(p);
     setName(p.name);
     setPrompt(p.prompt);
+    setVoice(p.voice || '');
     setIsEditing(true);
   };
 
@@ -39,7 +44,8 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
     onSave({
       id: currentPersonality?.id || Date.now().toString(),
       name: name.trim(),
-      prompt: prompt.trim()
+      prompt: prompt.trim(),
+      voice: voice || undefined
     });
     setIsEditing(false);
   };
@@ -94,7 +100,7 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">Instrução do Sistema (Prompt)</label>
-              <textarea 
+              <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Ex: Você é um programador experiente que preza pela simplicidade e clareza no código..."
@@ -102,7 +108,34 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
                 required
               />
             </div>
-            <button 
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder) flex items-center gap-1.5">
+                <Volume2 className="w-3.5 h-3.5" /> Voz padrão no modo LIVE
+              </label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => setVoice('')}
+                  className={`px-3 py-2.5 rounded-xl text-xs border transition text-left ${voice === '' ? 'bg-(--accent-bg) border-(--accent-border) text-(--accent-text) font-bold' : 'bg-(--bg-sidebar) border-(--border-light) text-(--text-secondary) hover:border-(--accent-border)'}`}
+                >
+                  <div className="font-semibold">Automática</div>
+                  <div className="text-[9px] text-(--text-placeholder) leading-tight mt-0.5">Mantém a voz atual</div>
+                </button>
+                {LIVE_VOICES.map(v => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => setVoice(v.id)}
+                    className={`px-3 py-2.5 rounded-xl text-xs border transition text-left ${voice === v.id ? 'bg-(--accent-bg) border-(--accent-border) text-(--accent-text) font-bold' : 'bg-(--bg-sidebar) border-(--border-light) text-(--text-secondary) hover:border-(--accent-border)'}`}
+                  >
+                    <div className="font-semibold">{v.id}</div>
+                    <div className="text-[9px] text-(--text-placeholder) leading-tight mt-0.5">{v.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-(--text-placeholder)">Ao ativar esta personalidade no LIVE, a voz escolhida é aplicada automaticamente.</p>
+            </div>
+            <button
               type="submit"
               className="w-full bg-(--accent) hover:bg-(--accent-hover) text-white font-bold py-3.5 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
             >
@@ -125,7 +158,14 @@ const PersonalitiesPanel: React.FC<PersonalitiesPanelProps> = ({
                     <User className="w-5 h-5 text-(--accent-text) opacity-60" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-(--text-primary) text-sm truncate">{p.name}</h4>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <h4 className="font-bold text-(--text-primary) text-sm truncate">{p.name}</h4>
+                      {p.voice && (
+                        <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-(--accent-bg) text-(--accent-text) text-[9px] font-bold uppercase tracking-wide">
+                          <Volume2 className="w-2.5 h-2.5" /> {p.voice}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-(--text-secondary) mt-0.5 line-clamp-2 wrap-break-word">{p.prompt}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition duration-200">

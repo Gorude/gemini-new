@@ -60,6 +60,7 @@ import {
   setGlobalDefaultApiKey,
   listLiveModels,
   setGlobalLocalEndpoint,
+  performWebSearch,
   type Message
 } from './services/gemini';
 
@@ -79,6 +80,40 @@ const DEFAULT_PERSONALITY: Personality = {
   name: 'Normal',
   prompt: ''
 };
+
+// Monta a instrução de sistema completa do modo LIVE (personalidade + contexto de
+// memória DNA + regras de memória). Usada tanto ao iniciar a sessão quanto ao
+// TROCAR de personalidade no meio dela (para manter a instrução sempre coerente
+// com a personalidade ativa, inclusive após reconexões).
+function buildLiveInstruction(personalityPrompt: string, memoryFacts: MemoryFact[], useMemory: boolean): string {
+  let dnaContext = "";
+  if (useMemory && memoryFacts.length > 0) {
+    dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" +
+      memoryFacts.map(f => `- [ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n");
+  }
+
+  const memoryRules = useMemory ? `
+REGRAS DE MEMÓRIA (MODO LIVE):
+1. Cada memória DEVE conter apenas um fato atômico, simples e específico (ex: 'O usuário se chama José Gabriel', 'O usuário tem 19 anos', 'O usuário estuda ADS'). NUNCA agrupe múltiplos fatos no mesmo texto.
+2. Use <MEMORY category='...'>texto</MEMORY> para novos fatos que NÃO contradizem memórias antigas. NÃO atualize memórias antigas para concatenar novas informações complementares (ex: se já sabe o nome, e o usuário disser o curso, crie um novo fato com <MEMORY>, NÃO atualize o fato do nome).
+3. Use <UPDATE_MEMORY id='...' category='...'>texto</UPDATE_MEMORY> para atualizar um fato APENAS quando a informação antiga daquele ID específico for diretamente contradita/substituída por uma nova (ex: mudou de idade ou de cidade).
+4. Use <DELETE_MEMORY id='...' /> para remover.
+5. IMPORTANTE: NUNCA, SOB HIPÓTESE ALGUMA, PRONUNCIE AS TAGS XML EM VOZ ALTA. Elas devem ficar invisíveis no áudio.
+` : "";
+
+  return `${personalityPrompt}${dnaContext}${memoryRules}\n\nResponda sempre de forma natural e conversacional.`;
+}
+
+// Remove marcadores internos de pesquisa que modelos leves (ex.: Flash Lite) às vezes
+// ecoam no início da resposta, como "WEB SEARCH ON" / "PESQUISA ATIVADA". Só limpa quando
+// aparecem como um rótulo isolado no começo do texto — não afeta o conteúdo real.
+function stripSearchMarkers(text: string): string {
+  if (!text) return text;
+  return text.replace(
+    /^\s*(?:web\s*se?a?rch\s*(?:on|ativad[ao])?|pesquisa\s*(?:web\s*)?(?:on|ativad[ao]))\s*[:.\-–—]*\s*(?:\r?\n)+/i,
+    ''
+  );
+}
 
 // Avaliador matemático seguro (sem eval/globais): usado pela ferramenta 'calculate'.
 // Aceita apenas números, operadores e um conjunto branco de funções/constantes.
@@ -170,6 +205,8 @@ const LIVE_TOOL_LABELS: Record<string, string> = {
   delete_memory: 'Removeu da memória',
   recall_memory: 'Consultou a memória',
   set_voice: 'Trocou a voz',
+  list_voices: 'Listou as vozes',
+  set_personality_voice: 'Definiu voz da personalidade',
   toggle_camera: 'Alternou a câmera',
   toggle_screen_share: 'Alternou a tela',
   toggle_proactivity: 'Alternou proatividade',
@@ -189,17 +226,22 @@ import LiveView from './components/LiveView';
 import LiveSetupModal from './components/LiveSetupModal';
 import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
+import { GeminiDictationSession } from './services/geminiDictation';
+import DictationPanel, { type DictationStatus } from './components/DictationPanel';
+import { audioBufferToWav, concatFloat32 } from './services/audioUtils';
 import SelectionPopup from './components/SelectionPopup';
 import { logger } from './services/logger';
 import LogWindow from './components/LogWindow';
 
 import SettingsModal from './components/SettingsModal';
 import {
-  MODEL_OPTIONS,
   LIVE_MODEL_MAP,
   DEFAULT_LIVE_MODEL,
   FONT_OPTIONS,
-  DEFAULT_FONT_ID
+  DEFAULT_FONT_ID,
+  LIVE_VOICES,
+  LIVE_VOICE_IDS,
+  DEFAULT_LIVE_VOICE
 } from './constants';
 
 const getPacificDate = () => {
@@ -212,6 +254,44 @@ const getPacificDate = () => {
 };
 
 let isLoggerInitialized = false;
+
+// Divide um texto grande em trechos para o ditado, respeitando parágrafos e frases,
+// com um teto de caracteres por trecho (mantém cada turno de áudio curto e evita
+// estourar o limite de output do modelo).
+function chunkTextForDictation(text: string, maxLen = 700): string[] {
+  const clean = text.replace(/\r\n/g, '\n').trim();
+  if (!clean) return [];
+  const chunks: string[] = [];
+  let buf = '';
+  const flush = () => { if (buf.trim()) chunks.push(buf.trim()); buf = ''; };
+  const add = (s: string) => { buf = buf ? `${buf} ${s}` : s; };
+
+  for (const para of clean.split(/\n{2,}/)) {
+    const sentences = para.match(/[^.!?…]+[.!?…]+|\S[^.!?…]*$/g) || [para];
+    for (const raw of sentences) {
+      const s = raw.trim();
+      if (!s) continue;
+      if (s.length > maxLen) {
+        // Frase gigante: quebra por palavras.
+        flush();
+        let wbuf = '';
+        for (const w of s.split(/\s+/)) {
+          if ((wbuf ? wbuf.length + 1 + w.length : w.length) > maxLen) { if (wbuf) chunks.push(wbuf); wbuf = w; }
+          else wbuf = wbuf ? `${wbuf} ${w}` : w;
+        }
+        if (wbuf) add(wbuf);
+      } else if ((buf ? buf.length + 1 + s.length : s.length) > maxLen) {
+        flush();
+        add(s);
+      } else {
+        add(s);
+      }
+    }
+    flush(); // fim de parágrafo → fecha o trecho para pausas naturais
+  }
+  flush();
+  return chunks;
+}
 
 function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -272,6 +352,14 @@ function App() {
   const [personalities, setPersonalities] = useState<Personality[]>([]);
   const [selectedPersonalityId, setSelectedPersonalityId] = useState(() => {
     return localStorage.getItem('nemon_selected_personality_id') || 'default';
+  });
+  // Personalidade do modo LIVE — separada da dos chats (que é por-chat).
+  const [livePersonalityId, setLivePersonalityId] = useState(() => localStorage.getItem('nemon_live_personality_id') || 'default');
+  // Volume da voz da IA no modo LIVE (escala 0–10). 10 = máximo, 0 = mudo.
+  const [liveVolume, setLiveVolume] = useState<number>(() => {
+    const saved = localStorage.getItem('nemon_live_volume');
+    const n = saved !== null ? parseInt(saved, 10) : 10;
+    return isNaN(n) ? 10 : Math.max(0, Math.min(10, n));
   });
   const [settingsTab, setSettingsTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'dna'>('geral');
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
@@ -423,21 +511,52 @@ function App() {
   // LIVE MODE STATE
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [liveStatus, setLiveStatus] = useState<'connecting' | 'connected' | 'error' | 'disconnected'>('disconnected');
-  const [liveTranscript, setLiveTranscript] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
-  const [liveVoice, setLiveVoice] = useState(() => localStorage.getItem('nemon_live_voice') || 'Charon');
+  const [liveTranscript, setLiveTranscript] = useState<{ role: 'user' | 'ai'; text: string; audioId?: string }[]>([]);
+  const [liveVoice, setLiveVoice] = useState(() => localStorage.getItem('nemon_live_voice') || DEFAULT_LIVE_VOICE);
   const [liveVisionType, setLiveVisionType] = useState<'camera' | 'screen' | null>(null);
   const [liveVideoStream, setLiveVideoStream] = useState<MediaStream | null>(null);
   const [isLiveSpeaking, setIsLiveSpeaking] = useState(false);
   const liveSessionRef = useRef<GeminiLiveSession | null>(null);
-  const proactiveTimerActiveRef = useRef<boolean>(false);
+  // Espelho sempre atual da voz LIVE, usado pelo executor de ferramentas e helpers.
+  const liveVoiceRef = useRef<string>(liveVoice);
+  // Valor sempre atual do volume + nó de ganho do pipeline de áudio do LIVE.
+  const liveVolumeRef = useRef<number>(liveVolume);
+  const liveGainNodeRef = useRef<GainNode | null>(null);
   const lastLiveActivityRef = useRef<number>(Date.now());
+  // Marca que o turno anterior da IA terminou: a próxima fala dela deve iniciar um
+  // balão novo na transcrição (evita mesclar duas respostas distintas, como ao
+  // trocar de personalidade). Consumida na primeira transcrição 'ai' seguinte.
+  const aiTurnBoundaryRef = useRef<boolean>(false);
+
+  // ---- Ditado de textos (TTS por chunks, sessão dedicada) ----
+  const [showDictation, setShowDictation] = useState(false);
+  const [dictationText, setDictationText] = useState('');
+  const [dictationStatus, setDictationStatus] = useState<DictationStatus>('idle');
+  const [dictationProgress, setDictationProgress] = useState({ current: 0, total: 0 });
+  const [dictationError, setDictationError] = useState('');
+  const [dictationBuffer, setDictationBuffer] = useState<AudioBuffer | null>(null);
+  const [dictationVolume, setDictationVolume] = useState<number>(10);
+  const dictationSessionRef = useRef<GeminiDictationSession | null>(null);
+  const dictationChunksRef = useRef<string[]>([]);
+  const dictationIndexRef = useRef<number>(0);
+  const dictationMasterAudioRef = useRef<Float32Array[]>([]); // trechos já confirmados
+  const dictationCurrentAudioRef = useRef<Float32Array[]>([]); // trecho em andamento
+  const dictationCtxRef = useRef<AudioContext | null>(null);
+  const dictationGainRef = useRef<GainNode | null>(null);
+
+  // Reouvir mensagens da IA: acumula os chunks de áudio do turno em andamento e,
+  // ao fim do turno, guarda o AudioBuffer resultante indexado por um id. São
+  // temporários (só durante a sessão): limpos ao encerrar o LIVE.
+  const liveAudioTurnChunksRef = useRef<Float32Array[]>([]);
+  const liveMessageAudioRef = useRef<Map<string, AudioBuffer>>(new Map());
+  // Coordenador de reprodução: garante que só um player toque por vez.
+  const activePlayerStopRef = useRef<null | (() => void)>(null);
 
   const resetProactivityState = useCallback((reason: string) => {
     console.log("[PROATIVIDADE] Resetando estado de proatividade. Motivo:", reason);
     // Apenas resetamos se estivermos ativos e com proatividade ligada
     setProactiveIdleCount(0);
     lastLiveActivityRef.current = Date.now();
-    proactiveTimerActiveRef.current = false;
   }, []);
   const liveAudioContextRef = useRef<AudioContext | null>(null);
   const audioQueueRef = useRef<Float32Array[]>([]);
@@ -450,7 +569,7 @@ function App() {
   const memoryFactsRef = useRef<MemoryFact[]>([]);
   const chatsRef = useRef<ChatSession[]>([]);
   const personalitiesRef = useRef<Personality[]>([]);
-  const selectedPersonalityIdRef = useRef<string>('default');
+  const livePersonalityIdRef = useRef<string>('default');
   // Executor de ferramentas do LIVE (definido após os handlers; acessado via ref para evitar TDZ).
   const liveToolExecutorRef = useRef<((name: string, args: any) => Promise<any>) | null>(null);
   // Registro de alarmes/cronômetros/lembretes agendados no modo LIVE.
@@ -484,8 +603,76 @@ function App() {
   useEffect(() => { memoryFactsRef.current = memoryFacts; }, [memoryFacts]);
   useEffect(() => { chatsRef.current = chats; }, [chats]);
   useEffect(() => { personalitiesRef.current = personalities; }, [personalities]);
-  useEffect(() => { selectedPersonalityIdRef.current = selectedPersonalityId; }, [selectedPersonalityId]);
+  useEffect(() => {
+    livePersonalityIdRef.current = livePersonalityId;
+    localStorage.setItem('nemon_live_personality_id', livePersonalityId);
+  }, [livePersonalityId]);
   useEffect(() => { liveVisionTypeRef.current = liveVisionType; }, [liveVisionType]);
+  useEffect(() => { liveVoiceRef.current = liveVoice; }, [liveVoice]);
+
+  // Aplica uma voz no modo LIVE: persiste a escolha (state + localStorage + ref) e,
+  // se há sessão ativa, troca a voz na hora sem perder o contexto (reconexão com
+  // retomada). Fonte única usada pelo usuário (UI) e pelo modelo (ferramentas).
+  const applyLiveVoice = useCallback((voice: string) => {
+    if (!voice) return;
+    setLiveVoice(voice);
+    liveVoiceRef.current = voice;
+    localStorage.setItem('nemon_live_voice', voice);
+    liveSessionRef.current?.setVoice(voice);
+  }, []);
+
+  useEffect(() => {
+    liveVolumeRef.current = liveVolume;
+    localStorage.setItem('nemon_live_volume', String(liveVolume));
+  }, [liveVolume]);
+
+  // Aplica o volume da voz da IA no modo LIVE (escala 0–10 → ganho 0.0–1.0).
+  // Fonte única usada pelo usuário (slider) e pelo modelo (ferramenta set_ai_volume).
+  // Uma rampa curta evita estalos ao mudar o ganho abruptamente.
+  const applyLiveVolume = useCallback((level: number) => {
+    const clamped = Math.max(0, Math.min(10, Math.round(Number(level))));
+    setLiveVolume(clamped);
+    liveVolumeRef.current = clamped;
+    const gain = liveGainNodeRef.current;
+    const ctx = liveAudioContextRef.current;
+    if (gain && ctx) {
+      const now = ctx.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(clamped / 10, now + 0.05);
+    }
+    return clamped;
+  }, []);
+
+  // Fecha o turno de áudio da IA: junta os chunks acumulados num AudioBuffer,
+  // guarda-o por id e associa esse id ao último balão 'ai' ainda sem áudio, para
+  // permitir reouvir aquela fala depois. Idempotente (sem chunks → no-op).
+  const finalizeAiTurnAudio = useCallback(() => {
+    const chunks = liveAudioTurnChunksRef.current;
+    liveAudioTurnChunksRef.current = [];
+    const ctx = liveAudioContextRef.current;
+    if (!ctx || chunks.length === 0) return;
+    let total = 0;
+    for (const c of chunks) total += c.length;
+    if (total === 0) return;
+    const merged = new Float32Array(total);
+    let off = 0;
+    for (const c of chunks) { merged.set(c, off); off += c.length; }
+    const audioBuffer = ctx.createBuffer(1, merged.length, 24000);
+    audioBuffer.copyToChannel(merged as unknown as Float32Array<ArrayBuffer>, 0);
+    const audioId = `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    liveMessageAudioRef.current.set(audioId, audioBuffer);
+    setLiveTranscript(prev => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].role === 'ai' && !prev[i].audioId) {
+          const copy = prev.slice();
+          copy[i] = { ...copy[i], audioId };
+          return copy;
+        }
+      }
+      return prev;
+    });
+  }, []);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--chat-font-size', `${chatFontSize}px`);
@@ -553,7 +740,6 @@ function App() {
       if (proactiveIdleCount === 0 && elapsed > 30000) {
         if (liveSessionRef.current) {
           console.log("[PROATIVIDADE] Inatividade detectada (30s). Estágio 1: Puxando assunto...");
-          proactiveTimerActiveRef.current = true;
           liveSessionRef.current.sendText("[SISTEMA: Modo Proativo. Analise o contexto e faça uma pergunta curta e pertinente agora.]");
           setProactiveIdleCount(1);
           lastLiveActivityRef.current = Date.now();
@@ -562,7 +748,6 @@ function App() {
       else if (proactiveIdleCount === 1 && elapsed > 30000) {
         if (liveSessionRef.current) {
           console.log("[PROATIVIDADE] Inatividade continuada (60s). Estágio 2: Check-in...");
-          proactiveTimerActiveRef.current = true;
           liveSessionRef.current.sendText("[SISTEMA: O usuário não respondeu. Pergunte se ele ainda está aí de forma amigável.]");
           setProactiveIdleCount(2);
           lastLiveActivityRef.current = Date.now();
@@ -655,8 +840,57 @@ function App() {
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = useMemo(() => activeChat?.messages || [], [activeChat]);
 
+  // Personalidade "atual" mostrada/editada no cabeçalho, conforme o contexto:
+  // - Modo LIVE: a personalidade do Live (separada).
+  // - Chat aberto: a personalidade salva NAQUELE chat (por-chat).
+  // - Sem chat (tela nova): o padrão para novos chats.
+  const currentPersonalityId = isLiveActive
+    ? livePersonalityId
+    : (activeChatId ? (activeChat?.personalityId ?? 'default') : selectedPersonalityId);
+
+  // Seleciona a personalidade no contexto certo (Live vs chat vs padrão) e, no Live,
+  // injeta a persona na sessão em andamento para afetar a fala imediatamente.
+  const handleSelectPersonality = useCallback((id: string) => {
+    if (isLiveActive) {
+      setLivePersonalityId(id);
+      livePersonalityIdRef.current = id;
+      const p = [DEFAULT_PERSONALITY, ...personalitiesRef.current].find(pp => pp.id === id);
+      const session = liveSessionRef.current;
+      if (session && p) {
+        resetProactivityState('Troca de personalidade (UI)');
+
+        // 1) Atualiza a instrução de sistema da sessão para a nova personalidade,
+        //    para que qualquer reconexão (voz/GoAway) já use a personalidade certa.
+        session.setPersonalityPrompt(buildLiveInstruction(p.prompt, memoryFactsRef.current, useMemoryLive));
+
+        // 2) Se a personalidade tem voz padrão, aplica-a (pode agendar reconexão).
+        if (p.voice) applyLiveVoice(p.voice);
+
+        // 3) Injeta a persona. Se há reconexão de voz pendente, a injeção é
+        //    ENFILEIRADA para depois do novo setup (senão se perderia no
+        //    fechamento da conexão atual). Caso contrário, envia agora.
+        const persona = p.prompt?.trim() ? p.prompt.trim() : 'Estilo neutro, natural e direto.';
+        const injection = `[SISTEMA: Troca de personalidade para "${p.name}". A partir de AGORA incorpore integralmente esta persona e responda SEMPRE neste estilo (tom, voz e vocabulário): ${persona} — Cumprimente brevemente já no novo personagem.]`;
+        if (session.isVoiceReconnectPending()) {
+          session.queuePersonaInjection(injection);
+        } else {
+          session.sendText(injection);
+        }
+      }
+    } else if (activeChatId) {
+      // Salva a personalidade NAQUELE chat.
+      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, personalityId: id } : c));
+    } else {
+      // Sem chat aberto: define o padrão para o próximo chat criado.
+      setSelectedPersonalityId(id);
+    }
+  }, [isLiveActive, activeChatId, resetProactivityState, applyLiveVoice, useMemoryLive]);
+
   const previousChatsRef = useRef<ChatSession[]>([]);
   const isInitialLoadRef = useRef(true);
+  // Timer de debounce para persistência no Firestore. Evita gravar o documento inteiro
+  // do chat a cada chunk do streaming (o que estourava "maximum allowed queued writes").
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load Initial Data from Firestore on Auth State Change
   useEffect(() => {
@@ -696,6 +930,7 @@ function App() {
               }
               if (data.settings.chatMargin !== undefined) setChatMargin(data.settings.chatMargin);
               if (data.settings.selectedPersonalityId) setSelectedPersonalityId(data.settings.selectedPersonalityId);
+              if (data.settings.livePersonalityId) setLivePersonalityId(data.settings.livePersonalityId);
               if (data.settings.chatFontSize !== undefined) setChatFontSize(data.settings.chatFontSize);
               if (data.settings.appFont) setAppFont(data.settings.appFont);
               if (data.settings.retroMode !== undefined) setRetroMode(data.settings.retroMode);
@@ -800,31 +1035,46 @@ function App() {
       return;
     }
 
-    // 1. Detect deleted chats
-    const deletedChats = previousChatsRef.current.filter(prevChat => !chats.some(c => c.id === prevChat.id));
-    deletedChats.forEach(async (chat) => {
-      const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
-      await deleteDoc(chatDocRef).catch(e => console.error("Erro ao deletar chat no Firestore:", e));
-    });
+    // Captura o estado mais recente para gravar quando o debounce disparar.
+    const snapshot = chats;
 
-    // 2. Detect updated or new chats
-    chats.forEach(async (chat) => {
-      const prevChat = previousChatsRef.current.find(c => c.id === chat.id);
-      if (!prevChat || JSON.stringify(prevChat) !== JSON.stringify(chat)) {
+    const flush = () => {
+      // 1. Detect deleted chats
+      const deletedChats = previousChatsRef.current.filter(prevChat => !snapshot.some(c => c.id === prevChat.id));
+      deletedChats.forEach(async (chat) => {
         const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
-        await setDoc(chatDocRef, chat).catch(e => console.error("Erro ao salvar chat no Firestore:", e));
+        await deleteDoc(chatDocRef).catch(e => console.error("Erro ao deletar chat no Firestore:", e));
+      });
+
+      // 2. Detect updated or new chats
+      snapshot.forEach(async (chat) => {
+        const prevChat = previousChatsRef.current.find(c => c.id === chat.id);
+        if (!prevChat || JSON.stringify(prevChat) !== JSON.stringify(chat)) {
+          const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
+          await setDoc(chatDocRef, chat).catch(e => console.error("Erro ao salvar chat no Firestore:", e));
+        }
+      });
+
+      // 3. Save sidebar order if changed
+      const currentOrder = snapshot.map(c => c.id);
+      const prevOrder = previousChatsRef.current.map(c => c.id);
+      if (JSON.stringify(currentOrder) !== JSON.stringify(prevOrder)) {
+        const userDocRef = doc(db, 'users', uid);
+        updateDoc(userDocRef, { sidebarOrder: currentOrder }).catch(e => console.error("Erro ao salvar ordem no Firestore:", e));
       }
-    });
 
-    // 3. Save sidebar order if changed
-    const currentOrder = chats.map(c => c.id);
-    const prevOrder = previousChatsRef.current.map(c => c.id);
-    if (JSON.stringify(currentOrder) !== JSON.stringify(prevOrder)) {
-      const userDocRef = doc(db, 'users', uid);
-      updateDoc(userDocRef, { sidebarOrder: currentOrder }).catch(e => console.error("Erro ao salvar ordem no Firestore:", e));
-    }
+      previousChatsRef.current = snapshot;
+    };
 
-    previousChatsRef.current = chats;
+    // Debounce: durante o streaming o `chats` muda a cada chunk. Reagendamos a gravação
+    // a cada mudança, então o Firestore só recebe UMA escrita ~800ms após a resposta
+    // assentar — em vez de centenas de escritas do documento inteiro por resposta.
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(flush, 800);
+
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    };
   }, [chats, isAuthLoading, isInitialLoading]);
 
   // Sync Preferences/Settings to Firestore
@@ -836,6 +1086,7 @@ function App() {
           theme,
           chatMargin,
           selectedPersonalityId,
+          livePersonalityId,
           chatFontSize,
           appFont,
           isOrderLocked,
@@ -847,7 +1098,7 @@ function App() {
         }
       }).catch(e => console.error("Erro ao salvar configurações no Firestore:", e));
     }
-  }, [theme, chatMargin, selectedPersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, liveModel, retroMode, isAuthLoading, isInitialLoading]);
+  }, [theme, chatMargin, selectedPersonalityId, livePersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, liveModel, retroMode, isAuthLoading, isInitialLoading]);
 
   useEffect(() => {
     localStorage.setItem('nemon_sidebar_locked', JSON.stringify(isOrderLocked));
@@ -890,6 +1141,7 @@ function App() {
     liveSessionRef.current = null;
     liveAudioContextRef.current?.close();
     liveAudioContextRef.current = null;
+    liveGainNodeRef.current = null;
     setLiveAnalyser(null);
     setLiveVisionType(null);
     setLiveVideoStream(null);
@@ -901,6 +1153,12 @@ function App() {
     audioQueueRef.current = [];
     isPlayingRef.current = false;
     nextAudioTimeRef.current = 0;
+    // Descarta o áudio temporário das mensagens (só vale durante a sessão) e para
+    // qualquer reprodução em andamento.
+    activePlayerStopRef.current?.();
+    activePlayerStopRef.current = null;
+    liveAudioTurnChunksRef.current = [];
+    liveMessageAudioRef.current.clear();
   }, []);
 
   // Handle Escape Key Global
@@ -1007,13 +1265,15 @@ function App() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    const selectedPersonality = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
+    // Personalidade é POR CHAT: usa a salva no chat alvo (fallback para a padrão).
+    const chatPersonalityId = chatsRef.current.find(c => c.id === targetChatId)?.personalityId ?? 'default';
+    const selectedPersonality = personalities.find(p => p.id === chatPersonalityId) || DEFAULT_PERSONALITY;
 
     const systemInstruction = "Você é o Nemon, uma inteligência artificial avançada, empática e extremamente RÁPIDA. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
       (selectedPersonality.prompt ? `INSTRUÇÃO DE PERSONALIDADE ATIVA: "${selectedPersonality.prompt}"\n\n` : "") +
       (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f: MemoryFact) => `[ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n") + "\n\n" : "") +
       "Regras de Pesquisa e Memória:\n" +
-      "1. Se a ferramenta de pesquisa estiver ativada (WEB SEARCH ON), você DEVE obrigatoriamente realizar a ferramenta google_search para fazer uma pesquisa na web ANTES de responder, mesmo para assuntos que você considere de conhecimento geral. O usuário deseja ver as fontes e evidências (ícones de sites) em todas as respostas.\n" +
+      "1. Quando houver uma seção 'RESULTADOS DE PESQUISA WEB ATUAL' no contexto (ou a ferramenta google_search estiver disponível), baseie sua resposta nesses dados reais e atualizados, sem inventar. NUNCA escreva marcadores ou rótulos internos como 'WEB SEARCH ON', 'PESQUISA ATIVADA' ou similares na resposta — apenas responda naturalmente ao usuário.\n" +
       "2. Regras de DNA (Memória Persistente):\n" +
       "   - Cada memória DEVE conter apenas um fato atômico, simples e específico (ex: 'O usuário se chama José Gabriel', 'O usuário tem 19 anos', 'O usuário estuda ADS'). NUNCA agrupe múltiplos fatos diferentes ou informações complementares em um único texto.\n" +
       "   - NOVA INFORMAÇÃO vs CONTRADIÇÃO (MUITO IMPORTANTE):\n" +
@@ -1079,12 +1339,43 @@ function App() {
         }
       }
 
-      const stream = streamGeminiContent(userText, model, apiHistory, systemInstruction, filesToSend, webSearchEnabled, controller.signal, thinkingEnabled);
+      // Delegação de busca: se a busca está ligada e o modelo atual NÃO é o buscador
+      // (Gemma 4 31B, o único que faz google_search de forma confiável), o 31B pesquisa
+      // e injetamos o resumo + fontes no contexto do modelo escolhido.
+      const SEARCH_MODEL = 'gemma-4-31b-it';
+      let effectiveWebSearch = webSearchEnabled;
+      let effectiveSystemInstruction = systemInstruction;
+      const preSources: { title: string; uri: string }[] = [];
+      if (webSearchEnabled && model !== SEARCH_MODEL) {
+        let searchFound = false;
+        try {
+          const searchRes = await performWebSearch(userText, controller.signal);
+          // Consideramos a busca bem-sucedida se houver resumo OU ao menos uma fonte.
+          if (searchRes.summary || searchRes.sources.length > 0) {
+            searchFound = true;
+            effectiveSystemInstruction = systemInstruction +
+              `\n\nRESULTADOS DE PESQUISA WEB ATUAL (obtidos via Gemma 4 31B + google_search). Use estas informações atualizadas para responder com precisão e cite/mencione quando pertinente:\n${searchRes.summary}`;
+          }
+          preSources.push(...searchRes.sources);
+        } catch (e) {
+          console.warn('Falha na pesquisa delegada (Gemma 4 31B):', e);
+        }
+        // Busca vazia ou com falha: instruímos o modelo a NÃO inventar dados atuais e a
+        // avisar o usuário. Evita respostas desatualizadas silenciosas (ex.: Grok-2 em vez
+        // do Grok 4.5) quando o grounding não retorna nada.
+        if (!searchFound) {
+          effectiveSystemInstruction = systemInstruction +
+            `\n\nAVISO: A pesquisa na web foi solicitada mas NÃO retornou resultados atuais. NÃO invente fatos recentes (datas, versões, números, nomes ou eventos). Responda apenas com o que você sabe com segurança e DEIXE CLARO ao usuário, de forma breve, que não foi possível obter informações atualizadas da web para esta pergunta.`;
+        }
+        effectiveWebSearch = false; // o modelo principal recebe o contexto já pesquisado
+      }
+
+      const stream = streamGeminiContent(userText, model, apiHistory, effectiveSystemInstruction, filesToSend, effectiveWebSearch, controller.signal, thinkingEnabled);
       let fullText = "";
       let fullThoughts = "";
-      const allSources: { title: string; uri: string }[] = [];
-      let isSearching = webSearchEnabled;
-      let isGrounded = false;
+      const allSources: { title: string; uri: string }[] = [...preSources];
+      let isSearching = effectiveWebSearch;
+      let isGrounded = preSources.length > 0;
       let finalUsage = null;
 
       for await (const chunk of stream) {
@@ -1122,7 +1413,7 @@ function App() {
         }
 
         const currentDuration = (performance.now() - startTime) / 1000;
-        const currentCleanText = parseMemoryTags(streamingText).trim();
+        const currentCleanText = stripSearchMarkers(parseMemoryTags(streamingText).trim());
 
         setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
           ...c,
@@ -1176,9 +1467,9 @@ function App() {
       finalCleanedText = finalCleanedText.replace(/<\/thinking>/g, '').replace(/<thinking>/g, '').trim();
 
       let updatesFound: PendingMemoryUpdate[] = [];
-      let finalCleanText = parseMemoryTags(finalCleanedText, true, (upds) => {
+      let finalCleanText = stripSearchMarkers(parseMemoryTags(finalCleanedText, true, (upds) => {
         updatesFound = upds;
-      }).trim();
+      }).trim());
 
       // 2. LÓGICA DE AUTO-RECUPERAÇÃO (Hidden Turn)
       if (!finalCleanText && finalThoughts && finalThoughts.length > 50) {
@@ -1257,7 +1548,7 @@ function App() {
       currentAiMsgIdRef.current = null;
       setChats(prev => prev);
     }
-  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, selectedPersonalityId, parseMemoryTags]);
+  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, parseMemoryTags]);
 
   const handleStopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1348,6 +1639,155 @@ function App() {
   }, [activeChatId, chats, executeAIRequest]);
 
 
+  // ---- Fluxo de DITADO (TTS por chunks, sessão dedicada) ----
+  const cleanupDictationSession = useCallback(() => {
+    dictationSessionRef.current?.stop();
+    dictationSessionRef.current = null;
+  }, []);
+
+  const applyDictationVolume = useCallback((level: number) => {
+    const clamped = Math.max(0, Math.min(10, Math.round(Number(level))));
+    setDictationVolume(clamped);
+    const gain = dictationGainRef.current;
+    const ctx = dictationCtxRef.current;
+    if (gain && ctx) {
+      const now = ctx.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(clamped / 10, now + 0.05);
+    }
+  }, []);
+
+  const finalizeDictation = useCallback(() => {
+    cleanupDictationSession();
+    const chunks = dictationMasterAudioRef.current;
+    if (chunks.length === 0) {
+      setDictationStatus('error');
+      setDictationError('Nenhum áudio foi gerado. Tente novamente.');
+      return;
+    }
+    const merged = concatFloat32(chunks);
+    if (merged.length === 0) {
+      setDictationStatus('error');
+      setDictationError('Nenhum áudio foi gerado. Tente novamente.');
+      return;
+    }
+    // Contexto próprio do ditado (independe do modo conversacional).
+    if (!dictationCtxRef.current) {
+      const ctx = new AudioContext({ sampleRate: 24000 });
+      const gain = ctx.createGain();
+      gain.gain.value = dictationVolume / 10;
+      gain.connect(ctx.destination);
+      dictationCtxRef.current = ctx;
+      dictationGainRef.current = gain;
+    }
+    const ctx = dictationCtxRef.current;
+    const buffer = ctx.createBuffer(1, merged.length, 24000);
+    buffer.copyToChannel(merged as unknown as Float32Array<ArrayBuffer>, 0);
+    setDictationBuffer(buffer);
+    setDictationStatus('done');
+  }, [cleanupDictationSession, dictationVolume]);
+
+  const sendCurrentDictationChunk = useCallback(() => {
+    // Descarta áudio parcial (ex.: após reconexão) e envia o trecho atual.
+    dictationCurrentAudioRef.current = [];
+    const idx = dictationIndexRef.current;
+    const chunk = dictationChunksRef.current[idx];
+    if (chunk == null) { finalizeDictation(); return; }
+    setDictationProgress({ current: idx + 1, total: dictationChunksRef.current.length });
+    dictationSessionRef.current?.sendChunk(chunk);
+  }, [finalizeDictation]);
+
+  const startDictation = useCallback(() => {
+    const chunks = chunkTextForDictation(dictationText);
+    if (chunks.length === 0) return;
+
+    cleanupDictationSession();
+    if (dictationCtxRef.current) {
+      dictationCtxRef.current.close();
+      dictationCtxRef.current = null;
+      dictationGainRef.current = null;
+    }
+    dictationChunksRef.current = chunks;
+    dictationIndexRef.current = 0;
+    dictationMasterAudioRef.current = [];
+    dictationCurrentAudioRef.current = [];
+    setDictationBuffer(null);
+    setDictationError('');
+    setDictationProgress({ current: 0, total: chunks.length });
+    setDictationStatus('connecting');
+
+    const model = LIVE_MODEL_MAP['gemini-2.5-flash-live'];
+    const session = new GeminiDictationSession({
+      onReady: () => { setDictationStatus('generating'); sendCurrentDictationChunk(); },
+      onAudio: (chunk) => { dictationCurrentAudioRef.current.push(chunk); },
+      onTurnComplete: () => {
+        // Confirma o áudio do trecho atual e avança (ou finaliza).
+        for (const c of dictationCurrentAudioRef.current) dictationMasterAudioRef.current.push(c);
+        dictationCurrentAudioRef.current = [];
+        dictationIndexRef.current += 1;
+        if (dictationIndexRef.current >= dictationChunksRef.current.length) {
+          finalizeDictation();
+        } else {
+          sendCurrentDictationChunk();
+        }
+      },
+      onStatusChange: () => {},
+      onError: (msg) => {
+        setDictationError(msg);
+        // Se já há áudio parcial, entrega o que deu; senão marca erro.
+        if (dictationMasterAudioRef.current.length > 0) finalizeDictation();
+        else { setDictationStatus('error'); cleanupDictationSession(); }
+      }
+    }, liveVoiceRef.current, paidApiKey || defaultApiKey, model);
+
+    dictationSessionRef.current = session;
+    session.start();
+  }, [dictationText, cleanupDictationSession, sendCurrentDictationChunk, finalizeDictation, paidApiKey, defaultApiKey]);
+
+  const cancelDictation = useCallback(() => {
+    cleanupDictationSession();
+    dictationCurrentAudioRef.current = [];
+    dictationMasterAudioRef.current = [];
+    setDictationStatus('idle');
+    setDictationProgress({ current: 0, total: 0 });
+  }, [cleanupDictationSession]);
+
+  const resetDictation = useCallback(() => {
+    // Volta para edição mantendo o texto; descarta o áudio anterior.
+    activePlayerStopRef.current?.();
+    activePlayerStopRef.current = null;
+    setDictationBuffer(null);
+    if (dictationCtxRef.current) {
+      dictationCtxRef.current.close();
+      dictationCtxRef.current = null;
+      dictationGainRef.current = null;
+    }
+    dictationMasterAudioRef.current = [];
+    dictationCurrentAudioRef.current = [];
+    setDictationStatus('idle');
+    setDictationProgress({ current: 0, total: 0 });
+    setDictationError('');
+  }, []);
+
+  const closeDictation = useCallback(() => {
+    resetDictation();
+    setShowDictation(false);
+  }, [resetDictation]);
+
+  const downloadDictation = useCallback(() => {
+    if (!dictationBuffer) return;
+    const blob = audioBufferToWav(dictationBuffer);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ditado_${Date.now()}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, [dictationBuffer]);
+
   const handleLiveStart = useCallback(() => {
     if (isLiveActive && isLiveDetached) {
       setIsLiveDetached(false);
@@ -1362,6 +1802,10 @@ function App() {
     setIsLiveActive(true);
     setLiveStatus('connecting');
     setLiveTranscript([]);
+    // Zera o áudio temporário de qualquer sessão anterior.
+    liveAudioTurnChunksRef.current = [];
+    liveMessageAudioRef.current.clear();
+    activePlayerStopRef.current = null;
 
     if (liveAudioContextRef.current) {
       liveAudioContextRef.current.close();
@@ -1372,27 +1816,29 @@ function App() {
     liveAudioContextRef.current = new AudioContext({ sampleRate: 24000 });
     const analyserNode = liveAudioContextRef.current.createAnalyser();
     analyserNode.fftSize = 256;
-    analyserNode.connect(liveAudioContextRef.current.destination);
+    // Nó de ganho para o volume da voz da IA (0–10 → 0.0–1.0). Fica DEPOIS do
+    // analyser para que o visualizador continue refletindo a fala independentemente
+    // do volume escolhido. Cadeia: source → analyser → gain → destination.
+    const gainNode = liveAudioContextRef.current.createGain();
+    gainNode.gain.value = liveVolumeRef.current / 10;
+    analyserNode.connect(gainNode);
+    gainNode.connect(liveAudioContextRef.current.destination);
+    liveGainNodeRef.current = gainNode;
     setLiveAnalyser(analyserNode);
 
-    // Contexto de Memória
-    let dnaContext = "";
-    if (useMemory && memoryFacts.length > 0) {
-      dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" +
-        memoryFacts.map(f => `- [ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n");
+    const selectedPersonalityProfile = personalities.find(p => p.id === livePersonalityIdRef.current) || DEFAULT_PERSONALITY;
+    const fullInstructionStr = buildLiveInstruction(selectedPersonalityProfile.prompt, memoryFacts, useMemory);
+
+    // Voz inicial: se a personalidade ativa tem uma voz padrão, ela tem prioridade
+    // sobre a última voz usada. Sincroniza state/ref para a UI refletir a escolha.
+    const initialVoice = (selectedPersonalityProfile.voice && LIVE_VOICE_IDS.includes(selectedPersonalityProfile.voice))
+      ? selectedPersonalityProfile.voice
+      : liveVoiceRef.current;
+    if (initialVoice !== liveVoiceRef.current) {
+      liveVoiceRef.current = initialVoice;
+      setLiveVoice(initialVoice);
+      localStorage.setItem('nemon_live_voice', initialVoice);
     }
-
-    const memoryRules = useMemory ? `
-REGRAS DE MEMÓRIA (MODO LIVE):
-1. Cada memória DEVE conter apenas um fato atômico, simples e específico (ex: 'O usuário se chama José Gabriel', 'O usuário tem 19 anos', 'O usuário estuda ADS'). NUNCA agrupe múltiplos fatos no mesmo texto.
-2. Use <MEMORY category='...'>texto</MEMORY> para novos fatos que NÃO contradizem memórias antigas. NÃO atualize memórias antigas para concatenar novas informações complementares (ex: se já sabe o nome, e o usuário disser o curso, crie um novo fato com <MEMORY>, NÃO atualize o fato do nome).
-3. Use <UPDATE_MEMORY id='...' category='...'>texto</UPDATE_MEMORY> para atualizar um fato APENAS quando a informação antiga daquele ID específico for diretamente contradita/substituída por uma nova (ex: mudou de idade ou de cidade).
-4. Use <DELETE_MEMORY id='...' /> para remover.
-5. IMPORTANTE: NUNCA, SOB HIPÓTESE ALGUMA, PRONUNCIE AS TAGS XML EM VOZ ALTA. Elas devem ficar invisíveis no áudio.
-` : "";
-
-    const selectedPersonalityProfile = personalities.find(p => p.id === selectedPersonalityId) || DEFAULT_PERSONALITY;
-    const fullInstructionStr = `${selectedPersonalityProfile.prompt}${dnaContext}${memoryRules}\n\nResponda sempre de forma natural e conversacional.`;
 
     // Usa o ref (sempre atual) para evitar closure desatualizada ao reiniciar após troca de modelo.
     const activeLiveModel = liveModelRef.current;
@@ -1408,15 +1854,25 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         setLiveStatus('error');
       },
       onInterrupt: () => handleInterruptLive(),
+      onTurnComplete: () => {
+        finalizeAiTurnAudio();
+        aiTurnBoundaryRef.current = true;
+      },
       onToolUsed: (name) => handleLiveToolUsed(name),
       onToolCall: (name, args) =>
         liveToolExecutorRef.current
           ? liveToolExecutorRef.current(name, args)
           : Promise.resolve({ result: 'Ferramenta indisponível no momento.' }),
       onTranscript: (role, text) => {
+        // Captura/consome a fronteira de turno ANTES do setState para evitar corrida:
+        // o updater lê o valor capturado no closure, não o ref (que já foi limpo).
+        const isNewAiTurn = role === 'ai' && aiTurnBoundaryRef.current;
+        if (role === 'ai') aiTurnBoundaryRef.current = false;
         setLiveTranscript(prev => {
-          if (prev.length > 0 && prev[prev.length - 1].role === role) {
-            const last = prev[prev.length - 1];
+          const last = prev[prev.length - 1];
+          // Só mescla com o balão anterior se for do mesmo interlocutor E não for o
+          // início de um novo turno da IA (aí vira balão separado).
+          if (last && last.role === role && !isNewAiTurn) {
             return [
               ...prev.slice(0, -1),
               { role, text: last.text + text }
@@ -1426,17 +1882,16 @@ REGRAS DE MEMÓRIA (MODO LIVE):
           }
         });
 
+        // Mantém o cronômetro de inatividade fresco enquanto há transmissão.
         lastLiveActivityRef.current = Date.now();
 
+        // IMPORTANTE: só a fala do USUÁRIO reengaja a conversa e zera o estágio de
+        // proatividade. A fala da IA — inclusive as próprias sondagens proativas —
+        // NÃO reseta o estágio; caso contrário a sondagem do estágio 1 chega em vários
+        // chunks e se auto-reseta, nunca avançando para o estágio 2. Enquanto a IA fala,
+        // o intervalo de proatividade já congela o cronômetro via isLiveSpeaking.
         if (role === 'user') {
           resetProactivityState("Fala do usuário");
-        } else if (role === 'ai') {
-          if (!proactiveTimerActiveRef.current) {
-            resetProactivityState("Fala natural da IA");
-          } else {
-            // Se foi proativo, apenas marcamos que o prompt já foi lido para liberar o próximo reset natural
-            proactiveTimerActiveRef.current = false;
-          }
         }
 
         // Voice Commands for Proactivity
@@ -1462,6 +1917,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         const ctx = liveAudioContextRef.current;
         if (ctx.state === 'suspended') ctx.resume();
 
+        // Guarda o chunk para permitir reouvir este turno depois (áudio temporário da sessão).
+        liveAudioTurnChunksRef.current.push(chunk);
+
         const buffer = ctx.createBuffer(1, chunk.length, 24000);
         buffer.copyToChannel(chunk as unknown as Float32Array<ArrayBuffer>, 0);
         const source = ctx.createBufferSource();
@@ -1482,15 +1940,14 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         activeSourcesRef.current.add(source);
         setIsLiveSpeaking(true);
 
+        // A IA está falando: apenas mantém o cronômetro de inatividade fresco.
+        // NÃO resetamos o estágio de proatividade aqui (mesma razão do onTranscript).
         lastLiveActivityRef.current = Date.now();
-        if (!proactiveTimerActiveRef.current && proactiveIdleCount !== 0) {
-          resetProactivityState("Áudio reativo da IA");
-        }
 
         source.start(startTime);
         nextAudioTimeRef.current = startTime + buffer.duration;
       }
-    }, fullInstructionStr, liveVoice, paidApiKey || defaultApiKey, liveModelString);
+    }, fullInstructionStr, initialVoice, paidApiKey || defaultApiKey, liveModelString);
 
     liveSessionRef.current = session;
     session.setMicEnabled(isLiveMicEnabled);
@@ -1498,7 +1955,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     // handleInterruptLive/handleLiveToolUsed são referenciados de forma lazy (definidos
     // depois deste callback); incluí-los nas deps causaria erro de TDZ na renderização.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChatId, personalities, selectedPersonalityId, liveVoice, memoryFacts, handleLiveStop, parseMemoryTags, proactiveIdleCount, resetProactivityState, liveModel, paidApiKey, defaultApiKey, isLiveMicEnabled]);
+  }, [activeChatId, personalities, liveVoice, memoryFacts, handleLiveStop, parseMemoryTags, proactiveIdleCount, resetProactivityState, liveModel, paidApiKey, defaultApiKey, isLiveMicEnabled]);
 
   const handleSetLiveModel = useCallback((newModel: string) => {
     setLiveModel(newModel);
@@ -1573,8 +2030,13 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       nextAudioTimeRef.current = liveAudioContextRef.current.currentTime;
     }
 
+    // Fecha o turno de áudio parcial (o que já foi dito antes da interrupção fica
+    // disponível para reouvir) e marca fronteira para separar do próximo balão.
+    finalizeAiTurnAudio();
+    aiTurnBoundaryRef.current = true;
+
     resetProactivityState("Interrupção manual/VAD");
-  }, [resetProactivityState]);
+  }, [resetProactivityState, finalizeAiTurnAudio]);
 
   // Toca um sininho curto (chime de duas notas) reutilizando o contexto de áudio do LIVE.
   const playToolBell = useCallback(() => {
@@ -1691,13 +2153,47 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       }
 
       // ---------- Controle do app por voz ----------
+      case 'list_voices': {
+        const current = liveSessionRef.current?.getVoice() || liveVoiceRef.current;
+        const list = LIVE_VOICES.map(v => `${v.id} (${v.desc})${v.id === current ? ' — ativa' : ''}`).join('; ');
+        return { result: `Vozes disponíveis: ${list}.` };
+      }
       case 'set_voice': {
-        const voices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
-        const voice = voices.find(v => v.toLowerCase() === String(a.voice || '').toLowerCase());
-        if (!voice) return { result: `Voz inválida. Opções: ${voices.join(', ')}.` };
-        setLiveVoice(voice);
-        localStorage.setItem('nemon_live_voice', voice);
-        return { result: `Voz definida como ${voice}. A mudança será aplicada ao reiniciar a sessão LIVE.` };
+        const voice = LIVE_VOICE_IDS.find(v => v.toLowerCase() === String(a.voice || '').toLowerCase());
+        if (!voice) return { result: `Voz inválida. Opções: ${LIVE_VOICE_IDS.join(', ')}.` };
+        applyLiveVoice(voice);
+        return { result: `Voz alterada para ${voice} imediatamente, mantendo o contexto da conversa.` };
+      }
+      case 'set_personality_voice': {
+        const rawVoice = String(a.voice || '').trim();
+        const clear = /^(nenhuma|remover|remove|limpar|padr[aã]o|none|default)$/i.test(rawVoice);
+        const voice = clear ? undefined : LIVE_VOICE_IDS.find(v => v.toLowerCase() === rawVoice.toLowerCase());
+        if (!clear && !voice) return { result: `Voz inválida. Opções: ${LIVE_VOICE_IDS.join(', ')} (ou 'nenhuma' para remover).` };
+
+        // Descobre a personalidade alvo: informada por nome, ou a ativa no momento.
+        const wanted = String(a.personality || '').trim();
+        const all = [DEFAULT_PERSONALITY, ...personalitiesRef.current.filter(p => p.id !== DEFAULT_PERSONALITY.id)];
+        const target = wanted
+          ? bestPersonalityMatch(wanted, all)
+          : all.find(p => p.id === livePersonalityIdRef.current) || DEFAULT_PERSONALITY;
+        if (!target) return { result: `Não encontrei "${wanted}". Personalidades: ${all.map(p => p.name).join(', ')}.` };
+        if (target.id === DEFAULT_PERSONALITY.id) {
+          return { result: 'A personalidade padrão "Normal" não guarda voz própria. Crie/ative uma personalidade personalizada para definir uma voz padrão.' };
+        }
+
+        const updated: Personality = { ...target, voice };
+        const next = personalitiesRef.current.map(p => p.id === target.id ? updated : p);
+        personalitiesRef.current = next;
+        setPersonalities(next); // auto-salva no Firestore via effect
+
+        // Se a personalidade alterada é a ativa agora, aplica a voz na hora.
+        if (target.id === livePersonalityIdRef.current && voice) applyLiveVoice(voice);
+
+        return {
+          result: clear
+            ? `Voz padrão da personalidade "${target.name}" removida.`
+            : `Voz padrão da personalidade "${target.name}" definida como ${voice}.${target.id === livePersonalityIdRef.current ? ' Aplicada agora, pois ela está ativa.' : ''}`
+        };
       }
       case 'toggle_camera': {
         const isOn = liveVisionTypeRef.current === 'camera';
@@ -1715,6 +2211,13 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         const enable = !!a.enable;
         setIsLiveProactive(enable);
         return { result: `Proatividade ${enable ? 'ativada' : 'desativada'}.` };
+      }
+      case 'set_ai_volume': {
+        if (a.level === undefined || a.level === null || isNaN(Number(a.level))) {
+          return { result: `Informe o volume em uma escala de 0 (mudo) a 10 (máximo). Atual: ${liveVolumeRef.current}/10.` };
+        }
+        const applied = applyLiveVolume(Number(a.level));
+        return { result: applied === 0 ? 'Volume no mudo (0/10).' : `Volume da voz ajustado para ${applied}/10.` };
       }
       case 'open_settings': {
         const allowed = ['geral', 'modelos', 'api', 'personalidades', 'dna'] as const;
@@ -1759,7 +2262,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       }
       case 'list_personalities': {
         const all = [DEFAULT_PERSONALITY, ...personalitiesRef.current.filter(p => p.id !== DEFAULT_PERSONALITY.id)];
-        const activeName = all.find(p => p.id === selectedPersonalityIdRef.current)?.name || DEFAULT_PERSONALITY.name;
+        const activeName = all.find(p => p.id === livePersonalityIdRef.current)?.name || DEFAULT_PERSONALITY.name;
         return { result: `Personalidades disponíveis: ${all.map(p => p.name).join(', ')}. Ativa no momento: ${activeName}.` };
       }
       case 'switch_personality': {
@@ -1772,13 +2275,26 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         if (!match) {
           return { result: `Não encontrei "${wanted}". Personalidades disponíveis: ${all.map(p => p.name).join(', ')}. Qual delas você quer?` };
         }
-        setSelectedPersonalityId(match.id);
-        selectedPersonalityIdRef.current = match.id;
+        setLivePersonalityId(match.id);
+        livePersonalityIdRef.current = match.id;
+        // Força a saudação da nova persona a começar num balão separado da resposta
+        // anterior — cobre também o caso de reconexão por troca de voz, em que o
+        // turnComplete do turno antigo pode não chegar.
+        aiTurnBoundaryRef.current = true;
+        // Atualiza a instrução de sistema da sessão para a nova personalidade, de
+        // modo que reconexões (voz/GoAway) não revertam para a personalidade antiga.
+        liveSessionRef.current?.setPersonalityPrompt(buildLiveInstruction(match.prompt, memoryFactsRef.current, useMemoryLive));
+        // Se a personalidade tem voz padrão, aplica-a (pode agendar reconexão).
+        if (match.voice) applyLiveVoice(match.voice);
         const persona = match.prompt?.trim() ? match.prompt.trim() : 'Estilo neutro, natural e direto, sem exageros.';
         // A instrução da persona volta no RESULTADO da tool: o modelo lê e passa a
-        // incorporá-la imediatamente, sem precisar reiniciar a sessão.
+        // incorporá-la imediatamente. Se, porém, há reconexão de voz pendente, o
+        // resultado se perderia — então enfileiramos a persona para o novo setup.
+        if (liveSessionRef.current?.isVoiceReconnectPending()) {
+          liveSessionRef.current.queuePersonaInjection(`[SISTEMA: Você agora é "${match.name}". Incorpore integralmente esta persona e responda SEMPRE neste estilo (tom, voz e vocabulário): ${persona} — Cumprimente brevemente já no novo personagem.]`);
+        }
         return {
-          result: `Personalidade alterada para "${match.name}". A partir de AGORA, incorpore integralmente esta persona e responda SEMPRE neste estilo (tom, voz e vocabulário), até que o usuário peça outra: ${persona} — Cumprimente o usuário brevemente já no novo personagem.`
+          result: `Personalidade alterada para "${match.name}"${match.voice ? ` (voz ${match.voice})` : ''}. A partir de AGORA, incorpore integralmente esta persona e responda SEMPRE neste estilo (tom, voz e vocabulário), até que o usuário peça outra: ${persona} — Cumprimente o usuário brevemente já no novo personagem.`
         };
       }
       case 'create_personality': {
@@ -1816,9 +2332,9 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         personalitiesRef.current = next;
         setPersonalities(next); // auto-salva no Firestore via effect
         let extra = '';
-        if (selectedPersonalityIdRef.current === match.id) {
-          setSelectedPersonalityId('default');
-          selectedPersonalityIdRef.current = 'default';
+        if (livePersonalityIdRef.current === match.id) {
+          setLivePersonalityId('default');
+          livePersonalityIdRef.current = 'default';
           extra = ' Ela estava ativa, então voltei para a personalidade Normal.';
         }
         return { result: `Personalidade "${match.name}" excluída.${extra}` };
@@ -1964,7 +2480,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
       default:
         return { result: `Ferramenta desconhecida: ${name}.` };
     }
-  }, [handleToggleCamera, handleToggleScreen, handleOpenSettings, handleLiveStop, saveMemoryFactsToFirestore, scheduleWake]);
+  }, [handleToggleCamera, handleToggleScreen, handleOpenSettings, handleLiveStop, saveMemoryFactsToFirestore, scheduleWake, applyLiveVoice, useMemoryLive]);
 
   // Mantém o ref do executor sempre apontando para a versão mais recente.
   useEffect(() => {
@@ -1985,7 +2501,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     let isFirst = false;
     if (!activeChatId) {
       targetId = Date.now().toString();
-      const newChat: ChatSession = { id: targetId, title: 'Nova Conversa', messages: [], isNaming: true };
+      const newChat: ChatSession = { id: targetId, title: 'Nova Conversa', messages: [], isNaming: true, personalityId: selectedPersonalityId };
       setChats(prev => [newChat, ...prev]);
       setActiveChatId(targetId);
       isFirst = true;
@@ -2001,7 +2517,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
     }));
 
     executeAIRequest(targetId, text, files, apiHistory, isFirst);
-  }, [activeChatId, activeChat, executeAIRequest, isLiveActive, resetProactivityState]);
+  }, [activeChatId, activeChat, executeAIRequest, isLiveActive, resetProactivityState, selectedPersonalityId]);
 
   const handleResolveMemoryUpdate = useCallback((messageId: string, updateId: string, action: 'accepted' | 'ignored') => {
     let updateToApply: any = null;
@@ -2591,7 +3107,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 <div className="flex items-center gap-1.5 sm:gap-2 overflow-hidden">
                   <User className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-text)' }} />
                   <span className="text-xs font-bold tracking-tight text-(--text-primary) truncate max-w-[70px] sm:max-w-none">
-                    {personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
+                    {currentPersonalityId === 'default' ? 'Normal' : (personalities.find(p => p.id === currentPersonalityId)?.name || 'Normal')}
                   </span>
                 </div>
                 <ChevronDown className={`w-3.5 h-3.5 opacity-40 transition-transform ${showPersonalitySelector ? 'rotate-180' : ''}`} />
@@ -2600,18 +3116,18 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               {showPersonalitySelector && (
                 <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-(--bg-main) border border-(--border-main) rounded-2xl py-2 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
                   <button
-                    onClick={() => { setSelectedPersonalityId('default'); setShowPersonalitySelector(false); }}
-                    className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === 'default' ? 'font-bold' : 'text-(--text-secondary)'}`}
-                    style={selectedPersonalityId === 'default' ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
+                    onClick={() => { handleSelectPersonality('default'); setShowPersonalitySelector(false); }}
+                    className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${currentPersonalityId === 'default' ? 'font-bold' : 'text-(--text-secondary)'}`}
+                    style={currentPersonalityId === 'default' ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                   >
                     <User className="w-3.5 h-3.5" /> Normal (Padrão)
                   </button>
                   {personalities.map(p => (
                     <button
                       key={p.id}
-                      onClick={() => { setSelectedPersonalityId(p.id); setShowPersonalitySelector(false); }}
-                      className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${selectedPersonalityId === p.id ? 'font-bold' : 'text-(--text-secondary)'}`}
-                      style={selectedPersonalityId === p.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
+                      onClick={() => { handleSelectPersonality(p.id); setShowPersonalitySelector(false); }}
+                      className={`w-full text-left px-3.5 py-2.5 text-xs hover:bg-white/5 transition flex items-center gap-3 ${currentPersonalityId === p.id ? 'font-bold' : 'text-(--text-secondary)'}`}
+                      style={currentPersonalityId === p.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}
                     >
                       <User className="w-3.5 h-3.5" /> {p.name}
                     </button>
@@ -2630,7 +3146,8 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 
             {/* Right Side: Font Size Selector & Log Window Trigger */}
             <div className="w-20 sm:w-24 flex justify-start items-center gap-1.5 sm:gap-3" ref={fontSizeRef}>
-              {/* Font Size Selector */}
+              {/* Font Size Selector — oculto no modo LIVE em tela cheia (não tem efeito lá) */}
+              {!(isLiveActive && !isLiveDetached) && (
               <div className="relative">
                 <button
                   onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
@@ -2666,6 +3183,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                   </div>
                 )}
               </div>
+              )}
 
               {/* Log Window Trigger - Mobile only */}
               <button
@@ -2737,6 +3255,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
               onDeletePersonality={(id) => {
                 setPersonalities((prev: Personality[]) => prev.filter((p: Personality) => p.id !== id));
                 if (selectedPersonalityId === id) setSelectedPersonalityId('default');
+                if (livePersonalityId === id) setLivePersonalityId('default');
               }}
               memoryFacts={memoryFacts}
               onDeleteMemoryFact={(id) => {
@@ -2772,12 +3291,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onToggleCamera={handleToggleCamera}
                     onToggleScreen={handleToggleScreen}
                     onInterrupt={handleInterruptLive}
-                    onVoiceChange={(v: string) => {
-                      setLiveVoice(v);
-                      localStorage.setItem('nemon_live_voice', v);
-                      handleLiveStop();
-                      setTimeout(handleLiveStart, 500);
-                    }}
+                    onVoiceChange={(v: string) => applyLiveVoice(v)}
                     isProactiveEnabled={isLiveProactive}
                     onToggleProactive={() => setIsLiveProactive(!isLiveProactive)}
                     onClose={handleLiveStop}
@@ -2793,6 +3307,16 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                     onSetLiveModel={handleSetLiveModel}
                     isMicEnabled={isLiveMicEnabled}
                     onToggleMic={handleToggleLiveMic}
+                    liveVolume={liveVolume}
+                    onSetLiveVolume={applyLiveVolume}
+                    getLiveAudio={(id: string) => liveMessageAudioRef.current.get(id)}
+                    liveAudioContext={liveAudioContextRef.current}
+                    liveOutputNode={liveGainNodeRef.current}
+                    onPlayerActivate={(stop: () => void) => {
+                      if (activePlayerStopRef.current) activePlayerStopRef.current();
+                      activePlayerStopRef.current = stop;
+                    }}
+                    onOpenDictation={() => setShowDictation(true)}
                   />
                 ) : (
                   <>
@@ -2853,12 +3377,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                         onToggleCamera={handleToggleCamera}
                         onToggleScreen={handleToggleScreen}
                         onInterrupt={handleInterruptLive}
-                        onVoiceChange={(v: string) => {
-                          setLiveVoice(v);
-                          localStorage.setItem('nemon_live_voice', v);
-                          handleLiveStop();
-                          setTimeout(handleLiveStart, 500);
-                        }}
+                        onVoiceChange={(v: string) => applyLiveVoice(v)}
                         isProactiveEnabled={isLiveProactive}
                         onToggleProactive={() => setIsLiveProactive(!isLiveProactive)}
                         onClose={handleLiveStop}
@@ -2874,6 +3393,16 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                         onSetLiveModel={handleSetLiveModel}
                         isMicEnabled={isLiveMicEnabled}
                         onToggleMic={handleToggleLiveMic}
+                        liveVolume={liveVolume}
+                        onSetLiveVolume={applyLiveVolume}
+                        getLiveAudio={(id: string) => liveMessageAudioRef.current.get(id)}
+                        liveAudioContext={liveAudioContextRef.current}
+                        liveOutputNode={liveGainNodeRef.current}
+                        onPlayerActivate={(stop: () => void) => {
+                          if (activePlayerStopRef.current) activePlayerStopRef.current();
+                          activePlayerStopRef.current = stop;
+                        }}
+                        onOpenDictation={() => setShowDictation(true)}
                       />
                     )}
                   </>
@@ -2912,10 +3441,10 @@ REGRAS DE MEMÓRIA (MODO LIVE):
                 model={model}
                 imagenModel={imagenModel}
                 aspectRatio={aspectRatio}
-                canSearch={MODEL_OPTIONS.find(m => m.id === model)?.hasSearch ?? false}
+                canSearch={true}
                 showScrollButton={showScrollButton}
                 margin={chatMargin}
-                personalityName={personalities.find(p => p.id === selectedPersonalityId)?.name || 'Normal'}
+                personalityName={currentPersonalityId === 'default' ? 'Normal' : (personalities.find(p => p.id === currentPersonalityId)?.name || 'Normal')}
                 onSend={handleSend}
                 onStartLive={handleLiveStart}
                 onInterrupt={handleInterruptLive}
@@ -2986,6 +3515,29 @@ REGRAS DE MEMÓRIA (MODO LIVE):
         ></div>
       )}
       <LogWindow dailyUsage={dailyUsage} isOpen={isLogOpen} setIsOpen={setIsLogOpen} />
+
+      <DictationPanel
+        isOpen={showDictation}
+        onClose={closeDictation}
+        text={dictationText}
+        onTextChange={setDictationText}
+        status={dictationStatus}
+        progress={dictationProgress}
+        error={dictationError}
+        onStart={startDictation}
+        onCancel={cancelDictation}
+        onReset={resetDictation}
+        onDownload={downloadDictation}
+        audioBuffer={dictationBuffer}
+        audioContext={dictationCtxRef.current}
+        outputNode={dictationGainRef.current}
+        onPlayerActivate={(stop: () => void) => {
+          if (activePlayerStopRef.current) activePlayerStopRef.current();
+          activePlayerStopRef.current = stop;
+        }}
+        volume={dictationVolume}
+        onVolumeChange={applyDictationVolume}
+      />
     </div>
   );
 }

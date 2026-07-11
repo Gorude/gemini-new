@@ -572,7 +572,8 @@ export async function* streamGeminiContent(
   signal?: AbortSignal,
   thinking: boolean = false,
   jsonMode: boolean = false,
-  manualApiKey?: string
+  manualApiKey?: string,
+  maxOutputTokens: number = 8192
 ): AsyncGenerator<{
   text?: string;
   thoughts?: string;
@@ -603,7 +604,7 @@ export async function* streamGeminiContent(
   const payload: any = {
     contents: [...history, { role: "user", parts: currentParts }],
     generationConfig: {
-      maxOutputTokens: 8192,
+      maxOutputTokens,
       temperature: 0.7,
       ...(jsonMode ? { response_mime_type: "application/json" } : {})
     }
@@ -623,6 +624,15 @@ export async function* streamGeminiContent(
       const searchInstruction = webSearch ? "\n\nPESQUISA OBRIGATÓRIA: Planeje e use 'google_search' para basear sua resposta em fatos REAIS." : "";
       currentParts.unshift({ text: "Missão Final: Fornecer uma resposta útil e direta ao usuário.\n\n1. Raciocínio (Privado): SEMPRE use <thinking>...</thinking> para seu processo interno.\n2. Conclusão (Público): Após fechar o </thinking>, você DEVE obrigatoriamente escrever a resposta final detalhada que o usuário verá. NUNCA termine sua mensagem apenas com o raciocínio." + searchInstruction });
     }
+  } else if (model.includes('gemma') && !webSearch) {
+    // Gemma 4 gasta "thought tokens" mesmo com o raciocínio desligado. A doc confirma que
+    // ele NÃO aceita thinkingBudget (retorna 400) e IGNORA includeThoughts, mas ACEITA
+    // thinkingLevel — restrito a MINIMAL ou HIGH. Quando NÃO há busca, MINIMAL corta esse
+    // overhead e acelera respostas diretas.
+    // ATENÇÃO: NÃO usar MINIMAL com google_search — o Gemma precisa do raciocínio para
+    // planejar e executar a ferramenta de busca; com MINIMAL ele pula o grounding e volta
+    // vazio (sources: [], text: ""). Por isso o guard `!webSearch`.
+    payload.generationConfig.thinkingConfig = { thinkingLevel: "MINIMAL" };
   }
 
   if (webSearch) {
@@ -833,6 +843,39 @@ export async function generateGeminiContent(
   }
 
   return { text: fullText, thoughts: fullThoughts, isGrounded, usage };
+}
+
+/**
+ * Delegação de busca: usa o Gemma 4 31B (que suporta google_search) para pesquisar
+ * na web e retornar um resumo factual + fontes. Serve para modelos que não fazem
+ * busca nativa poderem responder com dados atuais.
+ */
+export async function performWebSearch(
+  query: string,
+  signal?: AbortSignal,
+  manualApiKey?: string
+): Promise<{ summary: string; sources: { title: string; uri: string }[] }> {
+  const model = "gemma-4-31b-it";
+  const systemInstruction =
+    "Você é um mecanismo de pesquisa. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web " +
+    "e retorne um resumo CONCISO (no máximo 6 linhas ou tópicos curtos) apenas com os fatos mais relevantes " +
+    "e atualizados (números, datas, nomes) encontrados nas fontes. Vá direto ao ponto, sem introduções nem " +
+    "conclusões. Não invente; baseie-se somente nos resultados da busca.";
+  const prompt = `Pesquise na web e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
+
+  // Teto de tokens baixo: o resumo é curto, então gera muito mais rápido que o padrão (8192).
+  const gen = streamGeminiContent(prompt, model, [], systemInstruction, [], true, signal, false, false, manualApiKey, 1024);
+  let summary = "";
+  const sourceMap = new Map<string, { title: string; uri: string }>();
+  for await (const chunk of gen) {
+    if (chunk.text) summary += chunk.text;
+    if (chunk.sources) {
+      chunk.sources.forEach(s => {
+        if (s.uri && !sourceMap.has(s.uri)) sourceMap.set(s.uri, { title: s.title || s.uri, uri: s.uri });
+      });
+    }
+  }
+  return { summary: summary.trim(), sources: [...sourceMap.values()] };
 }
 
 export async function generateImagenContent(

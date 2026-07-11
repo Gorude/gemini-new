@@ -14,6 +14,9 @@ export interface LiveSessionHandlers {
   onToolCall?: (name: string, args: any) => Promise<any>;
   // Notificação de que o modelo acionou uma ferramenta (para feedback visual/sonoro na UI).
   onToolUsed?: (name: string, args: any) => void;
+  // Fim de um turno do modelo. Serve para a UI separar respostas distintas em
+  // balões próprios (ex.: despedida da persona antiga + saudação da nova ao trocar).
+  onTurnComplete?: () => void;
 }
 
 // Declarações das ferramentas customizadas expostas ao modelo no modo LIVE.
@@ -68,11 +71,28 @@ export const LIVE_TOOL_DECLARATIONS = [
   },
   // ---- Controle do app por voz ----
   {
+    name: "list_voices",
+    description: "Lista as vozes disponíveis no modo LIVE (com uma breve descrição de cada uma) e indica qual está ativa agora. Use quando o usuário perguntar quais vozes existem ou antes de trocar, se não tiver certeza dos nomes.",
+    parameters: { type: "OBJECT", properties: {} }
+  },
+  {
     name: "set_voice",
-    description: "Troca a voz da IA no modo LIVE.",
+    description: "Troca a voz da IA no modo LIVE imediatamente (sem perder o contexto da conversa). Se não tiver certeza dos nomes válidos, use list_voices antes.",
     parameters: {
       type: "OBJECT",
-      properties: { voice: { type: "STRING", description: "Uma de: Puck, Charon, Kore, Fenrir, Aoede." } },
+      properties: { voice: { type: "STRING", description: "Nome da voz. Opções: Puck, Charon, Kore, Fenrir, Aoede." } },
+      required: ["voice"]
+    }
+  },
+  {
+    name: "set_personality_voice",
+    description: "Define (ou remove) a VOZ PADRÃO de uma personalidade. Assim, sempre que essa personalidade for ativada, a voz correspondente é aplicada automaticamente. Se a personalidade não for informada, usa a personalidade ativa no momento.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        personality: { type: "STRING", description: "Nome (ou aproximação) da personalidade. Vazio = personalidade ativa atual." },
+        voice: { type: "STRING", description: "Nome da voz padrão (Puck, Charon, Kore, Fenrir, Aoede). Use 'nenhuma'/'remover' para limpar a voz padrão." }
+      },
       required: ["voice"]
     }
   },
@@ -99,6 +119,17 @@ export const LIVE_TOOL_DECLARATIONS = [
       type: "OBJECT",
       properties: { enable: { type: "BOOLEAN", description: "true ativa, false desativa." } },
       required: ["enable"]
+    }
+  },
+  {
+    name: "set_ai_volume",
+    description: "Ajusta o volume da SUA voz (a voz da IA) no modo LIVE, numa escala de 0 (mudo) a 10 (máximo). Use quando o usuário pedir para aumentar, abaixar ou silenciar o volume. Para pedidos relativos ('abaixa um pouco', 'mais alto'), escolha um novo nível adequado a partir do atual.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        level: { type: "NUMBER", description: "Volume de 0 a 10. 0 = mudo, 10 = volume máximo." }
+      },
+      required: ["level"]
     }
   },
   {
@@ -283,12 +314,22 @@ export class GeminiLiveSession {
 
   private active = false;
   private reconnectTimeout: any = null;
+  // Timeout que adia a reconexão ao trocar de voz (ver setVoice).
+  private voiceReconnectTimeout: any = null;
+  // Persona a (re)injetar assim que o próximo setup concluir. Usado quando uma
+  // troca de personalidade coincide com uma reconexão (ex.: troca de voz): a
+  // injeção não pode ser enviada na conexão antiga, que será fechada.
+  private pendingPersonaInjection: string | null = null;
   private attemptCount = 0;
   // Reconexão contida: poucas tentativas e mais espaçadas, para não reenviar o
   // setup muitas vezes por minuto (cada setup consome tokens da cota de 65K/min).
   private maxAttempts = 2;
   // Debounce da notificação de uso do Google Search (grounding vem em vários chunks).
   private lastSearchNotifyMs = 0;
+  // Handle de retomada de sessão (session resumption): o servidor o envia
+  // periodicamente e o usamos para reconectar SEM perder o contexto quando a
+  // conexão atinge o limite de duração ou cai. Null = começar sessão do zero.
+  private sessionHandle: string | null = null;
 
   constructor(
     handlers: LiveSessionHandlers,
@@ -430,7 +471,8 @@ export class GeminiLiveSession {
 
   private sendSetup(model: string) {
     if (!this.ws) return;
-    const setup = {
+
+    const setup: any = {
       setup: {
         model: model,
         generationConfig: {
@@ -445,6 +487,14 @@ export class GeminiLiveSession {
         },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
+        // Retomada de sessão: o servidor envia um "handle" periódico (ver
+        // handleServerMessage). Ao reconectar, reenviamos o último handle para
+        // continuar a conversa de onde parou, sem perder o contexto.
+        sessionResumption: this.sessionHandle ? { handle: this.sessionHandle } : {},
+        // Compressão de janela de contexto (sliding window): permite sessões longas
+        // sem estourar o limite de tokens — o servidor comprime o histórico antigo
+        // automaticamente em vez de encerrar a sessão ao atingir o limite.
+        contextWindowCompression: { slidingWindow: {} },
         // NOTA: Code Execution NÃO é suportado pela Live API (causa rejeição 1008).
         // Apenas Google Search + function calling podem ser combinados aqui.
         tools: [
@@ -454,16 +504,21 @@ export class GeminiLiveSession {
         systemInstruction: {
           role: "system",
           parts: [{ text: `Você é o Nemon no modo LIVE. ${this.personalityPrompt}.
-            HORA ATUAL: ${new Date().toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.
             REGRAS OBRIGATÓRIAS:
-            1. Responda SEMPRE ao usuário de forma audível. NUNCA fique em silêncio.
-            2. Use as ferramentas disponíveis quando fizer sentido: 'get_current_time' para a hora; 'google_search' para fatos atuais/reais; 'calculate' para QUALQUER conta matemática; 'get_weather' para clima/previsão; ferramentas de memória para lembrar do usuário; controle do app e alarmes/lembretes/cronômetros.
+            1. Responda de forma audível sempre que o usuário falar diretamente com você. Você PODE ignorar ruídos de fundo ou falas que claramente não são direcionadas a você, mas NUNCA deixe o usuário sem resposta quando ele se dirigir a você.
+            2. Use as ferramentas disponíveis quando fizer sentido: 'get_current_time' para saber a data/hora atual (consulte-a SEMPRE que precisar das horas, pois você não a tem de cabeça); 'google_search' para fatos atuais/reais; 'calculate' para QUALQUER conta matemática; 'get_weather' para clima/previsão; ferramentas de memória para lembrar do usuário; controle do app e alarmes/lembretes/cronômetros. Para voz: 'list_voices' mostra as vozes disponíveis, 'set_voice' troca sua voz na hora, e 'set_personality_voice' define a voz padrão de uma personalidade (aplicada sempre que ela for ativada).
             3. Ao salvar memória, use 'save_memory' para fatos novos e 'update_memory' apenas quando um fato antigo for contradito. Um fato atômico por chamada.
             4. Quando um alarme, cronômetro ou lembrete disparar, você receberá uma mensagem de [SISTEMA]. Avise o usuário em voz alta imediatamente, de forma natural.
             5. Seja direto, natural e amigável. Se não entender algo, peça para repetir, mas responda.` }]
         }
       }
     };
+
+    // NOTA: enableAffectiveDialog e proactivity (áudio nativo) NÃO são suportados
+    // no endpoint v1beta usado aqui — só existem no v1alpha e causam rejeição 1007
+    // ("Unknown name ... at 'setup'"). A proatividade continua sendo feita pelo
+    // silence-breaker no App.tsx. Para reativá-los seria preciso migrar para v1alpha.
+
     this.ws.send(JSON.stringify(setup));
   }
 
@@ -472,7 +527,18 @@ export class GeminiLiveSession {
       this.audioContext = new AudioContext({ sampleRate: 16000 });
       await this.audioContext.audioWorklet.addModule('/audio-processor.js');
 
-      this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Restrições de captura essenciais para voz: sem cancelamento de eco, o
+      // microfone capta o áudio da própria IA saindo pelos alto-falantes, causando
+      // barge-ins falsos e loops de feedback. Também reduzimos ruído e normalizamos ganho.
+      this.micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 16000
+        }
+      });
       
       // Aplicar o estado atual do microfone imediatamente
       this.micStream.getAudioTracks().forEach(track => {
@@ -513,6 +579,70 @@ export class GeminiLiveSession {
       });
     }
     console.log(`[LIVE] Estado do microfone alterado para: ${enabled ? 'ativado' : 'desativado'}`);
+  }
+
+  getVoice(): string {
+    return this.voice;
+  }
+
+  /**
+   * Troca a voz da IA no meio da sessão. A Live API fixa a voz no setup e não
+   * permite trocá-la numa conexão já aberta; então reconectamos — mas
+   * preservando o handle de retomada (sessionHandle) para NÃO perder o contexto
+   * da conversa, e sem derrubar câmera/tela em andamento.
+   *
+   * A reconexão é adiada para o próximo tick: quando a troca vem de uma tool call
+   * do modelo (set_voice), a resposta da ferramenta ainda precisa ser enviada na
+   * conexão atual antes de fecharmos — senão a chamada de função fica sem resposta.
+   */
+  setVoice(voice: string) {
+    if (!voice || voice === this.voice) return;
+    console.log(`[LIVE] 🎙️ Trocando voz: ${this.voice} → ${voice} (reconexão com retomada de contexto).`);
+    this.voice = voice;
+    if (!this.active) return;
+    if (this.voiceReconnectTimeout) return; // já há uma troca agendada
+    this.voiceReconnectTimeout = window.setTimeout(() => {
+      this.voiceReconnectTimeout = null;
+      this.reconnectForVoice();
+    }, 250);
+  }
+
+  // Atualiza a instrução de sistema (personalidade + DNA + regras) usada em toda
+  // (re)conexão. Sem isso, uma reconexão — por troca de voz, GoAway ou limite de
+  // duração — reenviaria a personalidade ANTIGA e o modelo reverteria a ela.
+  setPersonalityPrompt(fullInstruction: string) {
+    this.personalityPrompt = fullInstruction;
+  }
+
+  // Indica se há uma reconexão por troca de voz agendada. A UI usa isto para
+  // decidir se injeta a persona agora (sem reconexão) ou a enfileira para depois.
+  isVoiceReconnectPending(): boolean {
+    return this.voiceReconnectTimeout != null;
+  }
+
+  // Enfileira uma injeção de persona para ser enviada logo após o próximo
+  // setupComplete (ou seja, na conexão NOVA), sobrevivendo à reconexão.
+  queuePersonaInjection(text: string) {
+    this.pendingPersonaInjection = text;
+  }
+
+  private async reconnectForVoice() {
+    if (!this.active) return;
+    // Fecha a conexão atual de forma controlada: removemos os handlers para NÃO
+    // acionar o backoff de reconexão automática do onclose.
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      try { this.ws.close(); } catch { /* já fechada */ }
+      this.ws = null;
+    }
+    // Encerra o áudio atual (o connect() recria via initAudio). NÃO chamamos
+    // stopVideo() de propósito: preserva a câmera/tela durante a troca de voz.
+    this.micStream?.getTracks().forEach(t => t.stop());
+    this.audioContext?.close();
+    this.audioContext = null;
+
+    await this.connect();
   }
 
   sendText(text: string) {
@@ -648,6 +778,36 @@ export class GeminiLiveSession {
     if (msg.setupComplete || msg.setup_complete) {
       console.log("[LIVE] ✅ Setup concluído. Sessão pronta.");
       this.attemptCount = 0;
+      // Se uma troca de personalidade ficou pendente durante a reconexão (ex.:
+      // troca de voz), injeta a persona agora, na conexão nova.
+      if (this.pendingPersonaInjection) {
+        const text = this.pendingPersonaInjection;
+        this.pendingPersonaInjection = null;
+        console.log("[LIVE] 🎭 Reaplicando persona após reconexão.");
+        // Pequeno atraso para garantir que o canal está totalmente pronto.
+        window.setTimeout(() => this.sendText(text), 150);
+      }
+      return;
+    }
+
+    // Retomada de sessão: guarda o handle mais recente para reconectar sem perder
+    // o contexto. Só é válido quando `resumable` é verdadeiro.
+    const resumption = msg.sessionResumptionUpdate || msg.session_resumption_update;
+    if (resumption) {
+      const newHandle = resumption.newHandle || resumption.new_handle;
+      if ((resumption.resumable || resumption.resumable === undefined) && newHandle) {
+        this.sessionHandle = newHandle;
+      }
+      return;
+    }
+
+    // Aviso de desconexão iminente (limite de duração da conexão): o servidor manda
+    // um GoAway antes de fechar. Como já guardamos o handle de retomada, o onclose
+    // reconectará automaticamente continuando a conversa.
+    const goAway = msg.goAway || msg.go_away;
+    if (goAway) {
+      const timeLeft = goAway.timeLeft || goAway.time_left;
+      console.log(`[LIVE] ⏳ Servidor sinalizou desconexão iminente (GoAway${timeLeft ? `, restam ~${timeLeft}` : ''}). Reconectaremos retomando a sessão.`);
       return;
     }
 
@@ -697,6 +857,12 @@ export class GeminiLiveSession {
     }
     if (serverContent?.outputTranscription?.text || serverContent?.output_transcription?.text) {
       this.handlers.onTranscript('ai', serverContent.outputTranscription?.text || serverContent.output_transcription?.text);
+    }
+
+    // Fim de turno do modelo: sinaliza para a UI que a PRÓXIMA fala da IA é uma
+    // resposta nova (balão separado), em vez de continuar o balão anterior.
+    if (serverContent?.turnComplete || serverContent?.turn_complete) {
+      this.handlers.onTurnComplete?.();
     }
 
     // Tratar Tool Calls
@@ -776,7 +942,15 @@ export class GeminiLiveSession {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
+    if (this.voiceReconnectTimeout) {
+      clearTimeout(this.voiceReconnectTimeout);
+      this.voiceReconnectTimeout = null;
+    }
+    this.pendingPersonaInjection = null;
     this.attemptCount = 0;
+    // Descarta o handle de retomada: encerrar é intencional, a próxima sessão
+    // deve começar limpa (não continuar a conversa anterior).
+    this.sessionHandle = null;
     this.cleanupConnection();
   }
 

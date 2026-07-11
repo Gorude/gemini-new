@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Volume2, Settings, Camera, Monitor, Zap, Minimize2, Maximize2, Send, ChevronDown, Mic, MicOff } from 'lucide-react';
-import { LIVE_MODEL_OPTIONS } from '../constants';
+import { X, Volume2, Settings, Camera, Monitor, Zap, Minimize2, Maximize2, Send, ChevronDown, Mic, MicOff, Speech } from 'lucide-react';
+import { LIVE_MODEL_OPTIONS, LIVE_VOICES } from '../constants';
+import LiveAudioPlayer from './LiveAudioPlayer';
+import VolumeSlider from './VolumeSlider';
 
 interface LiveViewProps {
   status: 'connecting' | 'connected' | 'error' | 'disconnected';
-  transcript: { role: 'user' | 'ai'; text: string }[];
+  transcript: { role: 'user' | 'ai'; text: string; audioId?: string }[];
   currentVoice: string;
   analyser: AnalyserNode | null;
   visionType: 'camera' | 'screen' | null;
@@ -23,9 +25,15 @@ interface LiveViewProps {
   onSetLiveModel: (model: string) => void;
   isMicEnabled: boolean;
   onToggleMic: () => void;
+  liveVolume: number;
+  onSetLiveVolume: (level: number) => void;
+  getLiveAudio: (audioId: string) => AudioBuffer | undefined;
+  liveAudioContext: AudioContext | null;
+  liveOutputNode: AudioNode | null;
+  onPlayerActivate: (stop: () => void) => void;
+  onOpenDictation: () => void;
 }
 
-const VOICES = ["Puck", "Charon", "Kore", "Fenrir", "Aoede"];
 
 const BarVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -165,7 +173,7 @@ const MiniVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser 
   );
 };
 
-const LiveView: React.FC<LiveViewProps> = ({ 
+const LiveView: React.FC<LiveViewProps> = ({
   status, 
   transcript, 
   currentVoice, 
@@ -184,7 +192,14 @@ const LiveView: React.FC<LiveViewProps> = ({
   liveModel,
   onSetLiveModel,
   isMicEnabled,
-  onToggleMic
+  onToggleMic,
+  liveVolume,
+  onSetLiveVolume,
+  getLiveAudio,
+  liveAudioContext,
+  liveOutputNode,
+  onPlayerActivate,
+  onOpenDictation
 }) => {
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
@@ -301,7 +316,14 @@ const LiveView: React.FC<LiveViewProps> = ({
             <span className="text-[10px] font-bold uppercase tracking-widest text-(--text-primary)">Modo LIVE</span>
           </div>
           <div className="flex items-center gap-1">
-            <button 
+            <button
+              onClick={onOpenDictation}
+              className="p-1.5 hover:bg-white/5 rounded-lg text-(--text-secondary) hover:text-white transition"
+              title="Ditar um texto"
+            >
+              <Speech className="w-3.5 h-3.5" />
+            </button>
+            <button
               onClick={onToggleDetach}
               className="p-1.5 hover:bg-white/5 rounded-lg text-(--text-secondary) hover:text-white transition"
               title="Expandir tela"
@@ -425,14 +447,16 @@ const LiveView: React.FC<LiveViewProps> = ({
                 <Settings className="w-4 h-4" />
               </button>
               {showVoiceMenu && (
-                <div className="absolute right-0 bottom-full mb-2 bg-(--bg-sidebar-solid) border border-(--border-light) rounded-xl p-1 min-w-[120px] shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                  {VOICES.map(v => (
-                    <button 
-                      key={v}
-                      onClick={() => { onVoiceChange(v); setShowVoiceMenu(false); }}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] transition ${currentVoice === v ? 'bg-(--accent-bg) text-(--accent-text) font-bold' : 'hover:bg-white/5 text-(--text-secondary) hover:text-white'}`}
+                <div className="absolute right-0 bottom-full mb-2 bg-(--bg-sidebar-solid) border border-(--border-light) rounded-xl p-1 min-w-[150px] shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  {LIVE_VOICES.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => { onVoiceChange(v.id); setShowVoiceMenu(false); }}
+                      title={v.desc}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] transition ${currentVoice === v.id ? 'bg-(--accent-bg) text-(--accent-text) font-bold' : 'hover:bg-white/5 text-(--text-secondary) hover:text-white'}`}
                     >
-                      {v}
+                      <div className="font-semibold">{v.id}</div>
+                      <div className="text-[8px] text-(--text-placeholder) leading-tight">{v.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -440,9 +464,14 @@ const LiveView: React.FC<LiveViewProps> = ({
             </div>
           </div>
 
+          {/* Volume da voz da IA (0–10) */}
+          <div className="flex items-center bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/5">
+            <VolumeSlider value={liveVolume} onChange={onSetLiveVolume} variant="mini" />
+          </div>
+
           {/* Text input to speak to the Live session */}
           <div className="relative flex items-center">
-            <input 
+            <input
               type="text"
               placeholder="Fale por texto com o Nemon..."
               value={inputText}
@@ -479,13 +508,15 @@ const LiveView: React.FC<LiveViewProps> = ({
           {showVoiceMenu && (
             <div className="absolute right-0 top-full mt-3 bg-(--bg-sidebar) border border-(--border-light) rounded-2xl p-2 min-w-[160px] shadow-2xl z-30 animate-in fade-in slide-in-from-top-2 duration-200">
               <p className="text-[10px] font-bold text-(--text-placeholder) px-3 py-2 uppercase tracking-widest">Selecionar Voz</p>
-              {VOICES.map(v => (
-                <button 
-                  key={v}
-                  onClick={() => { onVoiceChange(v); setShowVoiceMenu(false); }}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition ${currentVoice === v ? 'bg-(--accent-bg) text-(--accent-text) font-bold' : 'hover:bg-white/5 text-(--text-secondary) hover:text-white'}`}
+              {LIVE_VOICES.map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => { onVoiceChange(v.id); setShowVoiceMenu(false); }}
+                  title={v.desc}
+                  className={`w-full text-left px-3 py-2 rounded-xl text-xs transition ${currentVoice === v.id ? 'bg-(--accent-bg) text-(--accent-text) font-bold' : 'hover:bg-white/5 text-(--text-secondary) hover:text-white'}`}
                 >
-                  {v}
+                  <div>{v.id}</div>
+                  <div className="text-[9px] text-(--text-placeholder) leading-tight mt-0.5">{v.desc}</div>
                 </button>
               ))}
             </div>
@@ -524,7 +555,15 @@ const LiveView: React.FC<LiveViewProps> = ({
           <Zap className={`w-5 h-5 ${isProactiveEnabled ? 'animate-pulse' : ''}`} />
         </button>
 
-        <button 
+        <button
+          onClick={onOpenDictation}
+          className="p-3 bg-(--bg-sidebar) border border-(--border-light) text-(--text-secondary) hover:text-white rounded-2xl transition shadow-xl"
+          title="Ditar um texto"
+        >
+          <Speech className="w-5 h-5" />
+        </button>
+
+        <button
           onClick={onToggleDetach}
           className="p-3 bg-(--bg-sidebar) border border-(--border-light) text-(--text-secondary) hover:text-white rounded-2xl transition shadow-xl"
           title="Destacar para popup (PIP)"
@@ -545,6 +584,11 @@ const LiveView: React.FC<LiveViewProps> = ({
         <span className="text-[10px] font-bold uppercase tracking-widest text-(--text-primary)">
           {status === 'connected' ? 'Modo LIVE Conectado' : status === 'connecting' ? 'Conectando...' : status === 'error' ? 'LIVE · Erro (ver logs)' : 'LIVE · Desconectado'}
         </span>
+      </div>
+
+      {/* Volume da voz da IA (0–10) */}
+      <div className="absolute top-20 left-6 z-20 w-56 flex items-center bg-(--bg-sidebar)/50 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-(--border-light)">
+        <VolumeSlider value={liveVolume} onChange={onSetLiveVolume} variant="full" />
       </div>
 
       {/* Central Visualizer */}
@@ -610,13 +654,24 @@ const LiveView: React.FC<LiveViewProps> = ({
                   <p className="text-(--text-placeholder) italic text-sm text-center">Inicie uma conversa por voz ou texto...</p>
                 </div>
               )}
-              {transcript.map((line, i) => (
-                <div key={i} className={`flex ${line.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
-                  <div className={`max-w-[85%] px-3.5 py-3 rounded-2xl text-sm leading-relaxed shadow-lg ${line.role === 'user' ? 'bg-(--bg-user-bubble) text-white font-medium' : 'bg-white/10 text-(--text-primary) border border-white/5'}`}>
-                    {line.text}
+              {transcript.map((line, i) => {
+                const audioBuffer = line.role === 'ai' && line.audioId ? getLiveAudio(line.audioId) : undefined;
+                return (
+                  <div key={i} className={`flex ${line.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-300`}>
+                    <div className={`max-w-[85%] px-3.5 py-3 rounded-2xl text-sm leading-relaxed shadow-lg ${line.role === 'user' ? 'bg-(--bg-user-bubble) text-white font-medium' : 'bg-white/10 text-(--text-primary) border border-white/5'}`}>
+                      {line.text}
+                      {audioBuffer && liveAudioContext && liveOutputNode && (
+                        <LiveAudioPlayer
+                          buffer={audioBuffer}
+                          context={liveAudioContext}
+                          outputNode={liveOutputNode}
+                          onActivate={onPlayerActivate}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

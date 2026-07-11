@@ -7,6 +7,7 @@ export interface ChatSession {
   pinned?: boolean;
   archived?: boolean;
   isNaming?: boolean;
+  personalityId?: string;
 }
 
 export interface ModelUsage {
@@ -35,6 +36,9 @@ export interface Personality {
   id: string;
   name: string;
   prompt: string;
+  // Voz padrão do modo LIVE para esta personalidade. Ao ativá-la, a voz é
+  // aplicada automaticamente. Vazio/ausente = mantém a voz atual.
+  voice?: string;
 }
 
 export interface MemoryFact {
