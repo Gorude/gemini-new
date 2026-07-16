@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Speech, Download, Loader2, Play } from 'lucide-react';
+import { X, Speech, Download, Loader2, Play, Eraser, AlertTriangle } from 'lucide-react';
 import LiveAudioPlayer from './LiveAudioPlayer';
 import VolumeSlider from './VolumeSlider';
 
@@ -23,6 +23,11 @@ interface DictationPanelProps {
   onPlayerActivate: (stop: () => void) => void;
   volume: number;
   onVolumeChange: (v: number) => void;
+  voice: string;
+  onVoiceChange: (v: string) => void;
+  voices: { id: string; desc: string }[];
+  chunkCount: number;
+  failedRegions: { start: number; end: number }[];
 }
 
 const DictationPanel: React.FC<DictationPanelProps> = ({
@@ -42,13 +47,19 @@ const DictationPanel: React.FC<DictationPanelProps> = ({
   outputNode,
   onPlayerActivate,
   volume,
-  onVolumeChange
+  onVolumeChange,
+  voice,
+  onVoiceChange,
+  voices,
+  chunkCount,
+  failedRegions,
 }) => {
   if (!isOpen) return null;
 
   const busy = status === 'connecting' || status === 'generating';
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
   const canStart = text.trim().length > 0;
+  const hasFailures = status === 'done' && failedRegions.length > 0;
 
   return (
     <div className="fixed top-0 right-0 h-full w-full max-w-[420px] z-[120] bg-(--bg-sidebar-solid) border-l border-(--border-light) shadow-[-20px_0_50px_rgba(0,0,0,0.35)] flex flex-col animate-in slide-in-from-right duration-300">
@@ -61,7 +72,7 @@ const DictationPanel: React.FC<DictationPanelProps> = ({
         <button
           onClick={onClose}
           className="p-1.5 hover:bg-white/5 rounded-lg text-(--text-secondary) hover:text-red-400 transition"
-          title="Fechar"
+          title="Fechar (o áudio é mantido)"
         >
           <X className="w-4 h-4" />
         </button>
@@ -87,7 +98,17 @@ const DictationPanel: React.FC<DictationPanelProps> = ({
               context={audioContext}
               outputNode={outputNode}
               onActivate={onPlayerActivate}
+              failedRegions={failedRegions}
             />
+            {hasFailures && (
+              <div className="flex items-start gap-1.5 text-[10px] text-red-300 leading-snug">
+                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                <span>
+                  {failedRegions.length} trecho(s) não puderam ser gerados (marcados em vermelho na barra).
+                  Serão pulados automaticamente na reprodução.
+                </span>
+              </div>
+            )}
             <div className="flex items-center bg-black/20 px-2.5 py-1.5 rounded-xl border border-white/5">
               <VolumeSlider value={volume} onChange={onVolumeChange} variant="mini" />
             </div>
@@ -125,12 +146,43 @@ const DictationPanel: React.FC<DictationPanelProps> = ({
           </div>
         )}
 
+        {/* Seletor de voz (idle / done / error) */}
+        {!busy && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-semibold text-(--text-secondary) uppercase tracking-wide">
+              Voz da narração
+            </label>
+            <select
+              value={voice}
+              onChange={(e) => onVoiceChange(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[12px] text-(--text-primary) outline-none focus:border-(--accent-border) transition cursor-pointer"
+            >
+              {voices.map((v) => (
+                <option key={v.id} value={v.id} className="bg-(--bg-sidebar-solid) text-(--text-primary)">
+                  {v.id} — {v.desc}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Entrada de texto (idle / done / error) */}
         {!busy && (
           <div className="flex flex-col gap-2 flex-1">
-            <label className="text-[11px] font-semibold text-(--text-secondary) uppercase tracking-wide">
-              {status === 'done' ? 'Texto ditado' : 'Cole o texto a narrar'}
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-(--text-secondary) uppercase tracking-wide">
+                {status === 'done' ? 'Texto ditado' : 'Cole o texto a narrar'}
+              </label>
+              {canStart && (
+                <button
+                  onClick={() => onTextChange('')}
+                  className="flex items-center gap-1 text-[10px] text-(--text-secondary) hover:text-red-400 transition"
+                  title="Limpar texto"
+                >
+                  <Eraser className="w-3 h-3" /> Limpar
+                </button>
+              )}
+            </div>
             <textarea
               value={text}
               onChange={(e) => onTextChange(e.target.value)}
@@ -140,6 +192,7 @@ const DictationPanel: React.FC<DictationPanelProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-(--text-placeholder) tabular-nums">
                 {text.trim().length} caracteres
+                {canStart && chunkCount > 0 && ` · ${chunkCount} trecho${chunkCount > 1 ? 's' : ''}`}
               </span>
               {status === 'done' ? (
                 <button
@@ -159,7 +212,7 @@ const DictationPanel: React.FC<DictationPanelProps> = ({
               )}
             </div>
             <p className="text-[10px] text-(--text-placeholder) leading-snug mt-1">
-              O texto é dividido em trechos e narrado pelo Gemini 2.5 Flash Live. Textos muito longos podem levar um tempo.
+              O texto é dividido em trechos e narrado em paralelo pelo Gemini 2.5 Flash Live. Textos muito longos podem levar um tempo.
             </p>
           </div>
         )}

@@ -7,11 +7,15 @@ import 'katex/dist/katex.min.css';
 
 const renderer = new marked.Renderer();
 
+// Ícone (SVG inline do lucide "copy") para o botão de copiar do bloco de código.
+const COPY_ICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+
 // Custom code renderer supporting both positional and token object formats for Marked compatibility
 renderer.code = (codeOrToken: any, langOrUndefined?: any) => {
   let text = '';
   let lang = 'plaintext';
-  
+
   if (codeOrToken && typeof codeOrToken === 'object') {
     text = codeOrToken.text || '';
     lang = codeOrToken.lang || 'plaintext';
@@ -19,10 +23,15 @@ renderer.code = (codeOrToken: any, langOrUndefined?: any) => {
     text = codeOrToken || '';
     lang = langOrUndefined || 'plaintext';
   }
-  
+
   const language = hljs.getLanguage(lang) ? lang : 'plaintext';
   const highlighted = hljs.highlight(text, { language }).value;
-  return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
+  // Envolvemos o <pre> num wrapper com um botão de copiar "grudento" (sticky):
+  // ele fica no canto superior direito e acompanha a rolagem enquanto o bloco
+  // estiver visível. O botão fica FORA do <pre> para não sofrer com o overflow-x
+  // do código. A cópia é tratada por delegação de evento no MessageItem (lê o
+  // texto do <code>).
+  return `<div class="code-block"><div class="code-copy-holder"><button type="button" class="code-copy-btn" title="Copiar código" aria-label="Copiar código">${COPY_ICON_SVG}<span>Copiar</span></button></div><pre><code class="hljs language-${language}">${highlighted}</code></pre></div>`;
 };
 
 // Configuração segura do Marked.js usando marked.use

@@ -3,6 +3,14 @@ import { Loader2, Zap, ExternalLink, Key } from 'lucide-react';
 import { type Message } from '../services/gemini';
 import MessageItem from './MessageItem';
 
+// Estado do TTS ("falar em voz alta") de uma mensagem do chat.
+export interface ChatTtsEntry {
+  status: 'generating' | 'done' | 'error';
+  buffer?: AudioBuffer;
+  failedRegions?: { start: number; end: number }[];
+  error?: string;
+}
+
 interface MessageListProps {
   messages: Message[];
   visibleMessagesCount: number;
@@ -32,6 +40,12 @@ interface MessageListProps {
   onResolveMemoryUpdate?: (messageId: string, updateId: string, action: 'accepted' | 'ignored') => void;
   hasFreeApiKey: boolean;
   onOpenSettings: (tab: 'geral' | 'modelos' | 'api' | 'personalidades' | 'dna') => void;
+  // Falar em voz alta as mensagens (TTS) — áudio por id de mensagem + player.
+  chatTts: Record<string, ChatTtsEntry>;
+  ttsAudioContext: AudioContext | null;
+  ttsOutputNode: AudioNode | null;
+  onSpeak: (id: string, text: string) => void;
+  onPlayerActivate: (stop: () => void) => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
@@ -61,10 +75,30 @@ const MessageList: React.FC<MessageListProps> = ({
   onSelectionChange,
   onResolveMemoryUpdate,
   hasFreeApiKey,
-  onOpenSettings
+  onOpenSettings,
+  chatTts,
+  ttsAudioContext,
+  ttsOutputNode,
+  onSpeak,
+  onPlayerActivate
 }) => {
   const visibleMessages = messages.slice(-visibleMessagesCount);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // "Grudar no fim": acompanha a mensagem sendo escrita enquanto o usuário estiver
+  // no fim do chat; para de acompanhar se ele rolar para cima e retoma ao voltar.
+  const stickRef = useRef(true);
+  const prevLastIdRef = useRef<string | null>(null);
+  const prevChatRef = useRef<string | null | undefined>(activeChatId);
+
+  const handleLocalScroll = () => {
+    const el = chatWindowRef.current;
+    if (el) {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickRef.current = dist < 100; // dentro de ~100px do fim = "grudado"
+    }
+    onScroll();
+  };
 
   const getGeneratingMessageId = () => {
     if (!isLoading) return null;
@@ -78,11 +112,30 @@ const MessageList: React.FC<MessageListProps> = ({
   const generatingMessageId = getGeneratingMessageId();
 
   useLayoutEffect(() => {
-    // Forçar o scroll para o fundo imediatamente quando as mensagens, o chat ou o estado de carregamento mudarem
-    if (chatWindowRef.current && !isInitialLoading) {
-      chatWindowRef.current.scrollTop = 999999 + chatWindowRef.current.scrollHeight;
+    const el = chatWindowRef.current;
+    if (!el || isInitialLoading) return;
+
+    const lastId = messages.length ? messages[messages.length - 1].id : null;
+    const chatChanged = prevChatRef.current !== activeChatId;
+    // Nova mensagem NO FIM (envio do usuário / início da resposta). Detectamos pelo
+    // id da última mensagem — assim o lazy-load (que adiciona mensagens ANTIGAS no topo)
+    // não é confundido com uma mensagem nova e não puxa a visão para o fim.
+    const appendedAtEnd = lastId !== prevLastIdRef.current;
+    prevChatRef.current = activeChatId;
+    prevLastIdRef.current = lastId;
+
+    if (chatChanged || appendedAtEnd) {
+      // Troca de chat ou mensagem nova → vai para o fim e volta a "grudar".
+      stickRef.current = true;
+      el.scrollTop = el.scrollHeight;
+      return;
     }
-  }, [messages.length, activeChatId, isInitialLoading, isLoading, chatWindowRef]);
+
+    // Conteúdo mudou (streaming da IA): só acompanha se o usuário estiver no fim.
+    if (stickRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, activeChatId, isInitialLoading, chatWindowRef]);
 
   // Enquanto estiver carregando o histórico inicial, não mostramos nada (ou um loader)
   if (isInitialLoading) {
@@ -103,7 +156,7 @@ const MessageList: React.FC<MessageListProps> = ({
   return (
     <section 
       ref={chatWindowRef} 
-      onScroll={onScroll}
+      onScroll={handleLocalScroll}
       className="flex-1 overflow-y-auto py-4 space-y-6 custom-scrollbar chat-container-responsive"
       style={{ 
         paddingLeft: `calc(${margin}% + 1rem)`, 
@@ -218,13 +271,22 @@ const MessageList: React.FC<MessageListProps> = ({
             const isContext = generatingIdx === -1 ? true : originalIdx < generatingIdx;
 
             const isGenerating = msg.id === generatingMessageId;
+            const tts = chatTts[msg.id];
 
             return (
-              <MessageItem 
+              <MessageItem
                 key={msg.id}
                 msg={msg}
                 isLoading={isLoading}
                 isGenerating={isGenerating}
+                ttsStatus={tts?.status}
+                ttsBuffer={tts?.buffer ?? null}
+                ttsFailedRegions={tts?.failedRegions}
+                ttsError={tts?.error}
+                ttsAudioContext={ttsAudioContext}
+                ttsOutputNode={ttsOutputNode}
+                onSpeak={onSpeak}
+                onPlayerActivate={onPlayerActivate}
                 editingMsgId={editingMsgId}
                 editingMsgText={editingMsgText}
                 copiedId={copiedId}

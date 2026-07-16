@@ -20,7 +20,7 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from '
 import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
 import LoginScreen from './components/LoginScreen';
 import ChatRuler from './components/ChatRuler';
-import MessageList from './components/MessageList';
+import MessageList, { type ChatTtsEntry } from './components/MessageList';
 import ChatInput from './components/ChatInput';
 import MessageTimeline from './components/MessageTimeline';
 import SortableChatItem from './components/SortableChatItem';
@@ -227,6 +227,7 @@ import LiveSetupModal from './components/LiveSetupModal';
 import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
 import { GeminiDictationSession } from './services/geminiDictation';
+import { StreamSmoother } from './services/streamSmoother';
 import DictationPanel, { type DictationStatus } from './components/DictationPanel';
 import { audioBufferToWav, concatFloat32 } from './services/audioUtils';
 import SelectionPopup from './components/SelectionPopup';
@@ -258,6 +259,11 @@ let isLoggerInitialized = false;
 // Divide um texto grande em trechos para o ditado, respeitando parágrafos e frases,
 // com um teto de caracteres por trecho (mantém cada turno de áudio curto e evita
 // estourar o limite de output do modelo).
+// Nº de trechos gerados em paralelo (conexões Live API simultâneas). 3 é o limite
+// de sessões concorrentes da Live API para o modelo native-audio; acima disso a
+// API rejeita as conexões extras.
+const DICTATION_CONCURRENCY = 3;
+
 function chunkTextForDictation(text: string, maxLen = 700): string[] {
   const clean = text.replace(/\r\n/g, '\n').trim();
   if (!clean) return [];
@@ -291,6 +297,43 @@ function chunkTextForDictation(text: string, maxLen = 700): string[] {
   }
   flush();
   return chunks;
+}
+
+// Junta os trechos de áudio ordenados num único Float32Array. Entradas `null`
+// (trechos que falharam) viram silêncio, dimensionado proporcionalmente ao texto
+// que faltou; devolve também as regiões falhas em segundos (24kHz) para o player
+// exibir em vermelho e pular. Compartilhado pelo ditado e pelo TTS do chat.
+function assembleDictationAudio(
+  results: (Float32Array | null)[],
+  chunkLens: number[]
+): { merged: Float32Array; failedRegions: { start: number; end: number }[] } {
+  let okSamples = 0, okChars = 0;
+  results.forEach((a, i) => {
+    if (a && a.length > 0) { okSamples += a.length; okChars += (chunkLens[i] || 1); }
+  });
+  const samplesPerChar = okChars > 0 ? okSamples / okChars : Math.round(24000 * 0.09);
+  const MIN_GAP = Math.round(24000 * 0.5); // lacuna mínima de 0,5s (visível no slider)
+
+  const parts: Float32Array[] = [];
+  const gaps: { start: number; end: number }[] = []; // em amostras
+  let cursor = 0;
+  results.forEach((a, i) => {
+    if (a && a.length > 0) {
+      parts.push(a);
+      cursor += a.length;
+    } else {
+      const len = Math.max(MIN_GAP, Math.round(samplesPerChar * (chunkLens[i] || 0)));
+      parts.push(new Float32Array(len)); // silêncio
+      // Junta a lacuna anterior se forem contíguas (trechos falhos seguidos).
+      const last = gaps[gaps.length - 1];
+      if (last && last.end === cursor) last.end = cursor + len;
+      else gaps.push({ start: cursor, end: cursor + len });
+      cursor += len;
+    }
+  });
+
+  const merged = concatFloat32(parts);
+  return { merged, failedRegions: gaps.map((g) => ({ start: g.start / 24000, end: g.end / 24000 })) };
 }
 
 function App() {
@@ -528,7 +571,7 @@ function App() {
   // trocar de personalidade). Consumida na primeira transcrição 'ai' seguinte.
   const aiTurnBoundaryRef = useRef<boolean>(false);
 
-  // ---- Ditado de textos (TTS por chunks, sessão dedicada) ----
+  // ---- Ditado de textos (TTS por chunks, sessões PARALELAS) ----
   const [showDictation, setShowDictation] = useState(false);
   const [dictationText, setDictationText] = useState('');
   const [dictationStatus, setDictationStatus] = useState<DictationStatus>('idle');
@@ -536,13 +579,26 @@ function App() {
   const [dictationError, setDictationError] = useState('');
   const [dictationBuffer, setDictationBuffer] = useState<AudioBuffer | null>(null);
   const [dictationVolume, setDictationVolume] = useState<number>(10);
+  // Voz da narração do ditado, independente da voz do modo LIVE (persistida).
+  const [dictationVoice, setDictationVoice] = useState(
+    () => localStorage.getItem('nemon_dictation_voice') || DEFAULT_LIVE_VOICE
+  );
+  // Regiões (em segundos) de trechos que falharam — marcadas em vermelho e puladas no player.
+  const [dictationFailedRegions, setDictationFailedRegions] = useState<{ start: number; end: number }[]>([]);
   const dictationSessionRef = useRef<GeminiDictationSession | null>(null);
-  const dictationChunksRef = useRef<string[]>([]);
-  const dictationIndexRef = useRef<number>(0);
-  const dictationMasterAudioRef = useRef<Float32Array[]>([]); // trechos já confirmados
-  const dictationCurrentAudioRef = useRef<Float32Array[]>([]); // trecho em andamento
+  const dictationChunksRef = useRef<string[]>([]); // textos dos trechos (p/ dimensionar lacunas)
   const dictationCtxRef = useRef<AudioContext | null>(null);
   const dictationGainRef = useRef<GainNode | null>(null);
+
+  // ---- Falar em voz alta as mensagens do chat (TTS por mensagem) ----
+  // Áudio gerado por id de mensagem; a barra fica salva abaixo da mensagem (como no LIVE).
+  const [chatTts, setChatTts] = useState<Record<string, ChatTtsEntry>>({});
+  const chatTtsRef = useRef<Record<string, ChatTtsEntry>>({}); // espelho p/ manter onSpeak estável
+  const chatTtsSessionRef = useRef<GeminiDictationSession | null>(null); // uma geração por vez
+  const chatTtsActiveIdRef = useRef<string | null>(null);
+  const chatTtsCtxRef = useRef<AudioContext | null>(null);
+  const chatTtsGainRef = useRef<GainNode | null>(null);
+  useEffect(() => { chatTtsRef.current = chatTts; }, [chatTts]);
 
   // Reouvir mensagens da IA: acumula os chunks de áudio do turno em andamento e,
   // ao fim do turno, guarda o AudioBuffer resultante indexado por um id. São
@@ -1284,6 +1340,10 @@ function App() {
       "   - NUNCA atualize uma memória se a nova informação for apenas complementar e puder ser armazenada em um fato separado.\n" +
       "3. Seja conciso e direto ao ponto quando possível.";
 
+    // Suavizador do streaming (efeito máquina de escrever). Declarado fora do try
+    // para o finally poder cancelá-lo em caso de erro/abort.
+    let smoother: StreamSmoother | null = null;
+
     try {
       const startTime = performance.now();
       const currentAiMsgId = replaceId || (Date.now() + 1).toString() + '-ai';
@@ -1378,6 +1438,25 @@ function App() {
       let isGrounded = preSources.length > 0;
       let finalUsage = null;
 
+      // Suavização caractere-a-caractere: o onFrame recebe o texto e o raciocínio
+      // já "revelados" e monta a mensagem com os metadados atuais (fontes, grounding).
+      smoother = new StreamSmoother((revealedText, revealedThoughts) => {
+        const currentDuration = (performance.now() - startTime) / 1000;
+        setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
+          ...c,
+          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? {
+            ...m,
+            text: isAppending ? m.text : revealedText,
+            continuationText: isAppending ? revealedText : undefined,
+            thoughts: isAppending ? (originalThoughts + (originalThoughts ? "\n\n" : "") + revealedThoughts) : revealedThoughts,
+            isGrounded,
+            isSearching,
+            sources: [...allSources],
+            duration: currentDuration
+          } : m)
+        } : c));
+      });
+
       for await (const chunk of stream) {
         if (chunk.text) fullText += chunk.text;
         if (chunk.thoughts && thinkingEnabled) fullThoughts += chunk.thoughts;
@@ -1412,23 +1491,14 @@ function App() {
           streamingText = streamingText.split('<thinking>')[0];
         }
 
-        const currentDuration = (performance.now() - startTime) / 1000;
         const currentCleanText = stripSearchMarkers(parseMemoryTags(streamingText).trim());
 
-        setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
-          ...c,
-          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? {
-            ...m,
-            text: isAppending ? m.text : currentCleanText,
-            continuationText: isAppending ? currentCleanText : undefined,
-            thoughts: isAppending ? (originalThoughts + (originalThoughts ? "\n\n" : "") + streamingThoughts.trim()) : streamingThoughts.trim(),
-            isGrounded,
-            isSearching,
-            sources: [...allSources],
-            duration: currentDuration
-          } : m)
-        } : c));
+        // Alimenta o suavizador; ele revela o texto/raciocínio caractere a caractere.
+        smoother.setTargets(currentCleanText, streamingThoughts.trim());
       }
+
+      // Garante que toda a revelação termine antes de aplicar o texto final.
+      await smoother.finish();
 
       if (finalUsage) {
         setDailyUsage((prev: DailyUsage) => {
@@ -1535,6 +1605,8 @@ function App() {
         });
       }
     } catch (error: unknown) {
+      // Interrompe a suavização e revela o que já havia chegado (abort/erro).
+      smoother?.cancel();
       if (error instanceof Error && error.name === 'AbortError') return;
       const errorMsg: Message = { id: Date.now().toString(), role: 'ai', text: `**[Erro]:** ${error instanceof Error ? error.message : String(error)}` };
       setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, messages: [...c.messages, errorMsg] } : c));
@@ -1658,20 +1730,109 @@ function App() {
     }
   }, []);
 
-  const finalizeDictation = useCallback(() => {
+  const changeDictationVoice = useCallback((voice: string) => {
+    setDictationVoice(voice);
+    localStorage.setItem('nemon_dictation_voice', voice);
+  }, []);
+
+  // Ativa um player e pausa o anterior (só um áudio toca por vez em todo o app).
+  const handlePlayerActivate = useCallback((stop: () => void) => {
+    if (activePlayerStopRef.current) activePlayerStopRef.current();
+    activePlayerStopRef.current = stop;
+  }, []);
+
+  // Falar em voz alta uma mensagem do chat (TTS), reusando a estrutura do ditado.
+  // Alterna: se já existe/está gerando, remove; senão gera e salva a barra abaixo.
+  const speakMessage = useCallback((msgId: string, text: string) => {
+    const existing = chatTtsRef.current[msgId];
+    if (existing) {
+      // Toggle off: cancela geração em andamento e/ou remove a barra existente.
+      if (chatTtsActiveIdRef.current === msgId) {
+        chatTtsSessionRef.current?.stop();
+        chatTtsSessionRef.current = null;
+        chatTtsActiveIdRef.current = null;
+      }
+      setChatTts((prev) => {
+        const next = { ...prev };
+        delete next[msgId];
+        return next;
+      });
+      return;
+    }
+
+    const clean = (text || '').trim();
+    if (!clean) return;
+    const chunks = chunkTextForDictation(clean);
+    if (chunks.length === 0) return;
+
+    // Só uma geração de TTS de chat por vez (respeita o limite de sessões da Live API).
+    chatTtsSessionRef.current?.stop();
+
+    // Contexto de áudio dedicado do TTS do chat (criado sob demanda).
+    if (!chatTtsCtxRef.current) {
+      const ctx = new AudioContext({ sampleRate: 24000 });
+      const gain = ctx.createGain();
+      gain.gain.value = 1;
+      gain.connect(ctx.destination);
+      chatTtsCtxRef.current = ctx;
+      chatTtsGainRef.current = gain;
+    }
+
+    chatTtsActiveIdRef.current = msgId;
+    setChatTts((prev) => ({ ...prev, [msgId]: { status: 'generating' } }));
+
+    const model = LIVE_MODEL_MAP['gemini-2.5-flash-live'];
+    const session = new GeminiDictationSession(
+      chunks,
+      {
+        onProgress: () => {},
+        onComplete: (results) => {
+          if (chatTtsActiveIdRef.current === msgId) {
+            chatTtsSessionRef.current = null;
+            chatTtsActiveIdRef.current = null;
+          }
+          const ctx = chatTtsCtxRef.current;
+          if (!ctx || !results.some((a) => a && a.length > 0)) {
+            setChatTts((prev) => ({ ...prev, [msgId]: { status: 'error', error: 'Não foi possível gerar o áudio.' } }));
+            return;
+          }
+          const { merged, failedRegions } = assembleDictationAudio(results, chunks.map((c) => c.length));
+          const buffer = ctx.createBuffer(1, merged.length, 24000);
+          buffer.copyToChannel(merged as unknown as Float32Array<ArrayBuffer>, 0);
+          setChatTts((prev) => ({ ...prev, [msgId]: { status: 'done', buffer, failedRegions } }));
+        },
+        onError: (msg) => {
+          if (chatTtsActiveIdRef.current === msgId) {
+            chatTtsSessionRef.current = null;
+            chatTtsActiveIdRef.current = null;
+          }
+          setChatTts((prev) => ({ ...prev, [msgId]: { status: 'error', error: msg } }));
+        },
+      },
+      dictationVoice,
+      paidApiKey || defaultApiKey,
+      model,
+      DICTATION_CONCURRENCY
+    );
+    chatTtsSessionRef.current = session;
+    session.start();
+  }, [dictationVoice, paidApiKey, defaultApiKey]);
+
+  // Monta o AudioBuffer final a partir dos trechos ordenados. Entradas `null`
+  // (trechos que falharam) viram lacunas de silêncio, marcadas como regiões
+  // vermelhas para o player exibir e pular durante a reprodução.
+  const buildDictationBuffer = useCallback((results: (Float32Array | null)[]) => {
     cleanupDictationSession();
-    const chunks = dictationMasterAudioRef.current;
-    if (chunks.length === 0) {
+    const chunks = dictationChunksRef.current;
+
+    // Nenhum trecho deu certo → erro (não há o que reproduzir).
+    if (!results.some((a) => a && a.length > 0)) {
       setDictationStatus('error');
       setDictationError('Nenhum áudio foi gerado. Tente novamente.');
       return;
     }
-    const merged = concatFloat32(chunks);
-    if (merged.length === 0) {
-      setDictationStatus('error');
-      setDictationError('Nenhum áudio foi gerado. Tente novamente.');
-      return;
-    }
+
+    const { merged, failedRegions } = assembleDictationAudio(results, chunks.map((c) => c.length));
     // Contexto próprio do ditado (independe do modo conversacional).
     if (!dictationCtxRef.current) {
       const ctx = new AudioContext({ sampleRate: 24000 });
@@ -1684,19 +1845,10 @@ function App() {
     const ctx = dictationCtxRef.current;
     const buffer = ctx.createBuffer(1, merged.length, 24000);
     buffer.copyToChannel(merged as unknown as Float32Array<ArrayBuffer>, 0);
+    setDictationFailedRegions(failedRegions);
     setDictationBuffer(buffer);
     setDictationStatus('done');
   }, [cleanupDictationSession, dictationVolume]);
-
-  const sendCurrentDictationChunk = useCallback(() => {
-    // Descarta áudio parcial (ex.: após reconexão) e envia o trecho atual.
-    dictationCurrentAudioRef.current = [];
-    const idx = dictationIndexRef.current;
-    const chunk = dictationChunksRef.current[idx];
-    if (chunk == null) { finalizeDictation(); return; }
-    setDictationProgress({ current: idx + 1, total: dictationChunksRef.current.length });
-    dictationSessionRef.current?.sendChunk(chunk);
-  }, [finalizeDictation]);
 
   const startDictation = useCallback(() => {
     const chunks = chunkTextForDictation(dictationText);
@@ -1709,46 +1861,41 @@ function App() {
       dictationGainRef.current = null;
     }
     dictationChunksRef.current = chunks;
-    dictationIndexRef.current = 0;
-    dictationMasterAudioRef.current = [];
-    dictationCurrentAudioRef.current = [];
     setDictationBuffer(null);
+    setDictationFailedRegions([]);
     setDictationError('');
     setDictationProgress({ current: 0, total: chunks.length });
     setDictationStatus('connecting');
 
     const model = LIVE_MODEL_MAP['gemini-2.5-flash-live'];
-    const session = new GeminiDictationSession({
-      onReady: () => { setDictationStatus('generating'); sendCurrentDictationChunk(); },
-      onAudio: (chunk) => { dictationCurrentAudioRef.current.push(chunk); },
-      onTurnComplete: () => {
-        // Confirma o áudio do trecho atual e avança (ou finaliza).
-        for (const c of dictationCurrentAudioRef.current) dictationMasterAudioRef.current.push(c);
-        dictationCurrentAudioRef.current = [];
-        dictationIndexRef.current += 1;
-        if (dictationIndexRef.current >= dictationChunksRef.current.length) {
-          finalizeDictation();
-        } else {
-          sendCurrentDictationChunk();
-        }
+    // Cada trecho abre a própria conexão; todos disparam de uma vez (limitados
+    // pelo pool de concorrência). O resultado volta ordenado no onComplete.
+    const session = new GeminiDictationSession(
+      chunks,
+      {
+        onProgress: (done, total) => {
+          setDictationStatus('generating');
+          setDictationProgress({ current: done, total });
+        },
+        onComplete: (results) => buildDictationBuffer(results),
+        onError: (msg) => {
+          setDictationError(msg);
+          setDictationStatus('error');
+          cleanupDictationSession();
+        },
       },
-      onStatusChange: () => {},
-      onError: (msg) => {
-        setDictationError(msg);
-        // Se já há áudio parcial, entrega o que deu; senão marca erro.
-        if (dictationMasterAudioRef.current.length > 0) finalizeDictation();
-        else { setDictationStatus('error'); cleanupDictationSession(); }
-      }
-    }, liveVoiceRef.current, paidApiKey || defaultApiKey, model);
+      dictationVoice,
+      paidApiKey || defaultApiKey,
+      model,
+      DICTATION_CONCURRENCY
+    );
 
     dictationSessionRef.current = session;
     session.start();
-  }, [dictationText, cleanupDictationSession, sendCurrentDictationChunk, finalizeDictation, paidApiKey, defaultApiKey]);
+  }, [dictationText, dictationVoice, cleanupDictationSession, buildDictationBuffer, paidApiKey, defaultApiKey]);
 
   const cancelDictation = useCallback(() => {
     cleanupDictationSession();
-    dictationCurrentAudioRef.current = [];
-    dictationMasterAudioRef.current = [];
     setDictationStatus('idle');
     setDictationProgress({ current: 0, total: 0 });
   }, [cleanupDictationSession]);
@@ -1758,22 +1905,24 @@ function App() {
     activePlayerStopRef.current?.();
     activePlayerStopRef.current = null;
     setDictationBuffer(null);
+    setDictationFailedRegions([]);
     if (dictationCtxRef.current) {
       dictationCtxRef.current.close();
       dictationCtxRef.current = null;
       dictationGainRef.current = null;
     }
-    dictationMasterAudioRef.current = [];
-    dictationCurrentAudioRef.current = [];
     setDictationStatus('idle');
     setDictationProgress({ current: 0, total: 0 });
     setDictationError('');
   }, []);
 
+  // Fechar apenas OCULTA o painel: o áudio, o texto e o estado são preservados
+  // (e a geração continua em segundo plano se estiver em andamento).
   const closeDictation = useCallback(() => {
-    resetDictation();
+    activePlayerStopRef.current?.();
+    activePlayerStopRef.current = null;
     setShowDictation(false);
-  }, [resetDictation]);
+  }, []);
 
   const downloadDictation = useCallback(() => {
     if (!dictationBuffer) return;
@@ -1787,6 +1936,12 @@ function App() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [dictationBuffer]);
+
+  // Prévia: em quantos trechos o texto atual será dividido (mostrada antes de gerar).
+  const dictationChunkCount = useMemo(
+    () => chunkTextForDictation(dictationText).length,
+    [dictationText]
+  );
 
   const handleLiveStart = useCallback(() => {
     if (isLiveActive && isLiveDetached) {
@@ -3148,41 +3303,41 @@ function App() {
             <div className="w-20 sm:w-24 flex justify-start items-center gap-1.5 sm:gap-3" ref={fontSizeRef}>
               {/* Font Size Selector — oculto no modo LIVE em tela cheia (não tem efeito lá) */}
               {!(isLiveActive && !isLiveDetached) && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
-                  className="flex items-center justify-center rounded-full bg-(--bg-chat-active) border border-(--border-light) shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-(--glow-active) hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
-                  title="Tamanho da Fonte"
-                >
-                  <Type className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowFontSizeSelector(!showFontSizeSelector)}
+                    className="flex items-center justify-center rounded-full bg-(--bg-chat-active) border border-(--border-light) shadow-sm transition-all duration-200 hover:scale-105 active:scale-95 hover:border-(--glow-active) hover:shadow-[0_0_15px_var(--glow-primary)] w-9 h-9"
+                    title="Tamanho da Fonte"
+                  >
+                    <Type className="w-4 h-4" style={{ color: 'var(--accent-text)' }} />
+                  </button>
 
-                {showFontSizeSelector && (
-                  <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-(--bg-main) border border-(--border-main) rounded-2xl p-3 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
-                    <div className="text-[9px] font-bold uppercase text-(--text-placeholder) tracking-widest border-b border-(--border-light) pb-1.5">
-                      Fonte do Chat
+                  {showFontSizeSelector && (
+                    <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-(--bg-main) border border-(--border-main) rounded-2xl p-3 min-w-[200px] shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col gap-3">
+                      <div className="text-[9px] font-bold uppercase text-(--text-placeholder) tracking-widest border-b border-(--border-light) pb-1.5">
+                        Fonte do Chat
+                      </div>
+                      <div className="flex justify-between items-center text-xs font-semibold text-(--text-secondary)">
+                        <span>Tamanho</span>
+                        <span className="px-2 py-0.5 rounded-md font-mono" style={{ color: 'var(--accent-text)', background: 'var(--accent-bg)' }}>{chatFontSize}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="12"
+                        max="24"
+                        step="0.5"
+                        value={chatFontSize}
+                        onChange={(e) => setChatFontSize(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-(--border-light) rounded-lg appearance-none cursor-pointer focus:outline-none"
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                      <div className="flex justify-between text-[10px] text-(--text-placeholder) font-medium">
+                        <span>12px</span>
+                        <span>24px</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center text-xs font-semibold text-(--text-secondary)">
-                      <span>Tamanho</span>
-                      <span className="px-2 py-0.5 rounded-md font-mono" style={{ color: 'var(--accent-text)', background: 'var(--accent-bg)' }}>{chatFontSize}px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="12"
-                      max="24"
-                      step="0.5"
-                      value={chatFontSize}
-                      onChange={(e) => setChatFontSize(parseFloat(e.target.value))}
-                      className="w-full h-1.5 bg-(--border-light) rounded-lg appearance-none cursor-pointer focus:outline-none"
-                      style={{ accentColor: 'var(--accent)' }}
-                    />
-                    <div className="flex justify-between text-[10px] text-(--text-placeholder) font-medium">
-                      <span>12px</span>
-                      <span>24px</span>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
               )}
 
               {/* Log Window Trigger - Mobile only */}
@@ -3364,6 +3519,11 @@ function App() {
                       onResolveMemoryUpdate={handleResolveMemoryUpdate}
                       hasFreeApiKey={!!defaultApiKey}
                       onOpenSettings={handleOpenSettings}
+                      chatTts={chatTts}
+                      ttsAudioContext={chatTtsCtxRef.current}
+                      ttsOutputNode={chatTtsGainRef.current}
+                      onSpeak={speakMessage}
+                      onPlayerActivate={handlePlayerActivate}
                     />
 
                     {isLiveActive && isLiveDetached && (
@@ -3537,6 +3697,11 @@ function App() {
         }}
         volume={dictationVolume}
         onVolumeChange={applyDictationVolume}
+        voice={dictationVoice}
+        onVoiceChange={changeDictationVoice}
+        voices={LIVE_VOICES}
+        chunkCount={dictationChunkCount}
+        failedRegions={dictationFailedRegions}
       />
     </div>
   );

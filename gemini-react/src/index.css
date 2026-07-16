@@ -431,6 +431,46 @@ body {
 .response-body pre { background: var(--code-bg); padding: 14px !important; border-radius: 10px; margin: 16px 0 !important; overflow-x: auto; border: 1px solid var(--code-border); box-shadow: 0 4px 20px rgba(0,0,0,0.15); transition: background 0.3s ease, border-color 0.3s ease; }
 .response-body pre code { background: transparent !important; padding: 0 !important; border: none !important; }
 
+/* Bloco de código com botão de copiar "grudento" (sticky) no canto superior direito.
+   O wrapper assume a margem do <pre>; o botão fica fora do <pre> (imune ao overflow-x)
+   e acompanha a rolagem enquanto o bloco estiver visível. */
+.response-body .code-block { position: relative; margin: 16px 0; }
+/* Reserva um espaço no topo do código para o botão não ficar colado/sobre a 1ª linha. */
+.response-body .code-block pre { margin: 0 !important; padding-top: 15px !important; }
+.response-body .code-copy-holder {
+  position: sticky;
+  top: 8px;
+  height: 0;            /* não empurra o código para baixo */
+  z-index: 5;
+  text-align: right;    /* alinha o botão à direita SEM flex (evita colapsar a caixa) */
+  pointer-events: none; /* só o botão captura clique; o resto passa para o código */
+}
+.response-body .code-copy-btn {
+  pointer-events: auto;
+  position: relative;
+  top: 8px;
+  margin-right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: rgba(20, 20, 20, 0.6);
+  border: 1px solid var(--code-border);
+  border-radius: 7px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  opacity: 0.6;
+  transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+.response-body .code-block:hover .code-copy-btn { opacity: 1; }
+.response-body .code-copy-btn:hover { color: var(--text-primary); background: rgba(20, 20, 20, 0.8); }
+.response-body .code-copy-btn.copied { color: #4ade80; opacity: 1; border-color: rgba(74, 222, 128, 0.4); }
+.response-body .code-copy-btn svg { width: 13px; height: 13px; }
+
 .table-wrapper {
   display: block;
   width: 100%;

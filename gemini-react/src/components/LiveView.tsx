@@ -495,8 +495,10 @@ const LiveView: React.FC<LiveViewProps> = ({
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4 relative overflow-hidden animate-in fade-in zoom-in-95 duration-700">
       
-      {/* Live Controls (Floating) */}
-      <div className="absolute top-6 right-6 z-20 flex gap-2">
+      {/* Live Controls (Floating). No mobile, quebram em linhas e ficam limitados à
+          direita (reservando espaço à esquerda p/ o status e o volume, evitando
+          sobreposição); no desktop voltam a uma única linha. */}
+      <div className="absolute top-6 right-6 z-20 flex gap-2 flex-wrap justify-end max-w-[calc(100%-14rem)] sm:max-w-none">
         <div className="relative">
           <button 
             onClick={handleToggleVoiceMenu}
@@ -581,7 +583,7 @@ const LiveView: React.FC<LiveViewProps> = ({
 
       <div className="absolute top-6 left-6 z-20 flex items-center gap-3 bg-(--bg-sidebar)/50 backdrop-blur-md px-3 py-2 rounded-2xl border border-(--border-light)">
         <div className={`w-2.5 h-2.5 rounded-full ${status === 'connected' ? 'bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]' : status === 'error' ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]'}`}></div>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-(--text-primary)">
+        <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-widest text-(--text-primary)">
           {status === 'connected' ? 'Modo LIVE Conectado' : status === 'connecting' ? 'Conectando...' : status === 'error' ? 'LIVE · Erro (ver logs)' : 'LIVE · Desconectado'}
         </span>
       </div>

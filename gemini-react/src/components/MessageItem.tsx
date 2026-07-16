@@ -16,10 +16,13 @@ import {
   Edit2,
   ShieldCheck,
   Clock,
-  Brain
+  Brain,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
+import LiveAudioPlayer from './LiveAudioPlayer';
 interface MessageItemProps {
   msg: Message;
   isLoading: boolean;
@@ -42,6 +45,15 @@ interface MessageItemProps {
   onCancelFactCheck?: (id: string) => void;
   onSelectionChange?: (text: string, pos: { x: number, y: number }, messageId: string) => void;
   onResolveMemoryUpdate?: (messageId: string, updateId: string, action: 'accepted' | 'ignored') => void;
+  // Falar em voz alta (TTS) desta mensagem — botão + player abaixo (como no LIVE).
+  ttsStatus?: 'generating' | 'done' | 'error';
+  ttsBuffer?: AudioBuffer | null;
+  ttsFailedRegions?: { start: number; end: number }[];
+  ttsError?: string;
+  ttsAudioContext?: AudioContext | null;
+  ttsOutputNode?: AudioNode | null;
+  onSpeak?: (id: string, text: string) => void;
+  onPlayerActivate?: (stop: () => void) => void;
 }
 
 const MessageItem: React.FC<MessageItemProps> = React.memo(({
@@ -65,7 +77,15 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   onFactCheck,
   onCancelFactCheck,
   onSelectionChange,
-  onResolveMemoryUpdate
+  onResolveMemoryUpdate,
+  ttsStatus,
+  ttsBuffer,
+  ttsFailedRegions,
+  ttsError,
+  ttsAudioContext,
+  ttsOutputNode,
+  onSpeak,
+  onPlayerActivate
 }) => {
   const [verifySeconds, setVerifySeconds] = React.useState(0);
   const [isTimerHovered, setIsTimerHovered] = React.useState(false);
@@ -121,6 +141,24 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
       if (interval) clearInterval(interval);
     };
   }, [msg.isVerifying]);
+
+  // Cópia dos blocos de código via delegação: o botão é injetado no HTML do
+  // markdown (safeMarkdown), então não há onClick React — capturamos o clique aqui.
+  const handleResponseClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const btn = (e.target as HTMLElement).closest('.code-copy-btn') as HTMLElement | null;
+    if (!btn || btn.classList.contains('copied')) return;
+    const code = btn.closest('.code-block')?.querySelector('pre code') as HTMLElement | null;
+    if (!code) return;
+    navigator.clipboard.writeText(code.textContent || '');
+    const original = btn.innerHTML;
+    btn.classList.add('copied');
+    btn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Copiado!</span>';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = original;
+    }, 2000);
+  };
 
   const handleMouseUp = () => {
     if (!onSelectionChange) return;
@@ -362,8 +400,9 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                <div dangerouslySetInnerHTML={{ __html: parsedHtml }} />
              </div>
           ) : msg.text ? (
-            <div 
+            <div
               onMouseUp={handleMouseUp}
+              onClick={handleResponseClick}
               className="response-body text-(--text-primary) antialiased min-h-[1.5em]"
               dangerouslySetInnerHTML={{ __html: parsedHtml }}
             />
@@ -447,8 +486,9 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           )}
 
           {msg.continuationText ? (
-            <div 
+            <div
               onMouseUp={handleMouseUp}
+              onClick={handleResponseClick}
               className="response-body text-(--text-primary) antialiased min-h-[1.5em] mt-4"
               dangerouslySetInnerHTML={{ __html: parsedContinuationHtml }}
             />
@@ -478,6 +518,30 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             </div>
           )}
 
+          {/* Barra de áudio da narração (TTS): fica salva abaixo da mensagem, como no LIVE. */}
+          {ttsStatus === 'done' && ttsBuffer && ttsAudioContext && ttsOutputNode && onPlayerActivate && (
+            <div className="mt-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <LiveAudioPlayer
+                buffer={ttsBuffer}
+                context={ttsAudioContext}
+                outputNode={ttsOutputNode}
+                onActivate={onPlayerActivate}
+                failedRegions={ttsFailedRegions}
+              />
+            </div>
+          )}
+          {ttsStatus === 'generating' && (
+            <div className="mt-3 flex items-center gap-2 text-[11px] text-(--text-secondary) max-w-md">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-(--accent-text)" />
+              Gerando áudio…
+            </div>
+          )}
+          {ttsStatus === 'error' && (
+            <div className="mt-3 text-[11px] text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5 max-w-md">
+              {ttsError || 'Não foi possível gerar o áudio.'}
+            </div>
+          )}
+
           <div className="flex items-center gap-4 mt-3 opacity-0 group-hover/msg:opacity-100 transition-opacity translate-y-1 group-hover/msg:translate-y-0 duration-300">
              <button onClick={() => onRegenerate(msg.id)} disabled={isLoading} className="text-(--text-placeholder) hover:text-(--text-primary) transition">
                <RotateCcw className={`w-4 h-4 ${isLoading && !msg.text ? 'animate-spin' : ''}`} />
@@ -488,7 +552,26 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
              <button onClick={() => onCopy(`\`\`\`markdown\n${msg.text}\n\`\`\``, msg.id + '-md')} className="text-(--text-placeholder) hover:text-(--text-primary) transition">
                {copiedId === msg.id + '-md' ? <Check className="w-4 h-4 text-green-500" /> : <FileText className="w-4 h-4" />}
              </button>
-             <button 
+             {onSpeak && msg.text && !msg.text.includes('❌ **Erro:**') && (
+               <button
+                 onClick={() => onSpeak(msg.id, msg.text)}
+                 title={
+                   ttsStatus === 'generating' ? 'Gerando áudio… (clique para cancelar)'
+                   : ttsStatus === 'done' ? 'Remover áudio'
+                   : 'Ouvir em voz alta'
+                 }
+                 className={`transition flex items-center ${
+                   ttsStatus === 'done' ? 'text-(--accent-text)' : 'text-(--text-placeholder) hover:text-(--accent-text)'
+                 }`}
+               >
+                 {ttsStatus === 'generating'
+                   ? <Loader2 className="w-4 h-4 animate-spin" />
+                   : ttsStatus === 'done'
+                     ? <VolumeX className="w-4 h-4" />
+                     : <Volume2 className="w-4 h-4" />}
+               </button>
+             )}
+             <button
                 onClick={(e) => {
                   e.stopPropagation();
                   if (msg.isVerifying) {
