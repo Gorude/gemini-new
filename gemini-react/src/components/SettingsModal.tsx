@@ -13,9 +13,15 @@ import {
   AlertCircle,
   Server,
   Type,
-  Gamepad2
+  Gamepad2,
+  Cpu,
+  Trash2,
+  Plus,
+  Star,
+  ChevronDown
 } from 'lucide-react';
-import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS, FONT_OPTIONS } from '../constants';
+import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS, FONT_OPTIONS, CUSTOM_MODEL_PROVIDERS, formatTokenCount, type CustomModel, type CustomModelProvider } from '../constants';
+import { fetchOpenRouterContextLength } from '../services/gemini';
 import NemonIcon from './NemonIcon';
 import PersonalitiesPanel from './PersonalitiesPanel';
 import DnaPanel from './DnaPanel';
@@ -29,6 +35,10 @@ interface SettingsModalProps {
   onSetChatMargin: (margin: number) => void;
   enabledModelIds: string[];
   onSetEnabledModelIds: (ids: string[]) => void;
+  defaultModelId: string;
+  onSetDefaultModelId: (id: string) => void;
+  memoryModelId: string;
+  onSetMemoryModelId: (id: string) => void;
   appFont: string;
   onSetAppFont: (id: string) => void;
   retroMode: boolean;
@@ -37,6 +47,10 @@ interface SettingsModalProps {
   onUpdatePaidApiKey: (key: string) => void;
   defaultApiKey: string;
   onUpdateDefaultApiKey: (key: string) => void;
+  openRouterApiKey: string;
+  onUpdateOpenRouterApiKey: (key: string) => void;
+  customModels: CustomModel[];
+  onSetCustomModels: (models: CustomModel[]) => void;
   localEndpoint: string;
   onUpdateLocalEndpoint: (url: string) => void;
   liveModel: string;
@@ -60,6 +74,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetTheme,
   enabledModelIds,
   onSetEnabledModelIds,
+  defaultModelId,
+  onSetDefaultModelId,
+  memoryModelId,
+  onSetMemoryModelId,
   appFont,
   onSetAppFont,
   retroMode,
@@ -68,6 +86,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdatePaidApiKey,
   defaultApiKey,
   onUpdateDefaultApiKey,
+  openRouterApiKey,
+  onUpdateOpenRouterApiKey,
+  customModels,
+  onSetCustomModels,
   localEndpoint,
   onUpdateLocalEndpoint,
   liveModel,
@@ -91,6 +113,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [tempPaidKey, setTempPaidKey] = useState(paidApiKey);
   const [tempLocalEndpoint, setTempLocalEndpoint] = useState(localEndpoint);
   const [valLocalStatus, setValLocalStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [tempOpenRouterKey, setTempOpenRouterKey] = useState(openRouterApiKey);
+  const [valOpenRouterStatus, setValOpenRouterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  // Rascunho do formulário "adicionar modelo" por provedor: { openrouter: {name,id} }.
+  const [modelDrafts, setModelDrafts] = useState<Record<CustomModelProvider, { name: string; id: string }>>({
+    openrouter: { name: '', id: '' },
+  });
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -107,6 +135,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     setTempPaidKey(paidApiKey);
   }, [paidApiKey]);
+
+  useEffect(() => {
+    setTempOpenRouterKey(openRouterApiKey);
+  }, [openRouterApiKey]);
 
   const validateDefaultKey = async (key: string) => {
     if (!key) {
@@ -154,27 +186,94 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       return;
     }
     setValLocalStatus('loading');
-    // Salva imediatamente para que o usuário possa usar mesmo se o teste falhar (ex.: CORS no preflight).
+    // Salva imediatamente para que o usuário possa usar mesmo se o teste falhar.
     onUpdateLocalEndpoint(url);
     try {
-      const res = await fetch(`${url}/v1/models`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
+      const res = await fetch(`${url}/v1/models`);
       setValLocalStatus(res.ok ? 'success' : 'error');
     } catch {
       setValLocalStatus('error');
     }
   };
 
+  // Salva e testa a chave do OpenRouter. Salva imediatamente (para não bloquear o uso
+  // caso o teste falhe por CORS) e tenta um GET /models só para exibir o status.
+  const validateOpenRouterKey = async (rawKey: string) => {
+    const key = (rawKey || '').trim();
+    onUpdateOpenRouterApiKey(key);
+    if (!key) {
+      setValOpenRouterStatus('idle');
+      return;
+    }
+    setValOpenRouterStatus('loading');
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      setValOpenRouterStatus(res.ok ? 'success' : 'error');
+    } catch {
+      setValOpenRouterStatus('error');
+    }
+  };
+
+  const [addingModel, setAddingModel] = useState<CustomModelProvider | null>(null);
+
+  const addCustomModel = async (provider: CustomModelProvider) => {
+    const draft = modelDrafts[provider];
+    const id = (draft.id || '').trim();
+    if (!id) return;
+    const name = (draft.name || '').trim() || id;
+    // Evita ids duplicados (o id é a chave de roteamento).
+    if (customModels.some(m => m.id === id)) return;
+
+    // Busca a janela de contexto real no OpenRouter (best-effort) para o indicador.
+    setAddingModel(provider);
+    let contextLength: number | undefined;
+    try {
+      if (provider === 'openrouter') {
+        contextLength = await fetchOpenRouterContextLength(id);
+      }
+    } finally {
+      setAddingModel(null);
+    }
+
+    onSetCustomModels([...customModels, { id, name, provider, contextLength }]);
+    // Modelo recém-cadastrado já entra habilitado (aparece no seletor do chat).
+    if (!enabledModelIds.includes(id)) onSetEnabledModelIds([...enabledModelIds, id]);
+    setModelDrafts(prev => ({ ...prev, [provider]: { name: '', id: '' } }));
+  };
+
+  const removeCustomModel = (id: string) => {
+    onSetCustomModels(customModels.filter(m => m.id !== id));
+    // Limpa o id da lista de habilitados e reatribui o padrão se era este.
+    if (enabledModelIds.includes(id)) {
+      onSetEnabledModelIds(enabledModelIds.filter(m => m !== id));
+    }
+    if (defaultModelId === id) {
+      const fallback = enabledModelIds.find(m => m !== id) || MODEL_OPTIONS[0]?.id || id;
+      onSetDefaultModelId(fallback);
+    }
+  };
+
   const toggleModel = (id: string) => {
     if (enabledModelIds.includes(id)) {
-      // Don't allow disabling if it's the last one
+      // Não permite desabilitar o último modelo restante.
       if (enabledModelIds.length > 1) {
-        onSetEnabledModelIds(enabledModelIds.filter(m => m !== id));
+        const next = enabledModelIds.filter(m => m !== id);
+        onSetEnabledModelIds(next);
+        // Se o modelo desabilitado era o padrão, escolhe outro habilitado.
+        if (defaultModelId === id) onSetDefaultModelId(next[0]);
       }
     } else {
       onSetEnabledModelIds([...enabledModelIds, id]);
     }
+  };
+
+  // Define um modelo como padrão (o que abre pré-selecionado num novo chat).
+  // Garante que ele esteja habilitado.
+  const setAsDefault = (id: string) => {
+    if (!enabledModelIds.includes(id)) onSetEnabledModelIds([...enabledModelIds, id]);
+    onSetDefaultModelId(id);
   };
 
   const themes = [
@@ -184,6 +283,55 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     { id: 'galaxia', name: 'Galáxia', color: '#0f172a' },
     { id: 'claude', name: 'Claude', color: '#d97757' }
   ];
+
+  // Linha de modelo na aba "Modelos": estrela (definir padrão) + toggle (ativar/desativar).
+  // Usada tanto pelos modelos internos quanto pelos customizados (OpenRouter).
+  const renderModelRow = (opt: { id: string; name: string; desc: string; hasSearch?: boolean }) => {
+    const enabled = enabledModelIds.includes(opt.id);
+    const isDefault = defaultModelId === opt.id;
+    return (
+      <div
+        key={opt.id}
+        className={`flex items-center justify-between gap-2 p-3 rounded-2xl border transition-all ${enabled ? '' : 'bg-(--bg-main)/30 border-(--border-light) opacity-60 grayscale-[0.5]'}`}
+        style={enabled ? { background: 'var(--accent-bg)', borderColor: 'var(--accent-border)' } : {}}
+      >
+        <div className="flex items-center gap-4 min-w-0">
+          <div className={`p-3 rounded-xl transition-colors ${enabled ? 'text-white' : 'bg-(--bg-chat-hover) text-(--text-placeholder)'}`} style={enabled ? { background: 'var(--accent)' } : {}}>
+            <NemonIcon themed={false} size={20} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-(--text-primary) truncate">{opt.name}</span>
+              {opt.hasSearch && <Globe size={12} className="shrink-0 text-blue-400" />}
+              {isDefault && <span className="shrink-0 text-[9px] font-bold text-white px-1.5 py-0.5 rounded-md" style={{ background: 'var(--accent)' }}>PADRÃO</span>}
+            </div>
+            <p className="text-xs text-(--text-secondary) truncate">{opt.desc}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Estrela: define como modelo padrão (pré-selecionado ao abrir um novo chat) */}
+          <button
+            onClick={() => setAsDefault(opt.id)}
+            title={isDefault ? 'Modelo padrão' : 'Definir como padrão'}
+            aria-label={isDefault ? 'Modelo padrão' : 'Definir como padrão'}
+            className="p-1.5 rounded-lg transition-colors hover:bg-(--bg-chat-hover)"
+            style={{ color: isDefault ? 'var(--accent-text)' : 'var(--text-placeholder)' }}
+          >
+            <Star size={16} fill={isDefault ? 'currentColor' : 'none'} />
+          </button>
+          {/* Toggle: ativa/desativa o modelo no seletor do chat */}
+          <button
+            onClick={() => toggleModel(opt.id)}
+            className={`relative w-12 h-6 rounded-full transition-all duration-300 flex items-center ${enabled ? '' : 'bg-gray-600'}`}
+            style={enabled ? { background: 'var(--accent-hover)' } : {}}
+          >
+            <div className={`absolute w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 ${enabled ? 'left-7' : 'left-1'}`}></div>
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const renderContent = () => (
     <div className={`w-full h-full flex flex-col md:flex-row overflow-hidden ${inline ? 'bg-(--bg-main)' : 'relative w-full max-w-2xl glass-modal rounded-[1rem] shadow-2xl h-[600px] animate-in zoom-in-95 duration-300'}`}>
@@ -345,35 +493,62 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {activeTab === 'modelos' && (
             <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="text-[10px] font-bold uppercase tracking-widest mb-4 px-2" style={{ color: 'var(--accent-text)' }}>Motores de Inteligência Ativos</div>
-              {MODEL_OPTIONS.map(opt => (
-                <div
-                  key={opt.id}
-                  className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${enabledModelIds.includes(opt.id) ? '' : 'bg-(--bg-main)/30 border-(--border-light) opacity-60 grayscale-[0.5]'}`}
-                  style={enabledModelIds.includes(opt.id) ? { background: 'var(--accent-bg)', borderColor: 'var(--accent-border)' } : {}}
-                >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className={`p-3 rounded-xl transition-colors ${enabledModelIds.includes(opt.id) ? 'text-white' : 'bg-(--bg-chat-hover) text-(--text-placeholder)'}`} style={enabledModelIds.includes(opt.id) ? { background: 'var(--accent)' } : {}}>
-                      <NemonIcon themed={false} size={20} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-(--text-primary) truncate">{opt.name}</span>
-                        {opt.hasSearch && <Globe size={12} className="shrink-0 text-blue-400" />}
-                      </div>
-                      <p className="text-xs text-(--text-secondary) truncate">{opt.desc}</p>
-                    </div>
-                  </div>
+              <div className="px-2">
+                <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--accent-text)' }}>Motores de Inteligência Ativos</div>
+                <p className="text-[11px] text-(--text-placeholder) mt-1">Use o interruptor para ativar/desativar cada modelo no chat. A <Star size={11} className="inline align-[-1px]" /> define o modelo padrão, já selecionado ao abrir um novo chat.</p>
+              </div>
 
-                  <button
-                    onClick={() => toggleModel(opt.id)}
-                    className={`relative w-12 h-6 rounded-full transition-all duration-300 flex items-center shrink-0 ${enabledModelIds.includes(opt.id) ? '' : 'bg-gray-600'}`}
-                    style={enabledModelIds.includes(opt.id) ? { background: 'var(--accent-hover)' } : {}}
-                  >
-                    <div className={`absolute w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 ${enabledModelIds.includes(opt.id) ? 'left-7' : 'left-1'}`}></div>
-                  </button>
+              {MODEL_OPTIONS.map(opt => renderModelRow(opt))}
+
+              {/* Modelos customizados por provedor (ex.: OpenRouter) */}
+              {CUSTOM_MODEL_PROVIDERS.map(provider => {
+                const models = customModels.filter(m => m.provider === provider.id);
+                if (models.length === 0) return null;
+                return (
+                  <div key={provider.id} className="space-y-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest pt-3 px-2 text-(--text-placeholder)">{provider.name}</div>
+                    {models.map(m => renderModelRow({ id: m.id, name: m.name, desc: m.id }))}
+                  </div>
+                );
+              })}
+
+              {/* Modelo usado para organizar as memórias (DNA) */}
+              <div className="pt-4 mt-2 border-t border-(--border-light)">
+                <div className="flex items-center gap-2 px-2 mb-2">
+                  <Zap size={14} className="text-emerald-400" />
+                  <h4 className="text-sm font-bold text-(--text-primary)">Organização de memórias (DNA)</h4>
                 </div>
-              ))}
+                <p className="text-[11px] text-(--text-placeholder) px-2 mb-3">
+                  Modelo usado para categorizar e conectar os fatos da memória. Deve saber responder em JSON.
+                </p>
+                <div className="relative px-2">
+                  <select
+                    value={memoryModelId}
+                    onChange={(e) => onSetMemoryModelId(e.target.value)}
+                    className="w-full appearance-none bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 pl-3 pr-9 text-sm text-(--text-primary) outline-none transition-all cursor-pointer"
+                    onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                    onBlur={(e) => e.currentTarget.style.borderColor = ''}
+                  >
+                    <optgroup label="Google AI Studio">
+                      {MODEL_OPTIONS.map(o => (
+                        <option key={o.id} value={o.id}>{o.name}</option>
+                      ))}
+                    </optgroup>
+                    {CUSTOM_MODEL_PROVIDERS.map(provider => {
+                      const models = customModels.filter(m => m.provider === provider.id);
+                      if (models.length === 0) return null;
+                      return (
+                        <optgroup key={provider.id} label={provider.name}>
+                          {models.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                  <ChevronDown size={16} className="absolute right-5 top-1/2 -translate-y-1/2 text-(--text-placeholder) pointer-events-none" />
+                </div>
+              </div>
             </div>
           )}
 
@@ -468,12 +643,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   <div className="h-px bg-(--border-light) opacity-35"></div>
 
-                  {/* Endpoint do Modelo Local (llama.cpp + ngrok) */}
+                  {/* Endpoint do Modelo Local (llama.cpp) */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <label className="flex items-center gap-2 text-[10px] font-bold text-(--text-secondary) uppercase tracking-widest">
                         <Server className="w-3.5 h-3.5" style={{ color: 'var(--accent-text)' }} />
-                        Modelo Local (llama.cpp via ngrok)
+                        Modelo Local (llama.cpp)
                       </label>
                       <div className="flex items-center gap-2">
                         {valLocalStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
@@ -488,7 +663,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         spellCheck={false}
                         autoCapitalize="off"
                         autoCorrect="off"
-                        placeholder="https://seu-tunel.ngrok-free.app"
+                        placeholder="http://localhost:8080"
                         className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 px-3 text-sm text-(--text-primary) outline-none transition-all pr-24"
                         onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
                         onBlur={(e) => e.currentTarget.style.borderColor = ''}
@@ -507,11 +682,139 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     </div>
                     <p className="text-[10px] text-(--text-placeholder) mt-2">
-                      Cole a URL pública do ngrok que aponta para o servidor do llama.cpp (<code>llama-server</code>). O app usará o endpoint compatível com OpenAI <code>/v1/chat/completions</code>. Depois é só escolher "Modelo Local" no seletor de modelos do chat.
+                      URL do servidor do llama.cpp (<code>llama-server</code>). O padrão é <code>http://localhost:8080</code>. O app usará o endpoint compatível com OpenAI <code>/v1/chat/completions</code>. Depois é só escolher "Modelo Local" no seletor de modelos do chat.
                     </p>
                   </div>
 
                   <div className="h-px bg-(--border-light) opacity-35"></div>
+
+                  {/* Provedor externo compatível com OpenAI: OpenRouter.
+                      Chave de API + modelos customizados (por id) que aparecem no seletor do chat. */}
+                  {([
+                    { id: 'openrouter' as CustomModelProvider, temp: tempOpenRouterKey, setTemp: setTempOpenRouterKey, status: valOpenRouterStatus, onSave: validateOpenRouterKey, placeholder: 'sk-or-v1-...' },
+                  ]).map(p => {
+                    const meta = CUSTOM_MODEL_PROVIDERS.find(m => m.id === p.id)!;
+                    const models = customModels.filter(m => m.provider === p.id);
+                    const draft = modelDrafts[p.id];
+                    return (
+                      <React.Fragment key={p.id}>
+                        {/* Chave de API do provedor */}
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <label className="flex items-center gap-2 text-[10px] font-bold text-(--text-secondary) uppercase tracking-widest">
+                              <Cpu className="w-3.5 h-3.5" style={{ color: 'var(--accent-text)' }} />
+                              {meta.name} — Chave de API
+                            </label>
+                            <div className="flex items-center gap-2">
+                              {p.status === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
+                              {p.status === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> ATIVA</div>}
+                              {p.status === 'error' && <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> ERRO</div>}
+                              {p.status === 'idle' && <div className="flex items-center gap-1 text-[10px] text-(--text-placeholder) font-bold bg-(--bg-sidebar) px-2 py-0.5 rounded-md">Opcional</div>}
+                            </div>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              spellCheck={false}
+                              autoCapitalize="off"
+                              autoCorrect="off"
+                              placeholder={`Cole sua chave do ${meta.name} (${p.placeholder})`}
+                              className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 px-3 text-sm text-(--text-primary) outline-none transition-all pr-24"
+                              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                              onBlur={(e) => e.currentTarget.style.borderColor = ''}
+                              value={p.temp}
+                              onChange={(e) => p.setTemp(e.target.value)}
+                            />
+                            <button
+                              onClick={() => p.onSave(p.temp)}
+                              disabled={p.status === 'loading'}
+                              className="absolute right-2 top-2 bottom-2 px-3 disabled:bg-gray-600 text-white text-[10px] font-bold rounded-lg transition-all cursor-pointer"
+                              style={{ background: 'var(--accent)' }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-hover)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--accent)'}
+                            >
+                              SALVAR
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-(--text-placeholder) mt-2">
+                            Chave usada para os modelos do {meta.name} no chat (API compatível com OpenAI). Gere a sua em <code>{meta.keysUrl}</code>.
+                          </p>
+                        </div>
+
+                        {/* Modelos customizados deste provedor */}
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-bold text-(--text-secondary) uppercase tracking-widest block">Modelos {meta.name} no chat</label>
+
+                          {models.length > 0 ? (
+                            <div className="space-y-2">
+                              {models.map(m => (
+                                <div key={m.id} className="flex items-center justify-between gap-3 bg-(--bg-sidebar) border border-(--border-light) rounded-xl px-3 py-2">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-(--text-primary) truncate">{m.name}</span>
+                                      {m.contextLength && (
+                                        <span className="shrink-0 text-[9px] font-bold text-(--text-placeholder) bg-(--bg-main) border border-(--border-light) px-1.5 py-0.5 rounded-md">{formatTokenCount(m.contextLength)} ctx</span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] text-(--text-placeholder) truncate font-mono">{m.id}</div>
+                                  </div>
+                                  <button
+                                    onClick={() => removeCustomModel(m.id)}
+                                    className="shrink-0 p-1.5 rounded-lg text-(--text-placeholder) hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                                    title="Remover modelo"
+                                    aria-label="Remover modelo"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-(--text-placeholder)">Nenhum modelo cadastrado. Adicione um id de modelo abaixo para que ele apareça no seletor do chat.</p>
+                          )}
+
+                          {/* Formulário de adição */}
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="text"
+                              spellCheck={false}
+                              placeholder="Nome (ex.: DeepSeek R1)"
+                              className="flex-1 min-w-0 bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-2.5 px-3 text-sm text-(--text-primary) outline-none transition-all"
+                              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                              onBlur={(e) => e.currentTarget.style.borderColor = ''}
+                              value={draft.name}
+                              onChange={(e) => setModelDrafts(prev => ({ ...prev, [p.id]: { ...prev[p.id], name: e.target.value } }))}
+                            />
+                            <input
+                              type="text"
+                              spellCheck={false}
+                              autoCapitalize="off"
+                              autoCorrect="off"
+                              placeholder={`Id do modelo (ex.: ${meta.example})`}
+                              className="flex-1 min-w-0 bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-2.5 px-3 text-sm text-(--text-primary) outline-none transition-all font-mono"
+                              onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                              onBlur={(e) => e.currentTarget.style.borderColor = ''}
+                              value={draft.id}
+                              onChange={(e) => setModelDrafts(prev => ({ ...prev, [p.id]: { ...prev[p.id], id: e.target.value } }))}
+                              onKeyDown={(e) => { if (e.key === 'Enter') addCustomModel(p.id); }}
+                            />
+                            <button
+                              onClick={() => addCustomModel(p.id)}
+                              disabled={!draft.id.trim() || addingModel === p.id}
+                              className="shrink-0 flex items-center justify-center gap-1.5 px-3 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                              style={{ background: 'var(--accent)' }}
+                              onMouseEnter={(e) => { if (draft.id.trim()) e.currentTarget.style.background = 'var(--accent-hover)'; }}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--accent)'}
+                            >
+                              {addingModel === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Adicionar
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="h-px bg-(--border-light) opacity-35"></div>
+                      </React.Fragment>
+                    );
+                  })}
 
                   {/* Seção de Modelos LIVE */}
                   <div className="space-y-4">

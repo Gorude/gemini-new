@@ -58,6 +58,10 @@ import {
   extractAndParseJson,
   setGlobalPaidApiKey,
   setGlobalDefaultApiKey,
+  setGlobalOpenRouterApiKey,
+  setGlobalCustomModels,
+  resolveProvider,
+  fetchOpenRouterContextLength,
   listLiveModels,
   setGlobalLocalEndpoint,
   performWebSearch,
@@ -242,8 +246,15 @@ import {
   DEFAULT_FONT_ID,
   LIVE_VOICES,
   LIVE_VOICE_IDS,
-  DEFAULT_LIVE_VOICE
+  DEFAULT_LIVE_VOICE,
+  DEFAULT_LOCAL_ENDPOINT,
+  MODEL_OPTIONS,
+  estimateTokens,
+  type CustomModel
 } from './constants';
+
+// Modelo inicial padrão de fábrica (quando nada foi configurado pelo usuário).
+const FALLBACK_MODEL = 'gemma-4-31b-it';
 
 const getPacificDate = () => {
   return new Intl.DateTimeFormat('en-CA', {
@@ -344,7 +355,11 @@ function App() {
   const [memoryFacts, setMemoryFacts] = useState<MemoryFact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
-  const [model, setModel] = useState('gemma-4-31b-it');
+  // Modelo padrão do usuário: fica pré-selecionado ao abrir um novo chat.
+  const [defaultModelId, setDefaultModelId] = useState(() => localStorage.getItem('nemon_default_model') || FALLBACK_MODEL);
+  const [model, setModel] = useState(() => localStorage.getItem('nemon_default_model') || FALLBACK_MODEL);
+  // Modelo usado para organizar/categorizar as memórias (DNA). Configurável na aba "Modelos".
+  const [memoryModelId, setMemoryModelId] = useState(() => localStorage.getItem('nemon_memory_model') || FALLBACK_MODEL);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [imageGenEnabled, setImageGenEnabled] = useState(false);
@@ -431,7 +446,20 @@ function App() {
   const [proactiveIdleCount, setProactiveIdleCount] = useState(0); // 0: Idle, 1: Probed, 2: Retried (Stopped)
   const [paidApiKey, setPaidApiKey] = useState('');
   const [defaultApiKey, setDefaultApiKey] = useState('');
-  const [localEndpoint, setLocalEndpoint] = useState(() => localStorage.getItem('nemon_local_endpoint') || '');
+  const [openRouterApiKey, setOpenRouterApiKey] = useState('');
+  const [localEndpoint, setLocalEndpoint] = useState(() => localStorage.getItem('nemon_local_endpoint') || DEFAULT_LOCAL_ENDPOINT);
+  // Modelos de chat customizados (OpenRouter) cadastrados pelo usuário.
+  // Persistidos localmente e no Firestore (settings.customModels).
+  const [customModels, setCustomModels] = useState<CustomModel[]>(() => {
+    const saved = localStorage.getItem('nemon_custom_models');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch { /* ignore */ }
+    }
+    return [];
+  });
   const [liveModel, setLiveModel] = useState(() => {
     const saved = localStorage.getItem('nemon_live_model');
     // Migra a chave antiga (gemini-3.1-flash-live) para o rótulo atual (gemini-3-flash-live).
@@ -521,7 +549,7 @@ function App() {
     return unsubscribe;
   }, []);
 
-  const saveConfig = useCallback((config: { paidApiKey?: string; defaultApiKey?: string }) => {
+  const saveConfig = useCallback((config: { paidApiKey?: string; defaultApiKey?: string; openRouterApiKey?: string }) => {
     if (config.paidApiKey !== undefined) {
       setPaidApiKey(config.paidApiKey);
       setGlobalPaidApiKey(config.paidApiKey);
@@ -530,14 +558,54 @@ function App() {
       setDefaultApiKey(config.defaultApiKey);
       setGlobalDefaultApiKey(config.defaultApiKey);
     }
+    if (config.openRouterApiKey !== undefined) {
+      setOpenRouterApiKey(config.openRouterApiKey);
+      setGlobalOpenRouterApiKey(config.openRouterApiKey);
+    }
     if (auth.currentUser) {
       const userDocRef = doc(db, 'users', auth.currentUser.uid);
       updateDoc(userDocRef, config).catch(err => console.error("Erro ao salvar configuração:", err));
     }
   }, []);
 
-  // Mantém o endpoint do modelo local (llama.cpp via ngrok) sincronizado com o serviço e o localStorage.
-  // É guardado localmente (não no Firestore) por ser específico do dispositivo/sessão de ngrok.
+  // Mantém os modelos customizados sincronizados com o serviço (para resolver o
+  // provedor a partir do id do modelo) e com o localStorage.
+  useEffect(() => {
+    setGlobalCustomModels(customModels);
+    localStorage.setItem('nemon_custom_models', JSON.stringify(customModels));
+  }, [customModels]);
+
+  // Persiste alterações nos modelos customizados também no Firestore do usuário.
+  const saveCustomModels = useCallback((models: CustomModel[]) => {
+    setCustomModels(models);
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { customModels: models }).catch(err => console.error("Erro ao salvar modelos customizados:", err));
+    }
+  }, []);
+
+  // Backfill: modelos OpenRouter cadastrados antes do recurso de janela de contexto
+  // não têm `contextLength`. Busca o valor real no OpenRouter uma vez e salva, para
+  // o indicador de contexto deixar de mostrar o fallback (128k) nesses modelos.
+  useEffect(() => {
+    if (!openRouterApiKey) return;
+    const missing = customModels.filter(m => m.provider === 'openrouter' && !m.contextLength);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const resolved = await Promise.all(
+        missing.map(async m => ({ id: m.id, ctx: await fetchOpenRouterContextLength(m.id) }))
+      );
+      if (cancelled) return;
+      const ctxById = new Map(resolved.filter(r => r.ctx).map(r => [r.id, r.ctx as number]));
+      if (ctxById.size === 0) return; // nada resolvido: não re-dispara (customModels inalterado)
+      saveCustomModels(customModels.map(m => ctxById.has(m.id) ? { ...m, contextLength: ctxById.get(m.id) } : m));
+    })();
+    return () => { cancelled = true; };
+  }, [customModels, openRouterApiKey, saveCustomModels]);
+
+  // Mantém o endpoint do modelo local (llama.cpp) sincronizado com o serviço e o localStorage.
+  // É guardado localmente (não no Firestore) por ser específico do dispositivo.
   useEffect(() => {
     setGlobalLocalEndpoint(localEndpoint);
     localStorage.setItem('nemon_local_endpoint', localEndpoint);
@@ -643,6 +711,28 @@ function App() {
   useEffect(() => {
     localStorage.setItem('nemon_enabled_models', JSON.stringify(enabledModelIds));
   }, [enabledModelIds]);
+
+  useEffect(() => {
+    localStorage.setItem('nemon_default_model', defaultModelId);
+  }, [defaultModelId]);
+
+  useEffect(() => {
+    localStorage.setItem('nemon_memory_model', memoryModelId);
+  }, [memoryModelId]);
+
+  // Resolve o modelo com que um novo chat deve abrir: o padrão do usuário se ele
+  // ainda existir (interno ou customizado); senão, cai no modelo de fábrica.
+  const resolveStartModel = useCallback(() => {
+    const exists = MODEL_OPTIONS.some(o => o.id === defaultModelId)
+      || customModels.some(m => m.id === defaultModelId);
+    return exists ? defaultModelId : FALLBACK_MODEL;
+  }, [defaultModelId, customModels]);
+
+  // Ao abrir um novo chat (sem chat ativo), pré-seleciona o modelo padrão. Não
+  // dispara ao entrar num chat existente nem após o 1º envio (activeChatId != '').
+  useEffect(() => {
+    if (activeChatId === '') setModel(resolveStartModel());
+  }, [activeChatId, resolveStartModel]);
 
   useEffect(() => {
     localStorage.setItem('nemon_sidebar_open', isSidebarOpen.toString());
@@ -853,8 +943,8 @@ function App() {
         LISTA DE FATOS DESTE LOTE (ID e Texto):\n${JSON.stringify(chunk.map(f => ({ id: f.id, t: f.text })))}`;
 
         try {
-          // Native JSON mode forced
-          const res = await generateGeminiContent(prompt, 'gemma-4-31b-it', [], "Você é um organizador de dados JSON.", [], false, false, true);
+          // Modelo configurável (aba "Modelos"); JSON mode forçado.
+          const res = await generateGeminiContent(prompt, memoryModelId, [], "Você é um organizador de dados JSON.", [], false, false, true);
           const mapping = extractAndParseJson(res.text);
 
           if (mapping && typeof mapping === 'object' && !Array.isArray(mapping)) {
@@ -891,7 +981,7 @@ function App() {
       setIsCategorizing(false);
       setCategorizationProgress({ current: 0, total: 0 });
     }
-  }, [memoryFacts, saveMemoryFactsToFirestore]);
+  }, [memoryFacts, saveMemoryFactsToFirestore, memoryModelId]);
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = useMemo(() => activeChat?.messages || [], [activeChat]);
@@ -965,6 +1055,8 @@ function App() {
           let dbDailyUsage: DailyUsage = { date: getPacificDate(), models: {} };
           let dbPaidApiKey = '';
           let dbDefaultApiKey = '';
+          let dbOpenRouterApiKey = '';
+          let dbCustomModels: CustomModel[] = [];
           let dbSidebarOrder: string[] = [];
 
           if (userDocSnap.exists()) {
@@ -976,6 +1068,8 @@ function App() {
             }
             dbPaidApiKey = data.paidApiKey || '';
             dbDefaultApiKey = data.defaultApiKey || '';
+            dbOpenRouterApiKey = data.openRouterApiKey || '';
+            dbCustomModels = Array.isArray(data.customModels) ? data.customModels : [];
             dbSidebarOrder = data.sidebarOrder || [];
 
             // Sync settings to states
@@ -992,6 +1086,12 @@ function App() {
               if (data.settings.retroMode !== undefined) setRetroMode(data.settings.retroMode);
               if (data.settings.isOrderLocked !== undefined) setIsOrderLocked(data.settings.isOrderLocked);
               if (data.settings.enabledModelIds) setEnabledModelIds(data.settings.enabledModelIds);
+              if (data.settings.defaultModelId) {
+                setDefaultModelId(data.settings.defaultModelId);
+                // Na carga inicial, o novo chat abre com o modelo padrão do usuário.
+                setModel(data.settings.defaultModelId);
+              }
+              if (data.settings.memoryModelId) setMemoryModelId(data.settings.memoryModelId);
               if (data.settings.isLiveProactive !== undefined) setIsLiveProactive(data.settings.isLiveProactive);
               if (data.settings.liveVoice) setLiveVoice(data.settings.liveVoice);
               if (data.settings.liveModel) setLiveModel(data.settings.liveModel);
@@ -1006,6 +1106,8 @@ function App() {
               dailyUsage: { date: getPacificDate(), models: {} },
               paidApiKey: '',
               defaultApiKey: '',
+              openRouterApiKey: '',
+              customModels: [],
               sidebarOrder: [],
               settings: {
                 theme,
@@ -1015,6 +1117,8 @@ function App() {
                 appFont,
                 isOrderLocked,
                 enabledModelIds,
+                defaultModelId,
+                memoryModelId,
                 isLiveProactive,
                 liveVoice,
                 liveModel
@@ -1030,6 +1134,10 @@ function App() {
           setGlobalPaidApiKey(dbPaidApiKey);
           setDefaultApiKey(dbDefaultApiKey);
           setGlobalDefaultApiKey(dbDefaultApiKey);
+          setOpenRouterApiKey(dbOpenRouterApiKey);
+          setGlobalOpenRouterApiKey(dbOpenRouterApiKey);
+          setCustomModels(dbCustomModels);
+          setGlobalCustomModels(dbCustomModels);
 
           // Load all chats
           const chatsColRef = collection(db, 'users', uid, 'chats');
@@ -1071,6 +1179,11 @@ function App() {
         setPaidApiKey('');
         setGlobalPaidApiKey('');
         setDefaultApiKey('');
+        setGlobalDefaultApiKey('');
+        setOpenRouterApiKey('');
+        setGlobalOpenRouterApiKey('');
+        setCustomModels([]);
+        setGlobalCustomModels([]);
       }
       setIsAuthLoading(false);
     });
@@ -1147,6 +1260,8 @@ function App() {
           appFont,
           isOrderLocked,
           enabledModelIds,
+          defaultModelId,
+          memoryModelId,
           isLiveProactive,
           liveVoice,
           liveModel,
@@ -1154,7 +1269,7 @@ function App() {
         }
       }).catch(e => console.error("Erro ao salvar configurações no Firestore:", e));
     }
-  }, [theme, chatMargin, selectedPersonalityId, livePersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, isLiveProactive, liveVoice, liveModel, retroMode, isAuthLoading, isInitialLoading]);
+  }, [theme, chatMargin, selectedPersonalityId, livePersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, defaultModelId, memoryModelId, isLiveProactive, liveVoice, liveModel, retroMode, isAuthLoading, isInitialLoading]);
 
   useEffect(() => {
     localStorage.setItem('nemon_sidebar_locked', JSON.stringify(isOrderLocked));
@@ -1402,11 +1517,14 @@ function App() {
       // Delegação de busca: se a busca está ligada e o modelo atual NÃO é o buscador
       // (Gemma 4 31B, o único que faz google_search de forma confiável), o 31B pesquisa
       // e injetamos o resumo + fontes no contexto do modelo escolhido.
+      // EXCEÇÃO: modelos OpenRouter usam a busca web NATIVA do próprio OpenRouter
+      // (plugin `web`), então não delegamos — passamos webSearch adiante.
       const SEARCH_MODEL = 'gemma-4-31b-it';
+      const isOpenRouterModel = resolveProvider(model) === 'openrouter';
       let effectiveWebSearch = webSearchEnabled;
       let effectiveSystemInstruction = systemInstruction;
       const preSources: { title: string; uri: string }[] = [];
-      if (webSearchEnabled && model !== SEARCH_MODEL) {
+      if (webSearchEnabled && model !== SEARCH_MODEL && !isOpenRouterModel) {
         let searchFound = false;
         try {
           const searchRes = await performWebSearch(userText, controller.signal);
@@ -1521,6 +1639,15 @@ function App() {
           localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(newState));
           return newState;
         });
+
+        // Base precisa do indicador de contexto: o total de tokens do último turno
+        // (prompt + resposta) equivale ao "peso" atual da conversa enviado ao modelo.
+        const turnTotal = finalUsage.totalTokenCount
+          || ((finalUsage.promptTokenCount || 0) + (finalUsage.candidatesTokenCount || 0));
+        if (turnTotal) {
+          setChats((prev: ChatSession[]) => prev.map((c: ChatSession) =>
+            c.id === targetChatId ? { ...c, contextTokens: turnTotal } : c));
+        }
       }
 
       // 1. Limpeza e extração final
@@ -3382,6 +3509,10 @@ function App() {
               }}
               enabledModelIds={enabledModelIds}
               onSetEnabledModelIds={setEnabledModelIds}
+              defaultModelId={defaultModelId}
+              onSetDefaultModelId={setDefaultModelId}
+              memoryModelId={memoryModelId}
+              onSetMemoryModelId={setMemoryModelId}
               appFont={appFont}
               onSetAppFont={setAppFont}
               retroMode={retroMode}
@@ -3394,6 +3525,12 @@ function App() {
               onUpdateDefaultApiKey={(key) => {
                 saveConfig({ defaultApiKey: key });
               }}
+              openRouterApiKey={openRouterApiKey}
+              onUpdateOpenRouterApiKey={(key) => {
+                saveConfig({ openRouterApiKey: key });
+              }}
+              customModels={customModels}
+              onSetCustomModels={saveCustomModels}
               localEndpoint={localEndpoint}
               onUpdateLocalEndpoint={setLocalEndpoint}
               liveModel={liveModel}
@@ -3617,6 +3754,15 @@ function App() {
                 onScrollToBottom={() => scrollToBottom(true, true)}
                 onStop={handleStopGeneration}
                 enabledModelIds={enabledModelIds}
+                customModels={customModels}
+                contextTokens={(() => {
+                  const c = chats.find(ch => ch.id === activeChatId);
+                  if (!c) return 0;
+                  // Base exata (da API) quando disponível; senão, estimativa do histórico
+                  // (chats antigos, anteriores à captura de uso, não ficam zerados).
+                  if (c.contextTokens) return c.contextTokens;
+                  return estimateTokens(c.messages.map(m => `${m.text || ''}\n${m.thoughts || ''}`).join('\n'));
+                })()}
               />
             </>
           )}

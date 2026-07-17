@@ -1,9 +1,9 @@
-import { marked } from 'marked';
-import markedKatex from 'marked-katex-extension';
-import { logger } from './logger';
-import hljs from 'highlight.js';
-import 'highlight.js/styles/github-dark.min.css';
-import 'katex/dist/katex.min.css';
+import { marked } from "marked";
+import markedKatex from "marked-katex-extension";
+import { logger } from "./logger";
+import hljs from "highlight.js";
+import "highlight.js/styles/github-dark.min.css";
+import "katex/dist/katex.min.css";
 
 const renderer = new marked.Renderer();
 
@@ -13,18 +13,18 @@ const COPY_ICON_SVG =
 
 // Custom code renderer supporting both positional and token object formats for Marked compatibility
 renderer.code = (codeOrToken: any, langOrUndefined?: any) => {
-  let text = '';
-  let lang = 'plaintext';
+  let text = "";
+  let lang = "plaintext";
 
-  if (codeOrToken && typeof codeOrToken === 'object') {
-    text = codeOrToken.text || '';
-    lang = codeOrToken.lang || 'plaintext';
+  if (codeOrToken && typeof codeOrToken === "object") {
+    text = codeOrToken.text || "";
+    lang = codeOrToken.lang || "plaintext";
   } else {
-    text = codeOrToken || '';
-    lang = langOrUndefined || 'plaintext';
+    text = codeOrToken || "";
+    lang = langOrUndefined || "plaintext";
   }
 
-  const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+  const language = hljs.getLanguage(lang) ? lang : "plaintext";
   const highlighted = hljs.highlight(text, { language }).value;
   // Envolvemos o <pre> num wrapper com um botão de copiar "grudento" (sticky):
   // ele fica no canto superior direito e acompanha a rolagem enquanto o bloco
@@ -38,33 +38,37 @@ renderer.code = (codeOrToken: any, langOrUndefined?: any) => {
 marked.use({
   renderer: renderer,
   breaks: false,
-  gfm: true
+  gfm: true,
 });
 
 // Adicionar suporte nativo à matemática
-marked.use(markedKatex({
-  throwOnError: false,
-  output: 'html',
-  nonStandard: true
-}));
+marked.use(
+  markedKatex({
+    throwOnError: false,
+    output: "html",
+    nonStandard: true,
+  }),
+);
 
 function escapeInnerQuotes(jsonStr: string): string {
-  let result = '';
+  let result = "";
   let inString = false;
   let isKey = false; // whether we are currently in a key string
-  let lastStructuralChar = '';
-  
+  let lastStructuralChar = "";
+
   for (let i = 0; i < jsonStr.length; i++) {
     const char = jsonStr[i];
-    
+
     if (!inString) {
       if (char === '"') {
         // Entering a string!
         // It is structural if the last structural char was '{', '[', ',', or ':'
-        const isStructuralStart = ['{', '[', ',', ':'].includes(lastStructuralChar) || lastStructuralChar === '';
+        const isStructuralStart =
+          ["{", "[", ",", ":"].includes(lastStructuralChar) ||
+          lastStructuralChar === "";
         if (isStructuralStart) {
           inString = true;
-          isKey = (lastStructuralChar === '{' || lastStructuralChar === ',');
+          isKey = lastStructuralChar === "{" || lastStructuralChar === ",";
           result += '"';
         } else {
           // If it's a quote outside a string but not in structural position, escape it
@@ -72,30 +76,30 @@ function escapeInnerQuotes(jsonStr: string): string {
         }
       } else {
         result += char;
-        if (['{', '}', '[', ']', ':', ','].includes(char)) {
+        if (["{", "}", "[", "]", ":", ","].includes(char)) {
           lastStructuralChar = char;
         }
       }
     } else {
       // Inside a string
-      if (char === '\\') {
+      if (char === "\\") {
         // If the next character is a double quote, we check if it is the structural closing quote.
         // This is key for model-generated responses that incorrectly escape closing quotes (e.g. \" at the end of a value).
         if (jsonStr[i + 1] === '"') {
           const rest = jsonStr.slice(i + 2);
           let isStructuralClose = false;
-          
+
           if (isKey) {
             isStructuralClose = /^\s*:/.test(rest);
           } else {
             if (/^\s*\}/.test(rest) || /^\s*\]/.test(rest)) {
               isStructuralClose = true;
             } else if (/^\s*,/.test(rest)) {
-              const afterComma = rest.replace(/^\s*,/, '');
+              const afterComma = rest.replace(/^\s*,/, "");
               isStructuralClose = /^\s*["}\]0-9tfn{[]/.test(afterComma);
             }
           }
-          
+
           if (isStructuralClose) {
             inString = false;
             result += '"'; // Output unescaped structural closing quote
@@ -105,14 +109,14 @@ function escapeInnerQuotes(jsonStr: string): string {
           i++; // Skip the quote character
         } else {
           // Copy backslash and next character as-is
-          result += '\\' + (jsonStr[i + 1] || '');
+          result += "\\" + (jsonStr[i + 1] || "");
           i++;
         }
       } else if (char === '"') {
         // We see a quote. Is it the structural closing quote?
         const rest = jsonStr.slice(i + 1);
         let isStructuralClose = false;
-        
+
         if (isKey) {
           // A key's closing quote must be followed by ':'
           isStructuralClose = /^\s*:/.test(rest);
@@ -122,11 +126,11 @@ function escapeInnerQuotes(jsonStr: string): string {
             isStructuralClose = true;
           } else if (/^\s*,/.test(rest)) {
             // Verify it's a valid structural comma (followed by key start, value start, or end of container)
-            const afterComma = rest.replace(/^\s*,/, '');
+            const afterComma = rest.replace(/^\s*,/, "");
             isStructuralClose = /^\s*["}\]0-9tfn{[]/.test(afterComma);
           }
         }
-        
+
         if (isStructuralClose) {
           inString = false;
           result += '"';
@@ -139,25 +143,25 @@ function escapeInnerQuotes(jsonStr: string): string {
       }
     }
   }
-  
+
   return result;
 }
 
 export function extractAndParseJson(text: string): any {
   if (!text) return null;
-  
+
   let cleaned = text.trim();
-  
+
   // 1. Remove markdown code blocks if present
   if (cleaned.includes("```")) {
     cleaned = cleaned.replace(/```json|```/g, "").trim();
   }
 
   // 2. Find the first [ or { and the last ] or }
-  const firstBrace = cleaned.indexOf('{');
-  const firstBracket = cleaned.indexOf('[');
-  const lastBrace = cleaned.lastIndexOf('}');
-  const lastBracket = cleaned.lastIndexOf(']');
+  const firstBrace = cleaned.indexOf("{");
+  const firstBracket = cleaned.indexOf("[");
+  const lastBrace = cleaned.lastIndexOf("}");
+  const lastBracket = cleaned.lastIndexOf("]");
 
   let start = -1;
   let end = -1;
@@ -172,11 +176,13 @@ export function extractAndParseJson(text: string): any {
   }
 
   if (start === -1 || end === -1) {
-    throw new Error("Não foi possível encontrar uma estrutura JSON válida na resposta.");
+    throw new Error(
+      "Não foi possível encontrar uma estrutura JSON válida na resposta.",
+    );
   }
 
   const jsonStr = cleaned.substring(start, end + 1);
-  
+
   try {
     // Attempt standard parse first
     return JSON.parse(jsonStr);
@@ -190,24 +196,24 @@ export function extractAndParseJson(text: string): any {
       // B. Fix unescaped control backslashes (e.g. \tau, \approx, \$) by doubling them
       // We only double backslashes that are NOT part of a valid JSON escape sequence.
       fixedJson = fixedJson.replace(/\\(.)/g, (match, p1) => {
-        if (['"', '\\', '/', 'b', 'f', 'n', 'r', 't'].includes(p1)) {
+        if (['"', "\\", "/", "b", "f", "n", "r", "t"].includes(p1)) {
           return match;
         }
-        if (p1 === 'u' && /^[0-9a-fA-F]{4}/.test(match.slice(2))) {
+        if (p1 === "u" && /^[0-9a-fA-F]{4}/.test(match.slice(2))) {
           return match;
         }
-        return '\\\\' + p1;
+        return "\\\\" + p1;
       });
 
       // C. Remove trailing commas
-      fixedJson = fixedJson.replace(/,\s*([\]}])/g, '$1');
+      fixedJson = fixedJson.replace(/,\s*([\]}])/g, "$1");
 
       return JSON.parse(fixedJson);
     } catch (e2: any) {
       console.warn("JSON cleanup/parsing failed completely:", {
         originalError: e.message,
         cleanupError: e2.message,
-        jsonStr
+        jsonStr,
       });
       throw e; // throw original error
     }
@@ -215,11 +221,11 @@ export function extractAndParseJson(text: string): any {
 }
 
 export function safeMarkdown(content: string): string {
-  if (typeof content !== 'string') return "";
+  if (typeof content !== "string") return "";
 
   // 1. Collapse all variations of multiple newlines (2+) into a single newline
   // This forces "tight" mode for almost everything by default.
-  const tightenedContent = content.replace(/(\n\s*){2,}/g, '\n\n');
+  const tightenedContent = content.replace(/(\n\s*){2,}/g, "\n\n");
 
   let html = marked.parse(tightenedContent) as string;
 
@@ -228,18 +234,18 @@ export function safeMarkdown(content: string): string {
   let prevHtml;
   do {
     prevHtml = html;
-    html = html.replace(/<li>\s*<p>([\s\S]*?)<\/p>\s*<\/li>/gi, '<li>$1</li>');
+    html = html.replace(/<li>\s*<p>([\s\S]*?)<\/p>\s*<\/li>/gi, "<li>$1</li>");
   } while (html !== prevHtml);
 
   // 3. Remove spurious empty/whitespace paragraphs that marked might still emit
-  html = html.replace(/<p>(\s|&nbsp;|<br\/?>)*<\/p>/gi, '');
+  html = html.replace(/<p>(\s|&nbsp;|<br\/?>)*<\/p>/gi, "");
 
   // 4. Collapse multiple <br> tags into one
-  html = html.replace(/(<br\/?>\s*){2,}/gi, '<br/>');
+  html = html.replace(/(<br\/?>\s*){2,}/gi, "<br/>");
 
   // 5. Tables ───────────────────────────────────────────────────────────────
   html = html.replace(/<table/g, '<div class="table-wrapper"><table');
-  html = html.replace(/<\/table>/g, '</table></div>');
+  html = html.replace(/<\/table>/g, "</table></div>");
 
   return html;
 }
@@ -253,7 +259,7 @@ export interface FactCheckResult {
 
 export interface Message {
   id: string;
-  role: 'user' | 'ai';
+  role: "user" | "ai";
   text: string;
   files?: Array<{ name: string; mimeType: string; data: string }>;
   isGrounded?: boolean;
@@ -268,19 +274,27 @@ export interface Message {
     category: string;
     oldText: string;
     newText: string;
-    resolved?: 'accepted' | 'ignored';
+    resolved?: "accepted" | "ignored";
   }>;
   continuationText?: string;
 }
 
+import { auth, db } from "./firebase";
+import { doc, getDoc } from "firebase/firestore";
+import {
+  LOCAL_MODEL_ID,
+  OPENROUTER_BASE_URL,
+  type ChatProvider,
+  type CustomModel,
+} from "../constants";
 
-import { auth, db } from './firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { LOCAL_MODEL_ID } from '../constants';
-
-let globalDefaultApiKey = '';
-let globalPaidApiKey = '';
-let globalLocalEndpoint = '';
+let globalDefaultApiKey = "";
+let globalPaidApiKey = "";
+let globalLocalEndpoint = "";
+let globalOpenRouterApiKey = "";
+// Registro dos modelos customizados cadastrados pelo usuário. Serve para resolver
+// o provedor (e portanto a URL/chave/cabeçalhos) a partir do id do modelo escolhido.
+let globalCustomModels: CustomModel[] = [];
 
 export function setGlobalDefaultApiKey(key: string) {
   globalDefaultApiKey = key;
@@ -290,12 +304,52 @@ export function setGlobalPaidApiKey(key: string) {
   globalPaidApiKey = key;
 }
 
+export function setGlobalOpenRouterApiKey(key: string) {
+  globalOpenRouterApiKey = (key || "").trim();
+}
+
+export function setGlobalCustomModels(models: CustomModel[]) {
+  globalCustomModels = Array.isArray(models) ? models : [];
+}
+
 /**
- * URL base do servidor local (llama.cpp) exposto via ngrok.
+ * Busca a janela de contexto (context_length) de um modelo no catálogo do OpenRouter.
+ * Best-effort: retorna undefined se não encontrar ou se a requisição falhar. O
+ * endpoint /models é público; a chave é enviada só se disponível.
+ */
+export async function fetchOpenRouterContextLength(modelId: string): Promise<number | undefined> {
+  try {
+    const headers: Record<string, string> = {};
+    if (globalOpenRouterApiKey) headers['Authorization'] = `Bearer ${globalOpenRouterApiKey}`;
+    const res = await fetch(`${OPENROUTER_BASE_URL}/models`, { headers });
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    const models: any[] = data?.data || [];
+    const found = models.find(m => m?.id === modelId);
+    const ctx = found?.context_length ?? found?.top_provider?.context_length;
+    return typeof ctx === 'number' && ctx > 0 ? ctx : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve o provedor de um id de modelo. Modelos customizados (OpenRouter) são
+ * consultados no registro; o modelo local tem id fixo; o resto é Gemini nativo.
+ */
+export function resolveProvider(model: string): ChatProvider {
+  if (isLocalModel(model)) return "local";
+  const custom = globalCustomModels.find((m) => m.id === model);
+  if (custom) return custom.provider;
+  return "gemini";
+}
+
+/**
+ * URL base do servidor local (llama.cpp), normalmente http://localhost:8080.
  * A barra final é removida para podermos concatenar "/v1/chat/completions".
  */
 export function setGlobalLocalEndpoint(url: string) {
-  globalLocalEndpoint = (url || '').trim().replace(/\/+$/, '');
+  globalLocalEndpoint = (url || "").trim().replace(/\/+$/, "");
 }
 
 export function getGlobalLocalEndpoint(): string {
@@ -310,10 +364,10 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
   if (manualApiKey) return manualApiKey;
   if (globalPaidApiKey) return globalPaidApiKey;
   if (globalDefaultApiKey) return globalDefaultApiKey;
-  
+
   try {
     if (auth.currentUser) {
-      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists()) {
         const data = userDocSnap.data();
@@ -330,8 +384,10 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
   } catch (e) {
     // Ignore
   }
-  
-  throw new Error("Chave de API do Google AI Studio padrão não configurada. Vá em Configurações > API para configurar.");
+
+  throw new Error(
+    "Chave de API do Google AI Studio padrão não configurada. Vá em Configurações > API para configurar.",
+  );
 }
 
 /**
@@ -339,23 +395,35 @@ export async function getApiKey(manualApiKey?: string): Promise<string> {
  * suportam a Live API (método 'bidiGenerateContent'). Útil para descobrir o id
  * exato do modelo LIVE disponível para a conta.
  */
-export async function listLiveModels(manualApiKey?: string): Promise<{ live: string[]; all: string[] }> {
+export async function listLiveModels(
+  manualApiKey?: string,
+): Promise<{ live: string[]; all: string[] }> {
   const key = await getApiKey(manualApiKey);
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1000`);
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1000`,
+  );
   if (!res.ok) {
     const errText = await res.text();
-    console.error(`[MODELS] Falha ao listar modelos (${res.status}): ${errText}`);
+    console.error(
+      `[MODELS] Falha ao listar modelos (${res.status}): ${errText}`,
+    );
     throw new Error(`Falha ao listar modelos: ${res.status}`);
   }
   const data = await res.json();
   const models: any[] = data.models || [];
-  const strip = (n: string) => (n || '').replace(/^models\//, '');
+  const strip = (n: string) => (n || "").replace(/^models\//, "");
   const live = models
-    .filter(m => (m.supportedGenerationMethods || []).includes('bidiGenerateContent'))
-    .map(m => strip(m.name));
-  const all = models.map(m => strip(m.name));
-  console.log(`[MODELS] 🎙️ Modelos com suporte à Live API (bidiGenerateContent): ${live.length ? live.join(', ') : 'NENHUM'}`);
-  console.log(`[MODELS] 📋 Todos os modelos disponíveis para esta chave: ${all.join(', ')}`);
+    .filter((m) =>
+      (m.supportedGenerationMethods || []).includes("bidiGenerateContent"),
+    )
+    .map((m) => strip(m.name));
+  const all = models.map((m) => strip(m.name));
+  console.log(
+    `[MODELS] 🎙️ Modelos com suporte à Live API (bidiGenerateContent): ${live.length ? live.join(", ") : "NENHUM"}`,
+  );
+  console.log(
+    `[MODELS] 📋 Todos os modelos disponíveis para esta chave: ${all.join(", ")}`,
+  );
   return { live, all };
 }
 
@@ -372,100 +440,143 @@ function partialTagSuffix(s: string, tag: string): number {
 }
 
 /**
- * Streaming para o modelo local servido via llama.cpp (endpoint compatível com OpenAI).
- * Converte o histórico no formato Gemini para o formato `messages` do OpenAI e
- * separa blocos de raciocínio (`reasoning_content` ou tags <think>...</think>) dos thoughts.
+ * Configuração de um endpoint compatível com OpenAI (modelo local ou OpenRouter).
+ * Reúne o que muda entre provedores; o corpo do streaming é idêntico.
  */
-async function* streamLocalContent(
+interface OpenAIEndpointConfig {
+  // URL completa do endpoint de chat completions.
+  url: string;
+  // Id do modelo enviado no campo `model` da requisição.
+  modelId: string;
+  // Cabeçalhos extras (Authorization, HTTP-Referer, etc).
+  headers: Record<string, string>;
+  // Rótulo curto para logs/erros (ex.: "local", "openrouter").
+  label: string;
+  // Mensagem amigável exibida quando a conexão de rede falha.
+  connectErrorMsg: string;
+  // Teto de tokens de saída.
+  maxTokens: number;
+  // Campos extras a serem mesclados no corpo da requisição (ex.: `reasoning` do OpenRouter).
+  extraBody?: Record<string, any>;
+}
+
+/**
+ * Streaming genérico para endpoints compatíveis com OpenAI (modelo local via
+ * llama.cpp e OpenRouter). Converte o histórico no formato Gemini para o formato
+ * `messages` do OpenAI e separa blocos de raciocínio (`reasoning_content` ou
+ * tags <think>...</think>) dos thoughts.
+ */
+async function* streamOpenAICompatibleContent(
+  cfg: OpenAIEndpointConfig,
   text: string,
-  history: { role: string, parts: any[] }[],
+  history: { role: string; parts: any[] }[],
   systemInstruction: string | undefined,
   files: { mimeType: string; data: string }[],
   signal: AbortSignal | undefined,
-  thinking: boolean
+  thinking: boolean,
 ): AsyncGenerator<{
   text?: string;
   thoughts?: string;
   isGrounded?: boolean;
   isSearching?: boolean;
   sources?: { title: string; uri: string }[];
-  usage?: { promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }
+  usage?: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
 }> {
-  const base = globalLocalEndpoint;
-  if (!base) {
-    throw new Error("Endpoint do modelo local não configurado. Vá em Configurações > API e cole a URL pública do seu ngrok.");
-  }
-
-  const url = `${base}/v1/chat/completions`;
+  const url = cfg.url;
 
   // Monta as mensagens no formato OpenAI a partir do histórico Gemini.
   const messages: any[] = [];
   if (systemInstruction) {
-    messages.push({ role: 'system', content: systemInstruction });
+    messages.push({ role: "system", content: systemInstruction });
   }
   for (const h of history) {
-    const role = h.role === 'model' || h.role === 'assistant' ? 'assistant' : 'user';
-    const content = (h.parts || []).map((p: any) => p.text || '').join('');
+    const role =
+      h.role === "model" || h.role === "assistant" ? "assistant" : "user";
+    const content = (h.parts || []).map((p: any) => p.text || "").join("");
     if (content) messages.push({ role, content });
   }
 
-  // Mensagem atual do usuário (com imagens opcionais para modelos multimodais como llava).
+  // Mensagem atual do usuário (com imagens opcionais para modelos multimodais).
   if (files && files.length > 0) {
     const parts: any[] = [];
-    if (text) parts.push({ type: 'text', text });
-    files.forEach(f => parts.push({ type: 'image_url', image_url: { url: `data:${f.mimeType};base64,${f.data}` } }));
-    messages.push({ role: 'user', content: parts });
+    if (text) parts.push({ type: "text", text });
+    files.forEach((f) =>
+      parts.push({
+        type: "image_url",
+        image_url: { url: `data:${f.mimeType};base64,${f.data}` },
+      }),
+    );
+    messages.push({ role: "user", content: parts });
   } else {
-    messages.push({ role: 'user', content: text });
+    messages.push({ role: "user", content: text });
   }
 
   const payload = {
-    model: LOCAL_MODEL_ID,
+    model: cfg.modelId,
     messages,
     stream: true,
     stream_options: { include_usage: true },
     temperature: 0.7,
-    max_tokens: 4096
+    max_tokens: cfg.maxTokens,
+    ...(cfg.extraBody || {}),
   };
 
-  logger.addLog('api-request', `Request: ${LOCAL_MODEL_ID} (local)`, { url, payload });
+  logger.addLog("api-request", `Request: ${cfg.modelId} (${cfg.label})`, {
+    url,
+    payload,
+  });
 
   let response: Response;
   try {
     response = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        // Evita a página de aviso do ngrok (free) em requisições não-navegador.
-        'ngrok-skip-browser-warning': 'true'
+        "Content-Type": "application/json",
+        ...cfg.headers,
       },
       body: JSON.stringify(payload),
-      signal
+      signal,
     });
   } catch (err: any) {
-    if (err?.name === 'AbortError') throw err;
-    logger.addLog('api-error', `Falha ao conectar no modelo local: ${err?.message}`, { error: err?.message, url });
-    throw new Error(`Não foi possível conectar ao modelo local (${base}). Verifique se o llama.cpp e o ngrok estão ativos. Detalhe: ${err?.message || err}`);
+    if (err?.name === "AbortError") throw err;
+    logger.addLog(
+      "api-error",
+      `Falha ao conectar (${cfg.label}): ${err?.message}`,
+      { error: err?.message, url },
+    );
+    throw new Error(`${cfg.connectErrorMsg} Detalhe: ${err?.message || err}`);
   }
 
   if (!response.ok) {
-    const errBody = await response.text().catch(() => '');
-    let errMsg = `Erro do servidor local (${response.status})`;
+    const errBody = await response.text().catch(() => "");
+    let errMsg = `Erro do servidor (${cfg.label}) (${response.status})`;
     try {
       const parsed = JSON.parse(errBody);
       errMsg = parsed?.error?.message || parsed?.message || errMsg;
-    } catch { if (errBody) errMsg = errBody.slice(0, 300); }
-    logger.addLog('api-error', `Erro definitivo do modelo local (${response.status})`, { error: errMsg });
+    } catch {
+      if (errBody) errMsg = errBody.slice(0, 300);
+    }
+    logger.addLog(
+      "api-error",
+      `Erro definitivo (${cfg.label}) (${response.status})`,
+      { error: errMsg },
+    );
     throw new Error(errMsg);
   }
 
   const reader = response.body?.getReader();
-  if (!reader) throw new Error("Falha ao abrir stream de leitura do modelo local.");
+  if (!reader)
+    throw new Error(`Falha ao abrir stream de leitura (${cfg.label}).`);
 
   const decoder = new TextDecoder();
   let buffer = "";
   let accumulatedText = "";
   let accumulatedThoughts = "";
+  const accumulatedSources: { title: string; uri: string }[] = [];
   let finalUsage: any = null;
 
   // Estado do separador de blocos <think>...</think> entre chunks.
@@ -479,27 +590,27 @@ async function* streamLocalContent(
     let outThoughts = "";
     while (s.length) {
       if (!thinkMode) {
-        const idx = s.indexOf('<think>');
+        const idx = s.indexOf("<think>");
         if (idx === -1) {
-          const partial = partialTagSuffix(s, '<think>');
+          const partial = partialTagSuffix(s, "<think>");
           outText += s.slice(0, s.length - partial);
           carry = s.slice(s.length - partial);
           s = "";
         } else {
           outText += s.slice(0, idx);
-          s = s.slice(idx + '<think>'.length);
+          s = s.slice(idx + "<think>".length);
           thinkMode = true;
         }
       } else {
-        const idx = s.indexOf('</think>');
+        const idx = s.indexOf("</think>");
         if (idx === -1) {
-          const partial = partialTagSuffix(s, '</think>');
+          const partial = partialTagSuffix(s, "</think>");
           outThoughts += s.slice(0, s.length - partial);
           carry = s.slice(s.length - partial);
           s = "";
         } else {
           outThoughts += s.slice(0, idx);
-          s = s.slice(idx + '</think>'.length);
+          s = s.slice(idx + "</think>".length);
           thinkMode = false;
         }
       }
@@ -528,53 +639,166 @@ async function* streamLocalContent(
 
           let chunkText = "";
           let chunkThoughts = "";
+          const chunkSources: { title: string; uri: string }[] = [];
 
-          // Canal de raciocínio nativo (llama.cpp com --reasoning-format).
-          if (delta.reasoning_content) {
+          // Citações da busca web nativa do OpenRouter (plugin `web`). Chegam como
+          // `annotations` do tipo `url_citation` — mapeamos para fontes exibíveis.
+          const annotations =
+            delta.annotations || json.choices?.[0]?.message?.annotations;
+          if (Array.isArray(annotations)) {
+            for (const ann of annotations) {
+              const cit = ann?.url_citation;
+              if ((ann?.type === "url_citation" || cit) && cit?.url) {
+                chunkSources.push({
+                  title: cit.title || cit.url,
+                  uri: cit.url,
+                });
+              }
+            }
+          }
+
+          // Canal de raciocínio nativo. Cada provedor usa um nome de campo diferente:
+          // - llama.cpp (com --reasoning-format): `reasoning_content`
+          // - OpenRouter (campo normalizado): `reasoning`
+          if (
+            typeof delta.reasoning_content === "string" &&
+            delta.reasoning_content
+          ) {
             chunkThoughts += delta.reasoning_content;
+          }
+          if (typeof delta.reasoning === "string" && delta.reasoning) {
+            chunkThoughts += delta.reasoning;
           }
 
           // Conteúdo normal — pode conter tags <think> embutidas.
-          if (typeof delta.content === 'string' && delta.content) {
+          if (typeof delta.content === "string" && delta.content) {
             const split = splitThinking(delta.content);
             chunkText += split.text;
             chunkThoughts += split.thoughts;
           }
 
+          // O `usage` costuma chegar num chunk FINAL separado, sem conteúdo
+          // (OpenRouter/OpenAI com include_usage). Por isso precisamos emiti-lo
+          // mesmo quando não há texto/raciocínio/fontes — senão a contagem se perde.
+          let usageArrived = false;
           if (json.usage) {
             finalUsage = {
               promptTokenCount: json.usage.prompt_tokens || 0,
               candidatesTokenCount: json.usage.completion_tokens || 0,
-              totalTokenCount: json.usage.total_tokens || 0
+              totalTokenCount: json.usage.total_tokens || 0,
             };
+            usageArrived = true;
           }
 
-          if (chunkText || chunkThoughts) {
+          if (chunkText || chunkThoughts || chunkSources.length > 0 || usageArrived) {
             accumulatedText += chunkText;
             accumulatedThoughts += chunkThoughts;
+            chunkSources.forEach((src) => {
+              if (!accumulatedSources.some((s) => s.uri === src.uri))
+                accumulatedSources.push(src);
+            });
             yield {
               text: chunkText,
               thoughts: thinking ? chunkThoughts : "",
-              usage: finalUsage || undefined
+              isGrounded: chunkSources.length > 0 ? true : undefined,
+              sources: chunkSources.length > 0 ? chunkSources : undefined,
+              usage: finalUsage || undefined,
             };
           }
         } catch (e) {
-          console.warn("Erro ao processar chunk do modelo local:", e);
+          console.warn(`Erro ao processar chunk (${cfg.label}):`, e);
         }
       }
     }
   } finally {
     reader.releaseLock();
-    logger.addLog('api-response', `Response: ${LOCAL_MODEL_ID} (local) completed`, {
-      response: { text: accumulatedText, thoughts: accumulatedThoughts, usage: finalUsage }
-    });
+    logger.addLog(
+      "api-response",
+      `Response: ${cfg.modelId} (${cfg.label}) completed`,
+      {
+        response: {
+          text: accumulatedText,
+          thoughts: accumulatedThoughts,
+          sources: accumulatedSources,
+          usage: finalUsage,
+        },
+      },
+    );
   }
+}
+
+/**
+ * Monta a config do endpoint compatível com OpenAI para cada provedor externo.
+ * Lança erro amigável quando falta a chave/endpoint necessário.
+ */
+function buildOpenAIConfig(
+  provider: Exclude<ChatProvider, "gemini">,
+  model: string,
+  maxTokens: number,
+  thinking: boolean,
+  webSearch: boolean,
+  jsonMode: boolean,
+): OpenAIEndpointConfig {
+  if (provider === "local") {
+    const base = globalLocalEndpoint;
+    if (!base) {
+      throw new Error(
+        "Endpoint do modelo local não configurado. Vá em Configurações > API e informe a URL do seu llama.cpp (ex.: http://localhost:8080).",
+      );
+    }
+    return {
+      url: `${base}/v1/chat/completions`,
+      modelId: LOCAL_MODEL_ID,
+      headers: {},
+      label: "local",
+      connectErrorMsg: `Não foi possível conectar ao modelo local (${base}). Verifique se o llama.cpp (llama-server) está ativo.`,
+      maxTokens,
+      // Saída em JSON (ex.: organização de memórias). llama-server aceita response_format.
+      extraBody: jsonMode ? { response_format: { type: "json_object" } } : undefined,
+    };
+  }
+
+  // provider === 'openrouter'
+  if (!globalOpenRouterApiKey) {
+    throw new Error(
+      "Chave da API do OpenRouter não configurada. Vá em Configurações > API para adicioná-la.",
+    );
+  }
+  // Campos extras específicos do OpenRouter:
+  // - `reasoning`: quando o "pensar" está ligado, pede os tokens de raciocínio
+  //   (campo `reasoning`). Modelos que não suportam ignoram.
+  // - `plugins: [{ id: 'web' }]`: busca web NATIVA do OpenRouter quando o usuário liga
+  //   o botão de busca. As citações voltam como `annotations` (url_citation) e viram fontes.
+  // - `response_format`: saída em JSON quando solicitado (ex.: organização de memórias).
+  const extraBody: Record<string, any> = {};
+  if (thinking) extraBody.reasoning = { enabled: true };
+  if (webSearch) extraBody.plugins = [{ id: "web", max_results: 50 }];
+  if (jsonMode) extraBody.response_format = { type: "json_object" };
+
+  return {
+    url: `${OPENROUTER_BASE_URL}/chat/completions`,
+    modelId: model,
+    headers: {
+      Authorization: `Bearer ${globalOpenRouterApiKey}`,
+      // Cabeçalhos recomendados pelo OpenRouter para atribuição do app.
+      "HTTP-Referer":
+        typeof location !== "undefined"
+          ? location.origin
+          : "https://nemon.chat",
+      "X-Title": "Nemon Chat",
+    },
+    label: "openrouter",
+    connectErrorMsg:
+      "Não foi possível conectar ao OpenRouter. Verifique sua conexão e a chave de API.",
+    maxTokens,
+    extraBody: Object.keys(extraBody).length > 0 ? extraBody : undefined,
+  };
 }
 
 export async function* streamGeminiContent(
   text: string,
   model: string,
-  history: { role: string, parts: any[] }[],
+  history: { role: string; parts: any[] }[],
   systemInstruction?: string,
   files: { mimeType: string; data: string }[] = [],
   webSearch: boolean = false,
@@ -582,18 +806,40 @@ export async function* streamGeminiContent(
   thinking: boolean = false,
   jsonMode: boolean = false,
   manualApiKey?: string,
-  maxOutputTokens: number = 8192
+  maxOutputTokens: number = 8192,
 ): AsyncGenerator<{
   text?: string;
   thoughts?: string;
   isGrounded?: boolean;
   isSearching?: boolean;
   sources?: { title: string; uri: string }[];
-  usage?: { promptTokenCount: number; candidatesTokenCount: number; totalTokenCount: number }
+  usage?: {
+    promptTokenCount: number;
+    candidatesTokenCount: number;
+    totalTokenCount: number;
+  };
 }> {
-  // Modelo local (llama.cpp + ngrok): roteamos para a API compatível com OpenAI.
-  if (isLocalModel(model)) {
-    yield* streamLocalContent(text, history, systemInstruction, files, signal, thinking);
+  // Provedores compatíveis com OpenAI (modelo local via llama.cpp, OpenRouter):
+  // roteamos todos para o mesmo streamer, variando só a config.
+  const provider = resolveProvider(model);
+  if (provider !== "gemini") {
+    const cfg = buildOpenAIConfig(
+      provider,
+      model,
+      maxOutputTokens,
+      thinking,
+      webSearch,
+      jsonMode,
+    );
+    yield* streamOpenAICompatibleContent(
+      cfg,
+      text,
+      history,
+      systemInstruction,
+      files,
+      signal,
+      thinking,
+    );
     return;
   }
 
@@ -602,7 +848,7 @@ export async function* streamGeminiContent(
 
   const currentParts: any[] = [];
   if (files.length > 0) {
-    files.forEach(f => {
+    files.forEach((f) => {
       currentParts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
     });
   }
@@ -615,25 +861,32 @@ export async function* streamGeminiContent(
     generationConfig: {
       maxOutputTokens,
       temperature: 0.7,
-      ...(jsonMode ? { response_mime_type: "application/json" } : {})
-    }
+      ...(jsonMode ? { response_mime_type: "application/json" } : {}),
+    },
   };
 
   if (thinking) {
     // Apenas modelos específicos suportam o parâmetro thinkingConfig nativo (como Gemini Thinking)
-    const supportsThinkingConfig = model.includes('thinking') || model.includes('gemini-2.0');
+    const supportsThinkingConfig =
+      model.includes("thinking") || model.includes("gemini-2.0");
 
     if (supportsThinkingConfig) {
       payload.generationConfig.thinkingConfig = {
         includeThoughts: true,
-        thinkingLevel: "HIGH"
+        thinkingLevel: "HIGH",
       };
     } else {
       // Fallback: Instrução via prompt para modelos que não aceitam thinkingConfig
-      const searchInstruction = webSearch ? "\n\nPESQUISA OBRIGATÓRIA: Planeje e use 'google_search' para basear sua resposta em fatos REAIS." : "";
-      currentParts.unshift({ text: "Missão Final: Fornecer uma resposta útil e direta ao usuário.\n\n1. Raciocínio (Privado): SEMPRE use <thinking>...</thinking> para seu processo interno.\n2. Conclusão (Público): Após fechar o </thinking>, você DEVE obrigatoriamente escrever a resposta final detalhada que o usuário verá. NUNCA termine sua mensagem apenas com o raciocínio." + searchInstruction });
+      const searchInstruction = webSearch
+        ? "\n\nPESQUISA OBRIGATÓRIA: Planeje e use 'google_search' para basear sua resposta em fatos REAIS."
+        : "";
+      currentParts.unshift({
+        text:
+          "Missão Final: Fornecer uma resposta útil e direta ao usuário.\n\n1. Raciocínio (Privado): SEMPRE use <thinking>...</thinking> para seu processo interno.\n2. Conclusão (Público): Após fechar o </thinking>, você DEVE obrigatoriamente escrever a resposta final detalhada que o usuário verá. NUNCA termine sua mensagem apenas com o raciocínio." +
+          searchInstruction,
+      });
     }
-  } else if (model.includes('gemma') && !webSearch) {
+  } else if (model.includes("gemma") && !webSearch) {
     // Gemma 4 gasta "thought tokens" mesmo com o raciocínio desligado. A doc confirma que
     // ele NÃO aceita thinkingBudget (retorna 400) e IGNORA includeThoughts, mas ACEITA
     // thinkingLevel — restrito a MINIMAL ou HIGH. Quando NÃO há busca, MINIMAL corta esse
@@ -651,12 +904,12 @@ export async function* streamGeminiContent(
   if (systemInstruction) {
     payload.systemInstruction = {
       role: "system",
-      parts: [{ text: systemInstruction }]
+      parts: [{ text: systemInstruction }],
     };
   }
 
   // API REQUEST LOGGING
-  logger.addLog('api-request', `Request: ${model}`, { url, payload });
+  logger.addLog("api-request", `Request: ${model}`, { url, payload });
 
   const maxRetries = 5;
   let attempt = 0;
@@ -667,14 +920,17 @@ export async function* streamGeminiContent(
     attempt++;
     try {
       if (attempt > 1) {
-        logger.addLog('warn', `Tentando reconectar com a API (${attempt}/${maxRetries})...`);
+        logger.addLog(
+          "warn",
+          `Tentando reconectar com a API (${attempt}/${maxRetries})...`,
+        );
       }
-      
+
       const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-        signal
+        signal,
       });
 
       if (res.ok) {
@@ -683,32 +939,48 @@ export async function* streamGeminiContent(
       } else {
         const errorBody = await res.json().catch(() => ({}));
         const errMsg = errorBody.error?.message || `Erro na API: ${res.status}`;
-        
+
         // Se for um erro do servidor (>= 500), faremos nova tentativa com backoff exponencial
         if (res.status >= 500) {
-          logger.addLog('warn', `Erro transiente da API (${res.status}): ${errMsg}. Nova tentativa em ${attempt * 1000}ms...`);
+          logger.addLog(
+            "warn",
+            `Erro transiente da API (${res.status}): ${errMsg}. Nova tentativa em ${attempt * 1000}ms...`,
+          );
           lastError = new Error(errMsg);
-          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
           continue;
         } else {
           // Erros de cliente (400, 403, etc.) não devem ser retentados pois são definitivos
-          logger.addLog('api-error', `Erro definitivo de cliente (${res.status}): ${errMsg}`, { error: errMsg });
+          logger.addLog(
+            "api-error",
+            `Erro definitivo de cliente (${res.status}): ${errMsg}`,
+            { error: errMsg },
+          );
           throw new Error(errMsg);
         }
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
+      if (err.name === "AbortError") {
         throw err; // Requisição abortada manualmente pelo usuário
       }
-      logger.addLog('warn', `Falha de rede/conexão: ${err.message}. Nova tentativa em ${attempt * 1000}ms...`);
+      logger.addLog(
+        "warn",
+        `Falha de rede/conexão: ${err.message}. Nova tentativa em ${attempt * 1000}ms...`,
+      );
       lastError = err;
-      await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
     }
   }
 
   if (!response) {
-    const errMsg = lastError?.message || "Conexão com a API esgotada após várias tentativas.";
-    logger.addLog('api-error', `API Connection Exhausted after ${maxRetries} attempts`, { error: errMsg });
+    const errMsg =
+      lastError?.message ||
+      "Conexão com a API esgotada após várias tentativas.";
+    logger.addLog(
+      "api-error",
+      `API Connection Exhausted after ${maxRetries} attempts`,
+      { error: errMsg },
+    );
     throw new Error(errMsg);
   }
 
@@ -747,20 +1019,26 @@ export async function* streamGeminiContent(
               let chunkSources: { title: string; uri: string }[] = [];
 
               if (metadata?.groundingChunks) {
-                chunkSources = metadata.groundingChunks.map((chunk: any) => {
-                  const s = chunk.web || chunk.webSource || chunk.source || chunk;
-                  return {
-                    title: s.title || chunk.title || "",
-                    uri: s.uri || chunk.uri || ""
-                  };
-                }).filter((s: any) => s.uri);
+                chunkSources = metadata.groundingChunks
+                  .map((chunk: any) => {
+                    const s =
+                      chunk.web || chunk.webSource || chunk.source || chunk;
+                    return {
+                      title: s.title || chunk.title || "",
+                      uri: s.uri || chunk.uri || "",
+                    };
+                  })
+                  .filter((s: any) => s.uri);
               }
 
-              const chunkIsSearching = !!(metadata?.webSearchQueries && metadata.webSearchQueries.length > 0);
+              const chunkIsSearching = !!(
+                metadata?.webSearchQueries &&
+                metadata.webSearchQueries.length > 0
+              );
 
               parts.forEach((part: any) => {
                 // Se o componente de pensamento (thought) está presente
-                if (part.thought === true || part.thought === 'true') {
+                if (part.thought === true || part.thought === "true") {
                   if (thinking && part.text) {
                     chunkThoughts += part.text;
                   }
@@ -776,8 +1054,8 @@ export async function* streamGeminiContent(
 
               accumulatedText += chunkText;
               accumulatedThoughts += chunkThoughts;
-              chunkSources.forEach(src => {
-                if (!accumulatedSources.some(s => s.uri === src.uri)) {
+              chunkSources.forEach((src) => {
+                if (!accumulatedSources.some((s) => s.uri === src.uri)) {
                   accumulatedSources.push(src);
                 }
               });
@@ -791,14 +1069,20 @@ export async function* streamGeminiContent(
                 isGrounded: chunkGrounded,
                 isSearching: chunkIsSearching,
                 sources: chunkSources,
-                usage: json.usageMetadata
+                usage: json.usageMetadata,
               };
 
               // DIAGNÓSTICO: Log do finishReason e estrutura se o texto estiver vazio mas o pensamento não
-              if (chunkThoughts && !chunkText && candidate.finishReason && candidate.finishReason !== 'STOP') {
-                console.warn(`[DEBUG] Resposta terminou sem texto. Motivo: ${candidate.finishReason}`);
+              if (
+                chunkThoughts &&
+                !chunkText &&
+                candidate.finishReason &&
+                candidate.finishReason !== "STOP"
+              ) {
+                console.warn(
+                  `[DEBUG] Resposta terminou sem texto. Motivo: ${candidate.finishReason}`,
+                );
               }
-
 
               // INSTRUMENTATION: Log the raw JSON for grounding debug
               if (chunkSources.length > 0 || chunkGrounded) {
@@ -817,13 +1101,13 @@ export async function* streamGeminiContent(
   } finally {
     reader.releaseLock();
     // API RESPONSE LOGGING
-    logger.addLog('api-response', `Response: ${model} completed`, {
+    logger.addLog("api-response", `Response: ${model} completed`, {
       response: {
         text: accumulatedText,
         thoughts: accumulatedThoughts,
         sources: accumulatedSources,
-        usage: finalUsage
-      }
+        usage: finalUsage,
+      },
     });
   }
 }
@@ -839,10 +1123,24 @@ export async function generateGeminiContent(
   thinking: boolean = false,
   jsonMode: boolean = false,
   signal?: AbortSignal,
-  manualApiKey?: string
+  manualApiKey?: string,
 ) {
-  const gen = streamGeminiContent(text, model, history, systemInstruction, files, webSearch, signal, thinking, jsonMode, manualApiKey);
-  let fullText = "", fullThoughts = "", isGrounded = false, usage: any = null;
+  const gen = streamGeminiContent(
+    text,
+    model,
+    history,
+    systemInstruction,
+    files,
+    webSearch,
+    signal,
+    thinking,
+    jsonMode,
+    manualApiKey,
+  );
+  let fullText = "",
+    fullThoughts = "",
+    isGrounded = false,
+    usage: any = null;
 
   for await (const chunk of gen) {
     if (chunk.text) fullText += chunk.text;
@@ -862,7 +1160,7 @@ export async function generateGeminiContent(
 export async function performWebSearch(
   query: string,
   signal?: AbortSignal,
-  manualApiKey?: string
+  manualApiKey?: string,
 ): Promise<{ summary: string; sources: { title: string; uri: string }[] }> {
   const model = "gemma-4-31b-it";
   const systemInstruction =
@@ -873,14 +1171,27 @@ export async function performWebSearch(
   const prompt = `Pesquise na web e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
 
   // Teto de tokens baixo: o resumo é curto, então gera muito mais rápido que o padrão (8192).
-  const gen = streamGeminiContent(prompt, model, [], systemInstruction, [], true, signal, false, false, manualApiKey, 1024);
+  const gen = streamGeminiContent(
+    prompt,
+    model,
+    [],
+    systemInstruction,
+    [],
+    true,
+    signal,
+    false,
+    false,
+    manualApiKey,
+    1024,
+  );
   let summary = "";
   const sourceMap = new Map<string, { title: string; uri: string }>();
   for await (const chunk of gen) {
     if (chunk.text) summary += chunk.text;
     if (chunk.sources) {
-      chunk.sources.forEach(s => {
-        if (s.uri && !sourceMap.has(s.uri)) sourceMap.set(s.uri, { title: s.title || s.uri, uri: s.uri });
+      chunk.sources.forEach((s) => {
+        if (s.uri && !sourceMap.has(s.uri))
+          sourceMap.set(s.uri, { title: s.title || s.uri, uri: s.uri });
       });
     }
   }
@@ -890,11 +1201,14 @@ export async function performWebSearch(
 export async function generateImagenContent(
   prompt: string,
   model: string,
-  aspectRatio: '1:1' | '9:16' | '16:9',
-  manualApiKey?: string
+  aspectRatio: "1:1" | "9:16" | "16:9",
+  manualApiKey?: string,
 ): Promise<{ data: string; mimeType: string }> {
   const key = manualApiKey || globalPaidApiKey || globalDefaultApiKey;
-  if (!key) throw new Error("Nenhuma chave de API configurada para o Imagen. Configure-a em Configurações > API.");
+  if (!key)
+    throw new Error(
+      "Nenhuma chave de API configurada para o Imagen. Configure-a em Configurações > API.",
+    );
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${key}`;
 
@@ -903,19 +1217,21 @@ export async function generateImagenContent(
     parameters: {
       sampleCount: 1,
       aspectRatio,
-      outputMimeType: "image/png"
-    }
+      outputMimeType: "image/png",
+    },
   };
 
   const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Erro na geração de imagem: ${response.status}`);
+    throw new Error(
+      err.error?.message || `Erro na geração de imagem: ${response.status}`,
+    );
   }
 
   const result = await response.json();
@@ -926,7 +1242,10 @@ export async function generateImagenContent(
   return { data: base64, mimeType: "image/png" };
 }
 
-export async function performFactCheck(text: string, signal?: AbortSignal): Promise<FactCheckResult[]> {
+export async function performFactCheck(
+  text: string,
+  signal?: AbortSignal,
+): Promise<FactCheckResult[]> {
   const model = "gemma-4-31b-it";
   const prompt = `Analise o texto a seguir e REALIZE PESQUISAS NA WEB (usando a ferramenta google_search) para verificar cada afirmação de fato.
   
@@ -950,12 +1269,22 @@ export async function performFactCheck(text: string, signal?: AbortSignal): Prom
   - Responda APENAS o JSON.`;
 
   try {
-    const systemInstruction = 
+    const systemInstruction =
       "Você é um checador de fatos rigoroso da Reuters. " +
       "Você DEVE OBRIGATORIAMENTE realizar pesquisas no Google (usando a ferramenta 'google_search') para validar cada afirmação no texto. " +
       "Não faça conjecturas e não responda baseando-se apenas em seu conhecimento interno de treinamento.";
 
-    const res = await generateGeminiContent(prompt, model, [], systemInstruction, [], true, false, false, signal);
+    const res = await generateGeminiContent(
+      prompt,
+      model,
+      [],
+      systemInstruction,
+      [],
+      true,
+      false,
+      false,
+      signal,
+    );
     const sanitized = extractAndParseJson(res.text);
     if (Array.isArray(sanitized)) {
       return sanitized;

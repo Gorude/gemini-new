@@ -1,5 +1,100 @@
-// Identificador fixo do modelo local servido via llama.cpp (exposto por ngrok).
+// Identificador fixo do modelo local servido via llama.cpp (localhost).
 export const LOCAL_MODEL_ID = "local-model";
+
+// Provedores de modelos de chat suportados. `gemini` usa a API nativa do Google;
+// `local` e `openrouter` falam a API compatível com OpenAI (/v1/chat/completions)
+// através do mesmo caminho de streaming.
+export type ChatProvider = "gemini" | "local" | "openrouter";
+
+// Provedores que o usuário pode cadastrar modelos customizados (por id).
+export type CustomModelProvider = "openrouter";
+
+// URL base (compatível com OpenAI) do provedor externo.
+export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
+// URL padrão do servidor local (llama.cpp / llama-server) rodando em localhost.
+export const DEFAULT_LOCAL_ENDPOINT = "http://localhost:8080";
+
+// Metadados de exibição de cada provedor customizável (usado na UI e nos rótulos
+// do seletor de modelos do chat).
+export const CUSTOM_MODEL_PROVIDERS: {
+  id: CustomModelProvider;
+  name: string;
+  // Placeholder de exemplo de id de modelo para o campo de cadastro.
+  example: string;
+  // URL da página de catálogo/keys do provedor (mostrada como ajuda).
+  keysUrl: string;
+}[] = [
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    example: "deepseek/deepseek-r1:free",
+    keysUrl: "https://openrouter.ai/keys",
+  },
+];
+
+// Modelo de chat customizado cadastrado pelo usuário. O `id` é enviado literalmente
+// no campo `model` da requisição ao provedor; `provider` define para onde roteamos.
+// `contextLength` é a janela de contexto (em tokens), buscada da API do OpenRouter
+// no momento do cadastro (best-effort; pode ficar indefinida).
+export interface CustomModel {
+  id: string;
+  name: string;
+  provider: CustomModelProvider;
+  contextLength?: number;
+}
+
+// Janela de contexto (em tokens) dos modelos internos conhecidos. Usada como
+// denominador do indicador de contexto por chat (ex.: 16k / 1M).
+export const MODEL_CONTEXT: Record<string, number> = {
+  "gemini-3.1-flash-lite-preview": 1_000_000,
+  "gemma-4-31b-it": 128_000,
+  "gemma-4-26b-a4b-it": 128_000,
+};
+
+// Janela de contexto padrão do modelo local (llama.cpp). Ajustável no futuro por
+// configuração; hoje é um valor conservador razoável.
+export const DEFAULT_LOCAL_CONTEXT = 32_000;
+
+// Fallback quando não sabemos a janela de contexto de um modelo (ex.: OpenRouter
+// cujo context_length não pôde ser buscado).
+export const DEFAULT_CONTEXT_FALLBACK = 128_000;
+
+/**
+ * Resolve a janela de contexto (em tokens) de um modelo, considerando os modelos
+ * customizados cadastrados. Ordem: contextLength do custom model → tabela interna →
+ * padrão do local → fallback genérico.
+ */
+export function getModelContextWindow(
+  model: string,
+  customModels: CustomModel[] = []
+): number {
+  const custom = customModels.find((m) => m.id === model);
+  if (custom?.contextLength) return custom.contextLength;
+  if (MODEL_CONTEXT[model]) return MODEL_CONTEXT[model];
+  if (model === LOCAL_MODEL_ID) return DEFAULT_LOCAL_CONTEXT;
+  return DEFAULT_CONTEXT_FALLBACK;
+}
+
+/**
+ * Estimativa rápida de tokens no navegador (~4 caracteres por token). NÃO é exata
+ * — serve só para o texto ainda não enviado no indicador de contexto ao vivo.
+ */
+export function estimateTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+/** Formata uma contagem de tokens de forma compacta: 940, 16k, 164k, 1M. */
+export function formatTokenCount(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) {
+    const k = n / 1000;
+    return `${k < 10 ? k.toFixed(1) : Math.round(k)}k`;
+  }
+  const m = n / 1_000_000;
+  return `${m < 10 ? m.toFixed(m % 1 === 0 ? 0 : 1) : Math.round(m)}M`;
+}
 
 // Fontes de texto disponíveis para o sistema. `stack` é aplicado na variável CSS --app-font.
 // As marcadas como "inspirada" usam aproximações livres das fontes proprietárias originais.
@@ -93,7 +188,7 @@ export const MODEL_OPTIONS = [
   {
     id: LOCAL_MODEL_ID,
     name: "Modelo Local",
-    desc: "Seu modelo rodando em llama.cpp e exposto via ngrok (API compatível com OpenAI)",
+    desc: "Seu modelo rodando em llama.cpp no localhost (API compatível com OpenAI)",
     hasSearch: false,
   },
 ];

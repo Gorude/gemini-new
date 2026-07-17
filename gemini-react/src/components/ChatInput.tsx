@@ -11,7 +11,7 @@ import {
   Headphones,
   Square
 } from 'lucide-react';
-import { MODEL_OPTIONS, IMAGEN_OPTIONS, LIVE_MODEL_OPTIONS } from '../constants';
+import { MODEL_OPTIONS, IMAGEN_OPTIONS, LIVE_MODEL_OPTIONS, CUSTOM_MODEL_PROVIDERS, getModelContextWindow, estimateTokens, formatTokenCount, type CustomModel } from '../constants';
 import { type PendingFile } from '../types';
 
 interface ChatInputProps {
@@ -42,6 +42,9 @@ interface ChatInputProps {
   onSetAspectRatio: (ratio: '1:1' | '9:16' | '16:9') => void;
   onScrollToBottom: () => void;
   enabledModelIds: string[];
+  customModels: CustomModel[];
+  // Tokens exatos já consumidos no chat atual (base do indicador de contexto).
+  contextTokens: number;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
@@ -71,7 +74,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onSetImagenModel,
   onSetAspectRatio,
   onScrollToBottom,
-  enabledModelIds
+  enabledModelIds,
+  customModels,
+  contextTokens
 }) => {
   const [input, setInput] = useState('');
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
@@ -155,6 +160,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setPendingFiles([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
+
+  // Indicador de contexto por chat: base exata (contextTokens, da API) + estimativa
+  // do que ainda não foi enviado (texto digitado + anexos pendentes).
+  const contextMax = getModelContextWindow(model, customModels);
+  const pendingTokens = estimateTokens(input) + pendingFiles.reduce(
+    (sum, f) => sum + (f.mimeType.startsWith('image/') ? 258 : Math.ceil((f.data.length * 0.75) / 4)),
+    0
+  );
+  const contextUsed = contextTokens + pendingTokens;
+  const contextPct = contextMax > 0 ? Math.min(100, (contextUsed / contextMax) * 100) : 0;
+  // Cor do indicador conforme o preenchimento (verde → âmbar → vermelho).
+  const contextColor = contextPct >= 90 ? '#ef4444' : contextPct >= 70 ? '#f59e0b' : 'var(--accent)';
 
   return (
     <footer 
@@ -297,15 +314,28 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              {!isLiveActive && (
+                <div
+                  className="hidden sm:flex items-center gap-2 px-2.5 py-2 rounded-xl bg-(--bg-chat-hover) border border-(--border-light) shadow-sm shrink-0"
+                  title={`Contexto do chat: ${contextUsed.toLocaleString('pt-BR')} de ${contextMax.toLocaleString('pt-BR')} tokens${pendingTokens > 0 ? ` (inclui ~${pendingTokens.toLocaleString('pt-BR')} estimados do texto atual)` : ''}`}
+                >
+                  <div className="w-10 h-1.5 rounded-full bg-(--border-light) overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-300" style={{ width: `${contextPct}%`, background: contextColor }}></div>
+                  </div>
+                  <span className="text-[10px] font-medium text-(--text-secondary) tabular-nums whitespace-nowrap">
+                    {formatTokenCount(contextUsed)}/{formatTokenCount(contextMax)}
+                  </span>
+                </div>
+              )}
               <div className="relative flex items-center">
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); setIsModelMenuOpen(!isModelMenuOpen); }}
                   className="flex items-center gap-1 sm:gap-1.5 bg-(--bg-chat-hover) hover:bg-(--bg-user-bubble) hover:scale-105 active:scale-95 text-[10px] sm:text-xs text-(--text-primary) transition-all rounded-xl px-2.5 py-2 sm:px-3 sm:py-2.5 font-medium border border-(--border-light) shadow-sm whitespace-nowrap"
                 >
                   <span className="truncate max-w-[65px] xs:max-w-[100px] sm:max-w-none">
-                    {isLiveActive 
+                    {isLiveActive
                       ? (LIVE_MODEL_OPTIONS.find(o => o.id === liveModel)?.name || 'Gemini 2.5 Flash Live')
-                      : (MODEL_OPTIONS.find(o => o.id === model)?.name || 'Padrão')}
+                      : (MODEL_OPTIONS.find(o => o.id === model)?.name || customModels.find(o => o.id === model)?.name || 'Padrão')}
                   </span>
                   <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 ml-0.5 opacity-60 shrink-0" />
                 </button>
@@ -325,15 +355,34 @@ const ChatInput: React.FC<ChatInputProps> = ({
                         </button>
                       ))
                     ) : (
-                      MODEL_OPTIONS.filter(opt => enabledModelIds.includes(opt.id)).map(opt => (
-                        <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
-                            {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-60 text-blue-400" />}
-                          </div>
-                          <span className="text-[11px] text-(--text-placeholder)">{opt.desc}</span>
-                        </button>
-                      ))
+                      <>
+                        {MODEL_OPTIONS.filter(opt => enabledModelIds.includes(opt.id)).map(opt => (
+                          <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
+                              {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-60 text-blue-400" />}
+                            </div>
+                            <span className="text-[11px] text-(--text-placeholder)">{opt.desc}</span>
+                          </button>
+                        ))}
+
+                        {/* Modelos customizados (OpenRouter), agrupados por provedor. */}
+                        {CUSTOM_MODEL_PROVIDERS.map(provider => {
+                          const providerModels = customModels.filter(m => m.provider === provider.id && enabledModelIds.includes(m.id));
+                          if (providerModels.length === 0) return null;
+                          return (
+                            <div key={provider.id} className="w-full">
+                              <div className="px-3.5 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">{provider.name}</div>
+                              {providerModels.map(opt => (
+                                <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
+                                  <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
+                                  <span className="text-[11px] text-(--text-placeholder) font-mono truncate max-w-full">{opt.id}</span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
                 )}

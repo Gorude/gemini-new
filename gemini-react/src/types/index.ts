@@ -8,6 +8,9 @@ export interface ChatSession {
   archived?: boolean;
   isNaming?: boolean;
   personalityId?: string;
+  // Tokens exatos do último turno (prompt + resposta) retornados pela API. Usado
+  // como base precisa do indicador de contexto por chat.
+  contextTokens?: number;
 }
 
 export interface ModelUsage {
