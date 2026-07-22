@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo, lazy, Suspense, type ComponentType, type ComponentProps, type ReactNode } from 'react';
 import {
   Archive,
   Trash2,
@@ -13,7 +13,11 @@ import {
   MessageSquare,
   RotateCcw,
   Type,
-  LogOut
+  LogOut,
+  ChevronRight,
+  Edit2,
+  Folder as FolderIcon,
+  FolderPlus
 } from 'lucide-react';
 import { auth, db } from './services/firebase';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
@@ -25,7 +29,7 @@ import ChatInput from './components/ChatInput';
 import MessageTimeline from './components/MessageTimeline';
 import SortableChatItem from './components/SortableChatItem';
 import NemonIcon from './components/NemonIcon';
-import GlobalSearchModal from './components/GlobalSearchModal';
+const GlobalSearchModal = lazyWithSuspense(() => import('./components/GlobalSearchModal'));
 
 import {
   DndContext,
@@ -61,10 +65,12 @@ import {
   setGlobalOpenRouterApiKey,
   setGlobalCustomModels,
   resolveProvider,
-  fetchOpenRouterContextLength,
+  fetchOpenRouterModelMeta,
   listLiveModels,
   setGlobalLocalEndpoint,
   performWebSearch,
+  runGeminiToolLoop,
+  CHAT_TOOLS,
   type Message
 } from './services/gemini';
 
@@ -74,7 +80,9 @@ import {
   type PendingFile,
   type Personality,
   type MemoryFact,
-  type PendingMemoryUpdate
+  type PendingMemoryUpdate,
+  type Folder,
+  type Skill
 } from './types';
 
 import { v4 as uuidv4 } from 'uuid';
@@ -226,8 +234,8 @@ const LIVE_TOOL_LABELS: Record<string, string> = {
   cancel_alarm: 'Cancelou um agendamento'
 };
 
-import LiveView from './components/LiveView';
-import LiveSetupModal from './components/LiveSetupModal';
+const LiveView = lazyWithSuspense(() => import('./components/LiveView'));
+const LiveSetupModal = lazyWithSuspense(() => import('./components/LiveSetupModal'));
 import ChatFileHub from './components/ChatFileHub';
 import { GeminiLiveSession } from './services/geminiLive';
 import { GeminiDictationSession } from './services/geminiDictation';
@@ -238,7 +246,9 @@ import SelectionPopup from './components/SelectionPopup';
 import { logger } from './services/logger';
 import LogWindow from './components/LogWindow';
 
-import SettingsModal from './components/SettingsModal';
+const SettingsModal = lazyWithSuspense(() => import('./components/SettingsModal'));
+const CodePreviewPanel = lazyWithSuspense(() => import('./components/CodePreviewPanel'));
+const ModelCompareModal = lazyWithSuspense(() => import('./components/ModelCompareModal'));
 import {
   LIVE_MODEL_MAP,
   DEFAULT_LIVE_MODEL,
@@ -252,9 +262,28 @@ import {
   estimateTokens,
   type CustomModel
 } from './constants';
+import { useToast } from './hooks/useToast';
+import InChatFind from './components/InChatFind';
+import { exportChatAsMarkdown, exportChatAsJson } from './utils/exportChat';
+import { extractPdfText } from './utils/extractPdfText';
+import { extractMapMarkers, stripMapMarkers } from './utils/mapMarkers';
 
 // Modelo inicial padrão de fábrica (quando nada foi configurado pelo usuário).
 const FALLBACK_MODEL = 'gemma-4-31b-it';
+
+// Carrega um componente sob demanda (code-splitting) já embrulhado em Suspense,
+// mantendo o mesmo nome/props do componente original — os sites de render não mudam.
+function lazyWithSuspense<T extends ComponentType<any>>(
+  loader: () => Promise<{ default: T }>,
+  fallback: ReactNode = null,
+) {
+  const Lazy = lazy(loader);
+  return (props: ComponentProps<T>) => (
+    <Suspense fallback={fallback}>
+      <Lazy {...(props as any)} />
+    </Suspense>
+  );
+}
 
 const getPacificDate = () => {
   return new Intl.DateTimeFormat('en-CA', {
@@ -348,6 +377,7 @@ function assembleDictationAudio(
 }
 
 function App() {
+  const toast = useToast();
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [chats, setChats] = useState<ChatSession[]>([]);
@@ -360,6 +390,13 @@ function App() {
   const [model, setModel] = useState(() => localStorage.getItem('nemon_default_model') || FALLBACK_MODEL);
   // Modelo usado para organizar/categorizar as memórias (DNA). Configurável na aba "Modelos".
   const [memoryModelId, setMemoryModelId] = useState(() => localStorage.getItem('nemon_memory_model') || FALLBACK_MODEL);
+  // Modelos das tarefas internas que exigem google_search (só modelos com hasSearch).
+  const [searchModelId, setSearchModelId] = useState(() => localStorage.getItem('nemon_search_model') || FALLBACK_MODEL);
+  const [factCheckModelId, setFactCheckModelId] = useState(() => localStorage.getItem('nemon_factcheck_model') || FALLBACK_MODEL);
+  // Ferramentas de chat (tool calling) habilitadas globalmente (F3). Ex.: ['calculate','get_weather'].
+  const [enabledChatToolIds, setEnabledChatToolIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('nemon_chat_tools') || '[]'); } catch { return []; }
+  });
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [imageGenEnabled, setImageGenEnabled] = useState(false);
@@ -374,7 +411,7 @@ function App() {
         return JSON.parse(saved);
       } catch { /* ignore */ }
     }
-    return ['gemma-4-31b-it', 'gemini-3.1-flash-lite-preview'];
+    return ['gemma-4-31b-it', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite-preview'];
   });
   const [isArchiveExpanded, setIsArchiveExpanded] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -419,7 +456,7 @@ function App() {
     const n = saved !== null ? parseInt(saved, 10) : 10;
     return isNaN(n) ? 10 : Math.max(0, Math.min(10, n));
   });
-  const [settingsTab, setSettingsTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'dna'>('geral');
+  const [settingsTab, setSettingsTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'skills' | 'dna'>('geral');
   const [showPersonalitySelector, setShowPersonalitySelector] = useState(false);
   const [chatFontSize, setChatFontSize] = useState<number>(() => {
     const saved = localStorage.getItem('nemon_chat_font_size');
@@ -460,6 +497,11 @@ function App() {
     }
     return [];
   });
+  // Pastas para organizar conversas (F5). Persistidas no Firestore (users/{uid}.folders).
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  // Skills (habilidades): templates de prompt + ferramentas. Persistidas no Firestore.
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [liveModel, setLiveModel] = useState(() => {
     const saved = localStorage.getItem('nemon_live_model');
     // Migra a chave antiga (gemini-3.1-flash-live) para o rótulo atual (gemini-3-flash-live).
@@ -476,6 +518,9 @@ function App() {
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [logsCount, setLogsCount] = useState(0);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [showInChatFind, setShowInChatFind] = useState(false);
+  const [previewCode, setPreviewCode] = useState<{ code: string; lang: string } | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   const saveMemoryFactsToFirestore = useCallback((facts: MemoryFact[]) => {
     if (auth.currentUser) {
       const userDocRef = doc(db, 'users', auth.currentUser.uid);
@@ -584,22 +629,91 @@ function App() {
     }
   }, []);
 
-  // Backfill: modelos OpenRouter cadastrados antes do recurso de janela de contexto
-  // não têm `contextLength`. Busca o valor real no OpenRouter uma vez e salva, para
-  // o indicador de contexto deixar de mostrar o fallback (128k) nesses modelos.
+  // ── Pastas (F5) ────────────────────────────────────────────────────────────
+  const saveFolders = useCallback((next: Folder[]) => {
+    setFolders(next);
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { folders: next }).catch(err => console.error("Erro ao salvar pastas:", err));
+    }
+  }, []);
+
+  const handleCreateFolder = useCallback((name: string) => {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    saveFolders([...folders, { id: `f-${Date.now()}`, name: trimmed }]);
+  }, [folders, saveFolders]);
+
+  const handleRenameFolder = useCallback((id: string, name: string) => {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    saveFolders(folders.map(f => f.id === id ? { ...f, name: trimmed } : f));
+  }, [folders, saveFolders]);
+
+  const handleDeleteFolder = useCallback((id: string) => {
+    saveFolders(folders.filter(f => f.id !== id));
+    // Conversas da pasta excluída voltam para "Sem pasta".
+    setChats(prev => prev.map(c => c.folderId === id ? { ...c, folderId: undefined } : c));
+  }, [folders, saveFolders]);
+
+  const handleSetChatFolder = useCallback((chatId: string, folderId: string | null) => {
+    setChats(prev => prev.map(c => c.id === chatId ? { ...c, folderId: folderId || undefined } : c));
+  }, []);
+
+  const toggleFolderCollapsed = useCallback((id: string) => {
+    setCollapsedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // ── Skills (F6/F3) ──────────────────────────────────────────────────────────
+  const saveSkills = useCallback((next: Skill[]) => {
+    setSkills(next);
+    if (auth.currentUser) {
+      const userDocRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userDocRef, { skills: next }).catch(err => console.error("Erro ao salvar skills:", err));
+    }
+  }, []);
+
+  const handleSaveSkill = useCallback((skill: Skill) => {
+    setSkills(prev => {
+      const exists = prev.some(s => s.id === skill.id);
+      const next = exists ? prev.map(s => s.id === skill.id ? skill : s) : [...prev, skill];
+      if (auth.currentUser) {
+        updateDoc(doc(db, 'users', auth.currentUser.uid), { skills: next }).catch(err => console.error("Erro ao salvar skills:", err));
+      }
+      return next;
+    });
+  }, []);
+
+  const handleDeleteSkill = useCallback((id: string) => {
+    saveSkills(skills.filter(s => s.id !== id));
+  }, [skills, saveSkills]);
+
+  // Templates de prompt (para o menu "/" do chat).
+  const promptSkills = useMemo(() => skills.filter(s => s.kind === 'prompt'), [skills]);
+
+  // Backfill: modelos OpenRouter cadastrados antes destes recursos podem não ter
+  // `contextLength` e/ou `capabilities`. Busca os metadados no OpenRouter uma vez e
+  // salva, para o indicador de contexto e os emojis de capacidade aparecerem.
   useEffect(() => {
     if (!openRouterApiKey) return;
-    const missing = customModels.filter(m => m.provider === 'openrouter' && !m.contextLength);
+    const missing = customModels.filter(m => m.provider === 'openrouter' && (!m.contextLength || !m.capabilities));
     if (missing.length === 0) return;
     let cancelled = false;
     (async () => {
       const resolved = await Promise.all(
-        missing.map(async m => ({ id: m.id, ctx: await fetchOpenRouterContextLength(m.id) }))
+        missing.map(async m => ({ id: m.id, meta: await fetchOpenRouterModelMeta(m.id) }))
       );
       if (cancelled) return;
-      const ctxById = new Map(resolved.filter(r => r.ctx).map(r => [r.id, r.ctx as number]));
-      if (ctxById.size === 0) return; // nada resolvido: não re-dispara (customModels inalterado)
-      saveCustomModels(customModels.map(m => ctxById.has(m.id) ? { ...m, contextLength: ctxById.get(m.id) } : m));
+      const metaById = new Map(resolved.filter(r => r.meta.contextLength || r.meta.capabilities).map(r => [r.id, r.meta]));
+      if (metaById.size === 0) return; // nada resolvido: não re-dispara (customModels inalterado)
+      saveCustomModels(customModels.map(m => {
+        const meta = metaById.get(m.id);
+        return meta ? { ...m, contextLength: m.contextLength ?? meta.contextLength, capabilities: m.capabilities ?? meta.capabilities } : m;
+      }));
     })();
     return () => { cancelled = true; };
   }, [customModels, openRouterApiKey, saveCustomModels]);
@@ -630,6 +744,10 @@ function App() {
   const liveSessionRef = useRef<GeminiLiveSession | null>(null);
   // Espelho sempre atual da voz LIVE, usado pelo executor de ferramentas e helpers.
   const liveVoiceRef = useRef<string>(liveVoice);
+  // Refs para o executor de ferramentas do LIVE, reusado no tool calling do chat
+  // (F3) — evita TDZ/dep já que handleLiveToolCall é definido mais abaixo.
+  const liveToolCallRef = useRef<((name: string, args: any) => Promise<{ result: string }>) | null>(null);
+  const liveToolUsedRef = useRef<((name: string) => void) | null>(null);
   // Valor sempre atual do volume + nó de ganho do pipeline de áudio do LIVE.
   const liveVolumeRef = useRef<number>(liveVolume);
   const liveGainNodeRef = useRef<GainNode | null>(null);
@@ -720,6 +838,10 @@ function App() {
     localStorage.setItem('nemon_memory_model', memoryModelId);
   }, [memoryModelId]);
 
+  useEffect(() => { localStorage.setItem('nemon_search_model', searchModelId); }, [searchModelId]);
+  useEffect(() => { localStorage.setItem('nemon_factcheck_model', factCheckModelId); }, [factCheckModelId]);
+  useEffect(() => { localStorage.setItem('nemon_chat_tools', JSON.stringify(enabledChatToolIds)); }, [enabledChatToolIds]);
+
   // Resolve o modelo com que um novo chat deve abrir: o padrão do usuário se ele
   // ainda existir (interno ou customizado); senão, cai no modelo de fábrica.
   const resolveStartModel = useCallback(() => {
@@ -728,11 +850,23 @@ function App() {
     return exists ? defaultModelId : FALLBACK_MODEL;
   }, [defaultModelId, customModels]);
 
-  // Ao abrir um novo chat (sem chat ativo), pré-seleciona o modelo padrão. Não
-  // dispara ao entrar num chat existente nem após o 1º envio (activeChatId != '').
+  // Ao trocar de chat: restaura o modelo salvo naquela conversa; num chat novo
+  // (sem id), pré-seleciona o modelo padrão. Usa chatsRef p/ não re-disparar a
+  // cada atualização de `chats` (ex.: streaming) — só depende do id ativo.
   useEffect(() => {
-    if (activeChatId === '') setModel(resolveStartModel());
+    if (activeChatId === '') { setModel(resolveStartModel()); return; }
+    const chat = chatsRef.current.find(c => c.id === activeChatId);
+    setModel(chat?.model || resolveStartModel());
   }, [activeChatId, resolveStartModel]);
+
+  // Troca de modelo pelo seletor do chat: atualiza a seleção atual e persiste no
+  // chat ativo (para a conversa lembrar o modelo entre trocas e reloads).
+  const handleSetModel = useCallback((id: string) => {
+    setModel(id);
+    if (activeChatId) {
+      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, model: id } : c));
+    }
+  }, [activeChatId]);
 
   useEffect(() => {
     localStorage.setItem('nemon_sidebar_open', isSidebarOpen.toString());
@@ -976,12 +1110,12 @@ function App() {
       console.log("Organização de DNA concluída com sucesso!");
     } catch (e) {
       console.error("Erro fatal na auto-categorização:", e);
-      alert("Houve um problema ao organizar: " + (e instanceof Error ? e.message : "Erro desconhecido"));
+      toast.error("Houve um problema ao organizar as memórias: " + (e instanceof Error ? e.message : "Erro desconhecido"));
     } finally {
       setIsCategorizing(false);
       setCategorizationProgress({ current: 0, total: 0 });
     }
-  }, [memoryFacts, saveMemoryFactsToFirestore, memoryModelId]);
+  }, [memoryFacts, saveMemoryFactsToFirestore, memoryModelId, toast]);
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = useMemo(() => activeChat?.messages || [], [activeChat]);
@@ -1057,6 +1191,8 @@ function App() {
           let dbDefaultApiKey = '';
           let dbOpenRouterApiKey = '';
           let dbCustomModels: CustomModel[] = [];
+          let dbFolders: Folder[] = [];
+          let dbSkills: Skill[] = [];
           let dbSidebarOrder: string[] = [];
 
           if (userDocSnap.exists()) {
@@ -1070,6 +1206,8 @@ function App() {
             dbDefaultApiKey = data.defaultApiKey || '';
             dbOpenRouterApiKey = data.openRouterApiKey || '';
             dbCustomModels = Array.isArray(data.customModels) ? data.customModels : [];
+            dbFolders = Array.isArray(data.folders) ? data.folders : [];
+            dbSkills = Array.isArray(data.skills) ? data.skills : [];
             dbSidebarOrder = data.sidebarOrder || [];
 
             // Sync settings to states
@@ -1092,6 +1230,9 @@ function App() {
                 setModel(data.settings.defaultModelId);
               }
               if (data.settings.memoryModelId) setMemoryModelId(data.settings.memoryModelId);
+              if (data.settings.searchModelId) setSearchModelId(data.settings.searchModelId);
+              if (data.settings.factCheckModelId) setFactCheckModelId(data.settings.factCheckModelId);
+              if (Array.isArray(data.settings.enabledChatToolIds)) setEnabledChatToolIds(data.settings.enabledChatToolIds);
               if (data.settings.isLiveProactive !== undefined) setIsLiveProactive(data.settings.isLiveProactive);
               if (data.settings.liveVoice) setLiveVoice(data.settings.liveVoice);
               if (data.settings.liveModel) setLiveModel(data.settings.liveModel);
@@ -1108,6 +1249,8 @@ function App() {
               defaultApiKey: '',
               openRouterApiKey: '',
               customModels: [],
+              folders: [],
+              skills: [],
               sidebarOrder: [],
               settings: {
                 theme,
@@ -1119,6 +1262,9 @@ function App() {
                 enabledModelIds,
                 defaultModelId,
                 memoryModelId,
+                searchModelId,
+                factCheckModelId,
+                enabledChatToolIds,
                 isLiveProactive,
                 liveVoice,
                 liveModel
@@ -1138,6 +1284,8 @@ function App() {
           setGlobalOpenRouterApiKey(dbOpenRouterApiKey);
           setCustomModels(dbCustomModels);
           setGlobalCustomModels(dbCustomModels);
+          setFolders(dbFolders);
+          setSkills(dbSkills);
 
           // Load all chats
           const chatsColRef = collection(db, 'users', uid, 'chats');
@@ -1183,6 +1331,8 @@ function App() {
         setOpenRouterApiKey('');
         setGlobalOpenRouterApiKey('');
         setCustomModels([]);
+        setFolders([]);
+        setSkills([]);
         setGlobalCustomModels([]);
       }
       setIsAuthLoading(false);
@@ -1262,6 +1412,9 @@ function App() {
           enabledModelIds,
           defaultModelId,
           memoryModelId,
+          searchModelId,
+          factCheckModelId,
+          enabledChatToolIds,
           isLiveProactive,
           liveVoice,
           liveModel,
@@ -1269,7 +1422,7 @@ function App() {
         }
       }).catch(e => console.error("Erro ao salvar configurações no Firestore:", e));
     }
-  }, [theme, chatMargin, selectedPersonalityId, livePersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, defaultModelId, memoryModelId, isLiveProactive, liveVoice, liveModel, retroMode, isAuthLoading, isInitialLoading]);
+  }, [theme, chatMargin, selectedPersonalityId, livePersonalityId, chatFontSize, appFont, isOrderLocked, enabledModelIds, defaultModelId, memoryModelId, searchModelId, factCheckModelId, enabledChatToolIds, isLiveProactive, liveVoice, liveModel, retroMode, isAuthLoading, isInitialLoading]);
 
   useEffect(() => {
     localStorage.setItem('nemon_sidebar_locked', JSON.stringify(isOrderLocked));
@@ -1430,11 +1583,15 @@ function App() {
     replaceId?: string,
     isAppending: boolean = false,
     _originalText: string = '',
-    originalThoughts: string = ''
+    originalThoughts: string = '',
+    modelOverride?: string
   ) => {
     setIsLoading(true);
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    // Modelo efetivo da requisição: um override (ex.: "regenerar com outro modelo")
+    // tem prioridade sobre o modelo atual da conversa.
+    const activeModel = modelOverride || model;
 
     // Personalidade é POR CHAT: usa a salva no chat alvo (fallback para a padrão).
     const chatPersonalityId = chatsRef.current.find(c => c.id === targetChatId)?.personalityId ?? 'default';
@@ -1453,7 +1610,8 @@ function App() {
       "     * Use <UPDATE_MEMORY id='ID'>novo texto</UPDATE_MEMORY> APENAS quando um fato salvo anteriormente tiver mudado de verdade (ex: mudou de idade, mudou de cidade, mudou de emprego) ou estiver comprovadamente errado/desatualizado. A atualização serve para substituir a informação desatualizada pela nova, mantendo o mesmo ID.\n" +
       "       Exemplo: Se já existe [ID: 456] 'O usuário tem 19 anos' e ele diz 'Fiz 20 anos hoje', use <UPDATE_MEMORY id='456'>O usuário tem 20 anos</UPDATE_MEMORY>.\n" +
       "   - NUNCA atualize uma memória se a nova informação for apenas complementar e puder ser armazenada em um fato separado.\n" +
-      "3. Seja conciso e direto ao ponto quando possível.";
+      "3. Seja conciso e direto ao ponto quando possível.\n" +
+      "4. LOCALIZAÇÃO/MAPA: Quando o usuário perguntar ONDE fica um lugar, endereço, ponto de referência ou estabelecimento, escreva sua resposta normalmente e inclua um marcador no formato [MAP: <local o mais específico possível, com cidade/estado se souber>]. O marcador vira um mapa interativo embutido — não descreva o marcador nem o mencione em voz alta, apenas inclua-o. Ex.: 'Fica no centro histórico. [MAP: Praça da Sé, São Paulo, SP]'. Use apenas quando fizer sentido geográfico.";
 
     // Suavizador do streaming (efeito máquina de escrever). Declarado fora do try
     // para o finally poder cancelá-lo em caso de erro/abort.
@@ -1520,14 +1678,14 @@ function App() {
       // EXCEÇÃO: modelos OpenRouter usam a busca web NATIVA do próprio OpenRouter
       // (plugin `web`), então não delegamos — passamos webSearch adiante.
       const SEARCH_MODEL = 'gemma-4-31b-it';
-      const isOpenRouterModel = resolveProvider(model) === 'openrouter';
+      const isOpenRouterModel = resolveProvider(activeModel) === 'openrouter';
       let effectiveWebSearch = webSearchEnabled;
       let effectiveSystemInstruction = systemInstruction;
       const preSources: { title: string; uri: string }[] = [];
-      if (webSearchEnabled && model !== SEARCH_MODEL && !isOpenRouterModel) {
+      if (webSearchEnabled && activeModel !== SEARCH_MODEL && !isOpenRouterModel) {
         let searchFound = false;
         try {
-          const searchRes = await performWebSearch(userText, controller.signal);
+          const searchRes = await performWebSearch(userText, controller.signal, undefined, searchModelId);
           // Consideramos a busca bem-sucedida se houver resumo OU ao menos uma fonte.
           if (searchRes.summary || searchRes.sources.length > 0) {
             searchFound = true;
@@ -1548,13 +1706,39 @@ function App() {
         effectiveWebSearch = false; // o modelo principal recebe o contexto já pesquisado
       }
 
-      const stream = streamGeminiContent(userText, model, apiHistory, effectiveSystemInstruction, filesToSend, effectiveWebSearch, controller.signal, thinkingEnabled);
+      // PDFs: o Gemini processa nativamente (inlineData). Provedores compatíveis com
+      // OpenAI (OpenRouter/local) não recebem PDF binário — extraímos o texto no
+      // cliente (pdf.js) e injetamos no prompt, removendo o PDF dos anexos enviados.
+      let requestText = userText;
+      let requestFiles = filesToSend;
+      if (resolveProvider(activeModel) !== 'gemini') {
+        const pdfs = filesToSend.filter(f => f.mimeType === 'application/pdf');
+        if (pdfs.length > 0) {
+          const extracted = await Promise.all(pdfs.map(async f => {
+            try {
+              const t = await extractPdfText(f.data);
+              return t ? `\n\n[Conteúdo do documento "${f.name}"]:\n${t}` : `\n\n[O documento "${f.name}" não contém texto extraível.]`;
+            } catch {
+              return `\n\n[Não foi possível extrair o texto do documento "${f.name}".]`;
+            }
+          }));
+          requestText = userText + extracted.join('');
+          requestFiles = filesToSend.filter(f => f.mimeType !== 'application/pdf');
+        }
+      }
+
       let fullText = "";
       let fullThoughts = "";
       const allSources: { title: string; uri: string }[] = [...preSources];
       let isSearching = effectiveWebSearch;
       let isGrounded = preSources.length > 0;
       let finalUsage = null;
+
+      // Tool calling (F3): só para Gemini, com ferramentas habilitadas, fora do modo
+      // "append" e quando não há busca web nativa/gemma em curso.
+      const useChatTools = enabledChatToolIds.length > 0
+        && resolveProvider(activeModel) === 'gemini'
+        && !isAppending && !effectiveWebSearch;
 
       // Suavização caractere-a-caractere: o onFrame recebe o texto e o raciocínio
       // já "revelados" e monta a mensagem com os metadados atuais (fontes, grounding).
@@ -1575,44 +1759,61 @@ function App() {
         } : c));
       });
 
-      for await (const chunk of stream) {
-        if (chunk.text) fullText += chunk.text;
-        if (chunk.thoughts && thinkingEnabled) fullThoughts += chunk.thoughts;
-        if (chunk.isGrounded) isGrounded = true;
-        if (chunk.isSearching) isSearching = true;
-        if (allSources.length > 0) isSearching = false;
-        if (chunk.usage) finalUsage = chunk.usage;
-        if (chunk.sources) {
-          chunk.sources.forEach(src => {
-            if (!allSources.find(s => s.uri === src.uri || (s.title && s.title === src.title))) {
-              allSources.push(src);
-            }
-          });
-        }
-
-        // Limpeza em tempo real para o streaming
-        let streamingText = fullText;
-        let streamingThoughts = fullThoughts;
-
-        // 1. Extrair blocos completos de <thinking>
-        const completeThinkingMatch = /<thinking>([\s\S]*?)<\/thinking>/g;
-        let m;
-        while ((m = completeThinkingMatch.exec(fullText)) !== null) {
-          if (thinkingEnabled && !streamingThoughts.includes(m[1].trim())) {
-            streamingThoughts += (streamingThoughts ? "\n" : "") + m[1].trim();
+      if (useChatTools) {
+        // Loop agêntico (não-streaming): resolve as ferramentas e revela o texto final.
+        isSearching = false;
+        const toolRun = await runGeminiToolLoop(
+          requestText, activeModel, apiHistory, effectiveSystemInstruction,
+          enabledChatToolIds,
+          (name, args) => liveToolCallRef.current
+            ? liveToolCallRef.current(name, args)
+            : Promise.resolve({ result: 'Ferramenta indisponível.' }),
+          controller.signal,
+        );
+        toolRun.toolsUsed.forEach(n => { try { liveToolUsedRef.current?.(n); } catch { /* ignore */ } });
+        fullText = toolRun.text;
+        smoother.setTargets(stripMapMarkers(stripSearchMarkers(parseMemoryTags(fullText).trim())), '');
+      } else {
+        const stream = streamGeminiContent(requestText, activeModel, apiHistory, effectiveSystemInstruction, requestFiles, effectiveWebSearch, controller.signal, thinkingEnabled);
+        for await (const chunk of stream) {
+          if (chunk.text) fullText += chunk.text;
+          if (chunk.thoughts && thinkingEnabled) fullThoughts += chunk.thoughts;
+          if (chunk.isGrounded) isGrounded = true;
+          if (chunk.isSearching) isSearching = true;
+          if (allSources.length > 0) isSearching = false;
+          if (chunk.usage) finalUsage = chunk.usage;
+          if (chunk.sources) {
+            chunk.sources.forEach(src => {
+              if (!allSources.find(s => s.uri === src.uri || (s.title && s.title === src.title))) {
+                allSources.push(src);
+              }
+            });
           }
-          streamingText = streamingText.replace(m[0], '');
+
+          // Limpeza em tempo real para o streaming
+          let streamingText = fullText;
+          let streamingThoughts = fullThoughts;
+
+          // 1. Extrair blocos completos de <thinking>
+          const completeThinkingMatch = /<thinking>([\s\S]*?)<\/thinking>/g;
+          let m;
+          while ((m = completeThinkingMatch.exec(fullText)) !== null) {
+            if (thinkingEnabled && !streamingThoughts.includes(m[1].trim())) {
+              streamingThoughts += (streamingThoughts ? "\n" : "") + m[1].trim();
+            }
+            streamingText = streamingText.replace(m[0], '');
+          }
+
+          // 2. Ocultar blocos incompletos ou texto que parece ser raciocínio (fallback)
+          if (streamingText.includes('<thinking>')) {
+            streamingText = streamingText.split('<thinking>')[0];
+          }
+
+          const currentCleanText = stripMapMarkers(stripSearchMarkers(parseMemoryTags(streamingText).trim()));
+
+          // Alimenta o suavizador; ele revela o texto/raciocínio caractere a caractere.
+          smoother.setTargets(currentCleanText, streamingThoughts.trim());
         }
-
-        // 2. Ocultar blocos incompletos ou texto que parece ser raciocínio (fallback)
-        if (streamingText.includes('<thinking>')) {
-          streamingText = streamingText.split('<thinking>')[0];
-        }
-
-        const currentCleanText = stripSearchMarkers(parseMemoryTags(streamingText).trim());
-
-        // Alimenta o suavizador; ele revela o texto/raciocínio caractere a caractere.
-        smoother.setTargets(currentCleanText, streamingThoughts.trim());
       }
 
       // Garante que toda a revelação termine antes de aplicar o texto final.
@@ -1622,11 +1823,11 @@ function App() {
         setDailyUsage((prev: DailyUsage) => {
           const today = getPacificDate();
           const state = prev.date === today ? prev : { date: today, models: {} };
-          const modelData = state.models[model] || { requests: 0, tokens: { prompt: 0, candidates: 0, total: 0 } };
+          const modelData = state.models[activeModel] || { requests: 0, tokens: { prompt: 0, candidates: 0, total: 0 } };
           const newState: DailyUsage = {
             ...state,
             models: {
-              ...state.models, [model]: {
+              ...state.models, [activeModel]: {
                 requests: modelData.requests + 1,
                 tokens: {
                   prompt: modelData.tokens.prompt + (finalUsage.promptTokenCount || 0),
@@ -1668,6 +1869,11 @@ function App() {
         updatesFound = upds;
       }).trim());
 
+      // F8: extrai marcadores [MAP: …] → locais embutidos + remove do texto exibido.
+      const mapResult = extractMapMarkers(finalCleanText);
+      finalCleanText = mapResult.text;
+      const finalMaps = mapResult.maps;
+
       // 2. LÓGICA DE AUTO-RECUPERAÇÃO (Hidden Turn)
       if (!finalCleanText && finalThoughts && finalThoughts.length > 50) {
         // Mostrar estado temporário amigável
@@ -1679,7 +1885,7 @@ function App() {
         try {
           const recoveryRes = await generateGeminiContent(
             `O modelo gerou apenas o raciocínio interno. Com base no raciocínio abaixo, escreva apenas a RESPOSTA FINAL amigável e direta para o usuário (em Português), ignorando a parte técnica do planejamento:\n\n${finalThoughts}`,
-            model,
+            activeModel,
             [],
             "Você é o Nemon. Resuma o raciocínio em uma resposta final útil."
           );
@@ -1707,6 +1913,7 @@ function App() {
           isGrounded,
           isVerifying: false,
           sources: [...allSources],
+          maps: isAppending ? (m.maps || finalMaps) : (finalMaps.length > 0 ? finalMaps : undefined),
           pendingMemoryUpdates: updatesFound.length > 0
             ? [...(m.pendingMemoryUpdates || []), ...updatesFound]
             : m.pendingMemoryUpdates
@@ -1747,7 +1954,7 @@ function App() {
       currentAiMsgIdRef.current = null;
       setChats(prev => prev);
     }
-  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, parseMemoryTags]);
+  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, parseMemoryTags, searchModelId, enabledChatToolIds]);
 
   const handleStopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1792,7 +1999,7 @@ function App() {
     })));
 
     try {
-      const results = await performFactCheck(segmentText);
+      const results = await performFactCheck(segmentText, undefined, factCheckModelId);
       setChats(prev => prev.map(chat => {
         if (chat.id === activeChatId) {
           return {
@@ -1820,7 +2027,7 @@ function App() {
         messages: chat.messages.map(msg => msg.id === messageId ? { ...msg, isVerifying: false } : msg)
       })));
     }
-  }, [activeChatId]);
+  }, [activeChatId, factCheckModelId]);
 
   const handleAskAboutSegment = useCallback((segmentText: string, questionText: string) => {
     const contextualPrompt = `Contexto selecionado: "${segmentText}"\n\nPergunta do usuário: ${questionText}`;
@@ -2280,9 +2487,9 @@ function App() {
         setLiveVisionType('camera');
       }
     } catch {
-      alert("Não foi possível acessar a câmera.");
+      toast.error("Não foi possível acessar a câmera.");
     }
-  }, [liveVisionType]);
+  }, [liveVisionType, toast]);
 
   const handleToggleScreen = useCallback(async () => {
     if (!liveSessionRef.current) return;
@@ -2295,9 +2502,9 @@ function App() {
         setLiveVisionType('screen');
       }
     } catch {
-      alert("Não foi possível compartilhar a tela.");
+      toast.error("Não foi possível compartilhar a tela.");
     }
-  }, [liveVisionType]);
+  }, [liveVisionType, toast]);
 
   const handleInterruptLive = useCallback(() => {
     // Parar todos os nós de áudio ativos e agendados
@@ -2627,7 +2834,7 @@ function App() {
         const claim = String(a.claim || '').trim();
         if (!claim) return { result: 'Informe a afirmação a verificar.' };
         try {
-          const results = await performFactCheck(claim);
+          const results = await performFactCheck(claim, undefined, factCheckModelId);
           if (!results || results.length === 0) {
             return { result: 'Não consegui verificar essa afirmação com fontes agora.' };
           }
@@ -2762,7 +2969,14 @@ function App() {
       default:
         return { result: `Ferramenta desconhecida: ${name}.` };
     }
-  }, [handleToggleCamera, handleToggleScreen, handleOpenSettings, handleLiveStop, saveMemoryFactsToFirestore, scheduleWake, applyLiveVoice, useMemoryLive]);
+  }, [handleToggleCamera, handleToggleScreen, handleOpenSettings, handleLiveStop, saveMemoryFactsToFirestore, scheduleWake, applyLiveVoice, useMemoryLive, factCheckModelId]);
+
+  // Mantém os refs do executor/feedback de ferramentas sempre atuais, para o tool
+  // calling do chat (executeAIRequest) usá-los sem depender da ordem de declaração.
+  useEffect(() => {
+    liveToolCallRef.current = handleLiveToolCall;
+    liveToolUsedRef.current = handleLiveToolUsed;
+  }, [handleLiveToolCall, handleLiveToolUsed]);
 
   // Mantém o ref do executor sempre apontando para a versão mais recente.
   useEffect(() => {
@@ -2783,7 +2997,7 @@ function App() {
     let isFirst = false;
     if (!activeChatId) {
       targetId = Date.now().toString();
-      const newChat: ChatSession = { id: targetId, title: 'Nova Conversa', messages: [], isNaming: true, personalityId: selectedPersonalityId };
+      const newChat: ChatSession = { id: targetId, title: 'Nova Conversa', messages: [], isNaming: true, personalityId: selectedPersonalityId, model };
       setChats(prev => [newChat, ...prev]);
       setActiveChatId(targetId);
       isFirst = true;
@@ -2799,7 +3013,7 @@ function App() {
     }));
 
     executeAIRequest(targetId, text, files, apiHistory, isFirst);
-  }, [activeChatId, activeChat, executeAIRequest, isLiveActive, resetProactivityState, selectedPersonalityId]);
+  }, [activeChatId, activeChat, executeAIRequest, isLiveActive, resetProactivityState, selectedPersonalityId, model]);
 
   const handleResolveMemoryUpdate = useCallback((messageId: string, updateId: string, action: 'accepted' | 'ignored') => {
     let updateToApply: any = null;
@@ -2945,7 +3159,7 @@ function App() {
     if (!msg) return;
 
     try {
-      const results = await performFactCheck(msg.text, controller.signal);
+      const results = await performFactCheck(msg.text, controller.signal, factCheckModelId);
 
       delete factCheckControllersRef.current[msgId];
 
@@ -2981,7 +3195,7 @@ function App() {
         return chat;
       }));
     }
-  }, [activeChat, activeChatId]);
+  }, [activeChat, activeChatId, factCheckModelId]);
 
   const handleDeleteChat = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -3007,6 +3221,16 @@ function App() {
     setChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, archived: !chat.archived } : chat));
     if (chatId === activeChatId) setActiveChatId('');
   }, [activeChatId]);
+
+  const handleExportChat = useCallback((chat: ChatSession, format: 'md' | 'json') => {
+    try {
+      if (format === 'json') exportChatAsJson(chat);
+      else exportChatAsMarkdown(chat);
+      toast.success(`Conversa exportada em ${format === 'json' ? 'JSON' : 'Markdown'}.`);
+    } catch (e) {
+      toast.error('Falha ao exportar a conversa: ' + (e instanceof Error ? e.message : 'erro desconhecido'));
+    }
+  }, [toast]);
 
   const handleRestoreChat = useCallback((chatId: string) => {
     setChats(prev => prev.map(chat => chat.id === chatId ? { ...chat, archived: false } : chat));
@@ -3047,6 +3271,31 @@ function App() {
     }
   };
 
+  // Renderiza um item de conversa na sidebar (reusado nos grupos de pastas).
+  const renderChatItem = (chat: ChatSession) => (
+    <SortableChatItem
+      key={chat.id}
+      chat={chat}
+      activeChatId={activeChatId}
+      editingChatId={editingChatId}
+      editTitle={editTitle}
+      menuOpenId={menuOpenId}
+      isLocked={isOrderLocked}
+      folders={folders}
+      onSetFolder={handleSetChatFolder}
+      onSelect={(id) => { setActiveChatId(id); if (window.innerWidth < 768) setIsSidebarOpen(false); setActiveTab('chat'); }}
+      onRename={handleRenameChat}
+      onEditTitleChange={setEditTitle}
+      onRenameConfirm={handleRenameChat}
+      onToggleMenu={(id) => setMenuOpenId(menuOpenId === id ? null : id)}
+      onTogglePin={handleTogglePin}
+      onArchive={handleArchiveChat}
+      onDelete={handleDeleteChat}
+      onSetEditingId={(id, title) => { setEditingChatId(id); setEditTitle(title); }}
+      onExport={handleExportChat}
+    />
+  );
+
   const handleSaveEdit = useCallback((msgId: string) => {
     if (!activeChatId || !editingMsgText.trim() || isLoading) return;
     const chat = chats.find(c => c.id === activeChatId);
@@ -3073,21 +3322,72 @@ function App() {
     executeAIRequest(activeChatId, newText, chat.messages[msgIndex].files || [], apiHistory, false, chat.messages[msgIndex + 1]?.id);
   }, [activeChatId, chats, editingMsgText, isLoading, executeAIRequest]);
 
-  const handleRegenerate = useCallback((msgId: string) => {
+  // Regenera a resposta. Se `newModelId` for passado (menu "Regenerar com…"), a
+  // conversa adota esse modelo e ele é usado na requisição.
+  const handleRegenerate = useCallback((msgId: string, newModelId?: string) => {
     if (!activeChatId || isLoading) return;
     const chat = chats.find(c => c.id === activeChatId);
     if (!chat) return;
     const idx = chat.messages.findIndex(m => m.id === msgId);
     if (idx <= 0) return;
     const userMsg = chat.messages[idx - 1];
-    setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: c.messages.map(m => m.id === msgId ? { ...m, text: '', thoughts: '' } : m) } : c));
+    if (newModelId) {
+      setModel(newModelId);
+      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, model: newModelId, messages: c.messages.map(m => m.id === msgId ? { ...m, text: '', thoughts: '' } : m) } : c));
+    } else {
+      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: c.messages.map(m => m.id === msgId ? { ...m, text: '', thoughts: '' } : m) } : c));
+    }
     const historyBefore = chat.messages.slice(0, idx - 1);
     const apiHistory = historyBefore.map(m => ({
       role: m.role === 'ai' ? 'model' : 'user',
       parts: [...(m.files?.map(f => ({ inlineData: { mimeType: f.mimeType, data: f.data } })) || []), { text: m.text }]
     }));
-    executeAIRequest(activeChatId, userMsg.text, userMsg.files || [], apiHistory, false, msgId);
+    executeAIRequest(activeChatId, userMsg.text, userMsg.files || [], apiHistory, false, msgId, false, '', '', newModelId);
   }, [activeChatId, chats, isLoading, executeAIRequest]);
+
+  // Ramifica a conversa a partir de uma mensagem: cria um novo chat com o histórico
+  // até (e incluindo) essa mensagem, e o ativa. A conversa original fica intacta.
+  const handleBranchFromMessage = useCallback((msgId: string) => {
+    const chat = chats.find(c => c.id === activeChatId);
+    if (!chat) return;
+    const idx = chat.messages.findIndex(m => m.id === msgId);
+    if (idx < 0) return;
+    const newId = Date.now().toString();
+    const branched: ChatSession = {
+      id: newId,
+      title: `${chat.title} (ramificação)`,
+      messages: chat.messages.slice(0, idx + 1).map(m => ({ ...m })),
+      personalityId: chat.personalityId,
+      model: chat.model,
+    };
+    setChats(prev => [branched, ...prev]);
+    setActiveChatId(newId);
+    setActiveTab('chat');
+    toast.success('Conversa ramificada em um novo chat.');
+  }, [activeChatId, chats, toast]);
+
+  // F2: insere no chat ativo (ou cria um) o par prompt+resposta escolhido na comparação.
+  const handleKeepComparison = useCallback((modelId: string, prompt: string, response: string) => {
+    setCompareOpen(false);
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', text: prompt };
+    const aiMsg: Message = { id: (Date.now() + 1).toString() + '-ai', role: 'ai', text: response };
+    if (activeChatId) {
+      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, model: modelId, messages: [...c.messages, userMsg, aiMsg] } : c));
+    } else {
+      const newId = Date.now().toString();
+      setChats(prev => [{ id: newId, title: prompt.slice(0, 40) || 'Comparação', messages: [userMsg, aiMsg], model: modelId }, ...prev]);
+      setActiveChatId(newId);
+    }
+    setModel(modelId);
+    setActiveTab('chat');
+    toast.success('Resposta adicionada ao chat.');
+  }, [activeChatId, toast]);
+
+  // Modelos habilitados (internos + customizados) para o menu "Regenerar com…".
+  const regenModels = useMemo(() => [
+    ...MODEL_OPTIONS.filter(o => enabledModelIds.includes(o.id)).map(o => ({ id: o.id, name: o.name })),
+    ...customModels.filter(m => enabledModelIds.includes(m.id)).map(m => ({ id: m.id, name: m.name })),
+  ], [enabledModelIds, customModels]);
 
   const handleJumpToMessage = useCallback((id: string) => {
     const msgIndex = messages.findIndex(m => m.id === id);
@@ -3116,6 +3416,22 @@ function App() {
       }
     }
   }, [messages, visibleMessagesCount]);
+
+  // Atalho "localizar nesta conversa" (Ctrl/Cmd+F) — só no chat com conversa aberta.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        if (activeTab === 'chat' && activeChatId && !isLiveActive) {
+          e.preventDefault();
+          setShowInChatFind(true);
+        }
+      } else if (e.key === 'Escape') {
+        setShowInChatFind(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeTab, activeChatId, isLiveActive]);
 
 
   // Intersection Observer for Message Timeline sync
@@ -3252,14 +3568,23 @@ function App() {
         <div className="flex-1 overflow-y-auto custom-scrollbar px-2">
           <div className="flex items-center justify-between px-3 mb-4 mt-6">
             <div className="text-[14px] font-medium text-(--text-primary)">Conversas</div>
-            <button
-              onClick={() => setIsOrderLocked(!isOrderLocked)}
-              className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-(--text-secondary) opacity-40 hover:opacity-100 hover:bg-(--bg-chat-hover)' : ''}`}
-              style={!isOrderLocked ? { color: 'var(--accent-text)', background: 'var(--accent-bg)' } : {}}
-              title={isOrderLocked ? "Destravar reordenação" : "Travar reordenação"}
-            >
-              {isOrderLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => { const n = window.prompt('Nome da nova pasta:'); if (n) handleCreateFolder(n); }}
+                className="p-1.5 rounded-md text-(--text-secondary) opacity-40 hover:opacity-100 hover:bg-(--bg-chat-hover) transition-all"
+                title="Nova pasta"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setIsOrderLocked(!isOrderLocked)}
+                className={`p-1.5 rounded-md transition-all ${isOrderLocked ? 'text-(--text-secondary) opacity-40 hover:opacity-100 hover:bg-(--bg-chat-hover)' : ''}`}
+                style={!isOrderLocked ? { color: 'var(--accent-text)', background: 'var(--accent-bg)' } : {}}
+                title={isOrderLocked ? "Destravar reordenação" : "Travar reordenação"}
+              >
+                {isOrderLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -3270,31 +3595,63 @@ function App() {
               onDragEnd={handleDragEnd}
               modifiers={[restrictToVerticalAxis]}
             >
-              <SortableContext
-                items={chats.filter(c => !c.archived).map(c => c.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {chats.filter(c => !c.archived).map(chat => (
-                  <SortableChatItem
-                    key={chat.id}
-                    chat={chat}
-                    activeChatId={activeChatId}
-                    editingChatId={editingChatId}
-                    editTitle={editTitle}
-                    menuOpenId={menuOpenId}
-                    isLocked={isOrderLocked}
-                    onSelect={(id) => { setActiveChatId(id); if (window.innerWidth < 768) setIsSidebarOpen(false); setActiveTab('chat'); }}
-                    onRename={handleRenameChat}
-                    onEditTitleChange={setEditTitle}
-                    onRenameConfirm={handleRenameChat}
-                    onToggleMenu={(id) => setMenuOpenId(menuOpenId === id ? null : id)}
-                    onTogglePin={handleTogglePin}
-                    onArchive={handleArchiveChat}
-                    onDelete={handleDeleteChat}
-                    onSetEditingId={(id, title) => { setEditingChatId(id); setEditTitle(title); }}
-                  />
-                ))}
-              </SortableContext>
+              {(() => {
+                const activeChats = chats.filter(c => !c.archived);
+                if (folders.length === 0) {
+                  return (
+                    <SortableContext items={activeChats.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                      {activeChats.map(renderChatItem)}
+                    </SortableContext>
+                  );
+                }
+                const noFolder = activeChats.filter(c => !c.folderId || !folders.some(f => f.id === c.folderId));
+                return (
+                  <>
+                    {folders.map(folder => {
+                      const fchats = activeChats.filter(c => c.folderId === folder.id);
+                      const collapsed = collapsedFolders.has(folder.id);
+                      return (
+                        <div key={folder.id} className="mb-1">
+                          <div className="flex items-center gap-1 px-2 py-1 group/folder">
+                            <button
+                              onClick={() => toggleFolderCollapsed(folder.id)}
+                              className="flex items-center gap-1.5 flex-1 min-w-0 text-[11px] font-bold uppercase tracking-wider text-(--text-placeholder) hover:text-(--text-primary) transition-colors"
+                            >
+                              <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${collapsed ? '' : 'rotate-90'}`} />
+                              <FolderIcon className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">{folder.name}</span>
+                              <span className="opacity-60 font-normal">{fchats.length}</span>
+                            </button>
+                            <button
+                              onClick={() => { const n = window.prompt('Renomear pasta:', folder.name); if (n) handleRenameFolder(folder.id, n); }}
+                              title="Renomear pasta"
+                              className="opacity-0 group-hover/folder:opacity-100 p-1 rounded text-(--text-placeholder) hover:text-(--text-primary) transition"
+                            ><Edit2 className="w-3 h-3" /></button>
+                            <button
+                              onClick={() => { if (window.confirm(`Excluir a pasta "${folder.name}"? As conversas voltam para "Sem pasta".`)) handleDeleteFolder(folder.id); }}
+                              title="Excluir pasta"
+                              className="opacity-0 group-hover/folder:opacity-100 p-1 rounded text-(--text-placeholder) hover:text-red-400 transition"
+                            ><Trash2 className="w-3 h-3" /></button>
+                          </div>
+                          {!collapsed && (
+                            <SortableContext items={fchats.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                              {fchats.map(renderChatItem)}
+                            </SortableContext>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {noFolder.length > 0 && (
+                      <div className="mb-1">
+                        <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-(--text-placeholder)">Sem pasta</div>
+                        <SortableContext items={noFolder.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                          {noFolder.map(renderChatItem)}
+                        </SortableContext>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               <DragOverlay adjustScale={false}>
                 {activeDragId ? (
@@ -3513,6 +3870,10 @@ function App() {
               onSetDefaultModelId={setDefaultModelId}
               memoryModelId={memoryModelId}
               onSetMemoryModelId={setMemoryModelId}
+              searchModelId={searchModelId}
+              onSetSearchModelId={setSearchModelId}
+              factCheckModelId={factCheckModelId}
+              onSetFactCheckModelId={setFactCheckModelId}
               appFont={appFont}
               onSetAppFont={setAppFont}
               retroMode={retroMode}
@@ -3549,6 +3910,12 @@ function App() {
                 if (selectedPersonalityId === id) setSelectedPersonalityId('default');
                 if (livePersonalityId === id) setLivePersonalityId('default');
               }}
+              skills={skills}
+              onSaveSkill={handleSaveSkill}
+              onDeleteSkill={handleDeleteSkill}
+              chatTools={CHAT_TOOLS.map(t => ({ id: t.id, label: t.label }))}
+              enabledChatToolIds={enabledChatToolIds}
+              onToggleChatTool={(id) => setEnabledChatToolIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
               memoryFacts={memoryFacts}
               onDeleteMemoryFact={(id) => {
                 const next = memoryFacts.filter((m) => m.id !== id);
@@ -3633,6 +4000,9 @@ function App() {
                       onSetEditingMsgText={setEditingMsgText}
                       onCancelEdit={() => setEditingMsgId(null)}
                       onRegenerate={handleRegenerate}
+                      onBranch={handleBranchFromMessage}
+                      onPreviewCode={(code, lang) => setPreviewCode({ code, lang })}
+                      regenModels={regenModels}
                       onDelete={(id: string) => setChats((p: ChatSession[]) => p.map((c: ChatSession) => c.id === activeChatId ? { ...c, messages: c.messages.filter((m: Message) => m.id !== id) } : c))}
                       onCopy={(text, id) => {
                         let finalOutput = text;
@@ -3744,11 +4114,14 @@ function App() {
                 personalityName={currentPersonalityId === 'default' ? 'Normal' : (personalities.find(p => p.id === currentPersonalityId)?.name || 'Normal')}
                 onSend={handleSend}
                 onStartLive={handleLiveStart}
+                onOpenFind={() => setShowInChatFind(true)}
+                onOpenCompare={() => setCompareOpen(true)}
+                promptSkills={promptSkills.map(s => ({ id: s.id, name: s.name, description: s.description, prompt: s.prompt || '' }))}
                 onInterrupt={handleInterruptLive}
                 onToggleWebSearch={() => setWebSearchEnabled(!webSearchEnabled)}
                 onToggleThinking={() => setThinkingEnabled(!thinkingEnabled)}
                 onToggleImageGen={() => setImageGenEnabled(!imageGenEnabled)}
-                onSetModel={setModel}
+                onSetModel={handleSetModel}
                 onSetImagenModel={setImagenModel}
                 onSetAspectRatio={setAspectRatio}
                 onScrollToBottom={() => scrollToBottom(true, true)}
@@ -3810,6 +4183,32 @@ function App() {
               }, 150);
             }
           }}
+        />
+      )}
+
+      {showInChatFind && activeChatId && !isLiveActive && activeTab === 'chat' && (
+        <InChatFind
+          messages={messages}
+          onJump={handleJumpToMessage}
+          onClose={() => setShowInChatFind(false)}
+        />
+      )}
+
+      {previewCode && (
+        <CodePreviewPanel
+          code={previewCode.code}
+          lang={previewCode.lang}
+          onClose={() => setPreviewCode(null)}
+        />
+      )}
+
+      {compareOpen && (
+        <ModelCompareModal
+          models={regenModels}
+          defaultA={model}
+          defaultB={regenModels.find(m => m.id !== model)?.id || model}
+          onClose={() => setCompareOpen(false)}
+          onKeep={handleKeepComparison}
         />
       )}
 

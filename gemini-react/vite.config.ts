@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -122,6 +123,23 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Separa libs pesadas em chunks próprios para reduzir o bundle principal
+        // e permitir cache independente entre deploys. (rolldown usa a forma função.)
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("firebase") || id.includes("@firebase")) return "firebase";
+          if (id.includes("katex")) return "katex";
+          if (id.includes("highlight.js")) return "highlight";
+          if (id.includes("/marked")) return "markdown";
+        },
+      },
+    },
+  },
+  test: {
+    environment: "node",
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
   }
 })

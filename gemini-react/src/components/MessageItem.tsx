@@ -18,10 +18,14 @@ import {
   Clock,
   Brain,
   Volume2,
-  VolumeX
+  VolumeX,
+  GitBranch,
+  MapPin,
+  ExternalLink
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
+import { mapEmbedUrl, mapLinkUrl } from '../utils/mapMarkers';
 import LiveAudioPlayer from './LiveAudioPlayer';
 interface MessageItemProps {
   msg: Message;
@@ -37,7 +41,12 @@ interface MessageItemProps {
   onSaveEdit: (id: string) => void;
   onSetEditingMsgText: (text: string) => void;
   onCancelEdit: () => void;
-  onRegenerate: (id: string) => void;
+  onRegenerate: (id: string, modelId?: string) => void;
+  onBranch: (id: string) => void;
+  // Abre o painel de preview com o conteúdo de um bloco de código (HTML/SVG).
+  onPreviewCode?: (code: string, lang: string) => void;
+  // Modelos disponíveis para "Regenerar com…" (id + nome).
+  regenModels: { id: string; name: string }[];
   onDelete: (id: string) => void;
   onCopy: (text: string, id: string) => void;
   onToggleSources: (id: string | null) => void;
@@ -71,6 +80,9 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   onSetEditingMsgText,
   onCancelEdit,
   onRegenerate,
+  onBranch,
+  onPreviewCode,
+  regenModels,
   onDelete,
   onCopy,
   onToggleSources,
@@ -89,6 +101,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
 }) => {
   const [verifySeconds, setVerifySeconds] = React.useState(0);
   const [isTimerHovered, setIsTimerHovered] = React.useState(false);
+  const [regenMenuOpen, setRegenMenuOpen] = React.useState(false);
 
   const [isVisible, setIsVisible] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -145,6 +158,14 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   // Cópia dos blocos de código via delegação: o botão é injetado no HTML do
   // markdown (safeMarkdown), então não há onClick React — capturamos o clique aqui.
   const handleResponseClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Preview de código (HTML/SVG): abre o painel lateral com o conteúdo do bloco.
+    const previewBtn = (e.target as HTMLElement).closest('.code-preview-btn') as HTMLElement | null;
+    if (previewBtn) {
+      const codeEl = previewBtn.closest('.code-block')?.querySelector('pre code') as HTMLElement | null;
+      if (codeEl && onPreviewCode) onPreviewCode(codeEl.textContent || '', previewBtn.dataset.lang || 'html');
+      return;
+    }
+
     const btn = (e.target as HTMLElement).closest('.code-copy-btn') as HTMLElement | null;
     if (!btn || btn.classList.contains('copied')) return;
     const code = btn.closest('.code-block')?.querySelector('pre code') as HTMLElement | null;
@@ -408,6 +429,35 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             />
           ) : null}
 
+          {msg.maps && msg.maps.length > 0 && (
+            <div className="mt-3 flex flex-col gap-3">
+              {msg.maps.map((mp, i) => (
+                <div key={`${mp.query}-${i}`} className="rounded-2xl overflow-hidden border border-(--border-light) bg-(--bg-sidebar)/30 max-w-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-(--border-light)">
+                    <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--accent-text)' }} />
+                    <span className="text-xs font-medium text-(--text-primary) truncate flex-1">{mp.query}</span>
+                    <a
+                      href={mapLinkUrl(mp.query)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Abrir no Google Maps"
+                      className="shrink-0 flex items-center gap-1 text-[10px] font-bold text-(--text-placeholder) hover:text-(--text-primary) transition-colors"
+                    >
+                      Abrir <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <iframe
+                    title={`Mapa: ${mp.query}`}
+                    src={mapEmbedUrl(mp.query)}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="w-full h-56 border-0 block"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           {msg.pendingMemoryUpdates && msg.pendingMemoryUpdates.length > 0 && (
             <div className="mt-4 bg-(--bg-sidebar)/30 border border-(--border-light) rounded-[0.75rem] p-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-start gap-2.5 mb-2.5">
@@ -543,8 +593,33 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           )}
 
           <div className="flex items-center gap-4 mt-3 opacity-0 group-hover/msg:opacity-100 transition-opacity translate-y-1 group-hover/msg:translate-y-0 duration-300">
-             <button onClick={() => onRegenerate(msg.id)} disabled={isLoading} className="text-(--text-placeholder) hover:text-(--text-primary) transition">
-               <RotateCcw className={`w-4 h-4 ${isLoading && !msg.text ? 'animate-spin' : ''}`} />
+             {/* Regenerar (mesmo modelo) + menu "Regenerar com…" */}
+             <div className="relative flex items-center">
+               <button onClick={() => onRegenerate(msg.id)} disabled={isLoading} title="Regenerar" className="text-(--text-placeholder) hover:text-(--text-primary) transition">
+                 <RotateCcw className={`w-4 h-4 ${isLoading && !msg.text ? 'animate-spin' : ''}`} />
+               </button>
+               {regenModels.length > 0 && (
+                 <button onClick={() => setRegenMenuOpen(v => !v)} disabled={isLoading} title="Regenerar com outro modelo" className="text-(--text-placeholder) hover:text-(--text-primary) transition -ml-1">
+                   <ChevronDown className="w-3.5 h-3.5" />
+                 </button>
+               )}
+               {regenMenuOpen && (
+                 <div className="absolute bottom-full left-0 mb-1 bg-(--bg-sidebar-solid) border border-(--border-light) rounded-xl py-1 min-w-52 max-h-64 overflow-y-auto z-50 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                   <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">Regenerar com</div>
+                   {regenModels.map(m => (
+                     <button
+                       key={m.id}
+                       onClick={() => { setRegenMenuOpen(false); onRegenerate(msg.id, m.id); }}
+                       className="w-full text-left px-3 py-2 text-sm hover:bg-white/5 transition text-(--text-primary)"
+                     >
+                       {m.name}
+                     </button>
+                   ))}
+                 </div>
+               )}
+             </div>
+             <button onClick={() => onBranch(msg.id)} disabled={isLoading} title="Ramificar a partir daqui" className="text-(--text-placeholder) hover:text-(--text-primary) transition">
+               <GitBranch className="w-4 h-4" />
              </button>
              <button onClick={() => onCopy(msg.text, msg.id + '-copy')} className="text-(--text-placeholder) hover:text-(--text-primary) transition">
                {copiedId === msg.id + '-copy' ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}

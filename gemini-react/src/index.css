@@ -837,3 +837,36 @@ body {
   --dx: -9px;
   --dy: 0px;
 }
+
+/* Realce da mensagem atual na busca dentro da conversa (F7 — InChatFind). */
+.msg-search-highlight {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 12px;
+  transition: outline-color 0.2s ease;
+}
+
+/* Botão "Preview" nos blocos de código (F1) — espelha o de copiar. */
+.response-body .code-preview-btn {
+  pointer-events: auto;
+  position: relative;
+  top: 8px;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: rgba(20, 20, 20, 0.6);
+  border: 1px solid var(--code-border);
+  border-radius: 7px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  opacity: 0.6;
+}
+.response-body .code-block:hover .code-preview-btn { opacity: 1; }
+.response-body .code-preview-btn:hover { color: var(--accent-text); background: rgba(20, 20, 20, 0.8); border-color: var(--accent-border); }
+.response-body .code-preview-btn svg { width: 13px; height: 13px; }

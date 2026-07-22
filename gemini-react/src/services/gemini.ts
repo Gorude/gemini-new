@@ -1,15 +1,74 @@
 import { marked } from "marked";
 import markedKatex from "marked-katex-extension";
 import { logger } from "./logger";
-import hljs from "highlight.js";
+// Usamos o core do highlight.js e registramos só as linguagens comuns, em vez do
+// import padrão (que empacota TODAS as linguagens, ~900 KB). Linguagens não
+// registradas caem em texto simples (o renderer já faz esse fallback).
+import hljs from "highlight.js/lib/core";
+import type { LanguageFn } from "highlight.js";
+import javascript from "highlight.js/lib/languages/javascript";
+import typescript from "highlight.js/lib/languages/typescript";
+import python from "highlight.js/lib/languages/python";
+import bash from "highlight.js/lib/languages/bash";
+import shell from "highlight.js/lib/languages/shell";
+import json from "highlight.js/lib/languages/json";
+import xml from "highlight.js/lib/languages/xml";
+import css from "highlight.js/lib/languages/css";
+import sql from "highlight.js/lib/languages/sql";
+import java from "highlight.js/lib/languages/java";
+import go from "highlight.js/lib/languages/go";
+import rust from "highlight.js/lib/languages/rust";
+import cpp from "highlight.js/lib/languages/cpp";
+import c from "highlight.js/lib/languages/c";
+import csharp from "highlight.js/lib/languages/csharp";
+import php from "highlight.js/lib/languages/php";
+import ruby from "highlight.js/lib/languages/ruby";
+import yaml from "highlight.js/lib/languages/yaml";
+import markdownLang from "highlight.js/lib/languages/markdown";
 import "highlight.js/styles/github-dark.min.css";
 import "katex/dist/katex.min.css";
+
+const HLJS_LANGS: Record<string, LanguageFn> = {
+  javascript, typescript, python, bash, shell, json, xml, css, sql, java,
+  go, rust, cpp, c, csharp, php, ruby, yaml, markdown: markdownLang,
+};
+for (const [name, fn] of Object.entries(HLJS_LANGS)) {
+  hljs.registerLanguage(name, fn);
+}
+// Aliases comuns → linguagens registradas.
+hljs.registerAliases(["js", "jsx"], { languageName: "javascript" });
+hljs.registerAliases(["ts", "tsx"], { languageName: "typescript" });
+hljs.registerAliases(["py"], { languageName: "python" });
+hljs.registerAliases(["sh", "zsh"], { languageName: "bash" });
+hljs.registerAliases(["html", "xhtml", "svg"], { languageName: "xml" });
+hljs.registerAliases(["yml"], { languageName: "yaml" });
+hljs.registerAliases(["c++"], { languageName: "cpp" });
+hljs.registerAliases(["cs"], { languageName: "csharp" });
+hljs.registerAliases(["rb"], { languageName: "ruby" });
 
 const renderer = new marked.Renderer();
 
 // Ícone (SVG inline do lucide "copy") para o botão de copiar do bloco de código.
 const COPY_ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+
+// Ícone (lucide "eye") para o botão de pré-visualizar (HTML/SVG).
+const PREVIEW_ICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>';
+
+// Linguagens de código que podem ser pré-visualizadas (renderizadas) no painel lateral.
+const PREVIEWABLE_LANGS = new Set(["html", "svg", "xml"]);
+
+// Escapa HTML para exibir código sem linguagem registrada como texto simples
+// (evita injeção e o crash do highlight com "plaintext" não registrado).
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // Custom code renderer supporting both positional and token object formats for Marked compatibility
 renderer.code = (codeOrToken: any, langOrUndefined?: any) => {
@@ -24,14 +83,22 @@ renderer.code = (codeOrToken: any, langOrUndefined?: any) => {
     lang = langOrUndefined || "plaintext";
   }
 
-  const language = hljs.getLanguage(lang) ? lang : "plaintext";
-  const highlighted = hljs.highlight(text, { language }).value;
+  // Só chamamos o highlight quando a linguagem está REGISTRADA. Antes caíamos em
+  // "plaintext", que não está no build core → hljs.highlight lançava
+  // ("Unknown language: plaintext"). Sem linguagem, escapamos o texto e exibimos
+  // como código simples (o fallback que o comentário do topo promete).
+  const language = hljs.getLanguage(lang) ? lang : null;
+  const highlighted = language ? hljs.highlight(text, { language }).value : escapeHtml(text);
   // Envolvemos o <pre> num wrapper com um botão de copiar "grudento" (sticky):
   // ele fica no canto superior direito e acompanha a rolagem enquanto o bloco
   // estiver visível. O botão fica FORA do <pre> para não sofrer com o overflow-x
-  // do código. A cópia é tratada por delegação de evento no MessageItem (lê o
-  // texto do <code>).
-  return `<div class="code-block"><div class="code-copy-holder"><button type="button" class="code-copy-btn" title="Copiar código" aria-label="Copiar código">${COPY_ICON_SVG}<span>Copiar</span></button></div><pre><code class="hljs language-${language}">${highlighted}</code></pre></div>`;
+  // do código. A cópia (e o preview) são tratados por delegação de evento no
+  // MessageItem (lê o texto do <code>).
+  const cssLang = language || "plaintext";
+  const previewBtn = language && PREVIEWABLE_LANGS.has(language)
+    ? `<button type="button" class="code-preview-btn" data-lang="${language}" title="Pré-visualizar" aria-label="Pré-visualizar">${PREVIEW_ICON_SVG}<span>Preview</span></button>`
+    : "";
+  return `<div class="code-block"><div class="code-copy-holder">${previewBtn}<button type="button" class="code-copy-btn" title="Copiar código" aria-label="Copiar código">${COPY_ICON_SVG}<span>Copiar</span></button></div><pre><code class="hljs language-${cssLang}">${highlighted}</code></pre></div>`;
 };
 
 // Configuração segura do Marked.js usando marked.use
@@ -41,12 +108,19 @@ marked.use({
   gfm: true,
 });
 
-// Adicionar suporte nativo à matemática
+// Adicionar suporte nativo à matemática.
+// - strict: false → o KaTeX não loga avisos "unicodeTextInMathMode" (acentos ã/ç/é
+//   caindo em modo matemático). Antes esses avisos inundavam o log.
+// - nonStandard: false (padrão) → NÃO trata qualquer `$…$` como fórmula. Assim
+//   valores monetários em português ("R$ 50 … R$ 100") deixam de ser interpretados
+//   como matemática (a causa raiz dos avisos e da renderização bagunçada). Fórmulas
+//   reais com `$…$`/`$$…$$` bem formadas continuam funcionando.
 marked.use(
   markedKatex({
     throwOnError: false,
     output: "html",
-    nonStandard: true,
+    strict: false,
+    nonStandard: false,
   }),
 );
 
@@ -277,6 +351,64 @@ export interface Message {
     resolved?: "accepted" | "ignored";
   }>;
   continuationText?: string;
+  // Mapas embutidos (F8): locais extraídos de marcadores [MAP: …] na resposta.
+  maps?: Array<{ query: string }>;
+}
+
+// ── Contratos de streaming das APIs (parsing de rede) ──────────────────────────
+// Tipar estes payloads evita bugs de campo errado (ex.: `reasoning` vs
+// `reasoning_content`, ou o `usage` num chunk final sem conteúdo).
+
+interface OpenAIUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+}
+
+interface OpenAIUrlCitation {
+  type?: string;
+  url_citation?: { url?: string; title?: string };
+}
+
+interface OpenAIDelta {
+  content?: string;
+  reasoning?: string;
+  reasoning_content?: string;
+  annotations?: OpenAIUrlCitation[];
+}
+
+interface OpenAIStreamChunk {
+  choices?: Array<{
+    delta?: OpenAIDelta;
+    message?: { annotations?: OpenAIUrlCitation[] };
+    finish_reason?: string | null;
+  }>;
+  usage?: OpenAIUsage;
+}
+
+interface GeminiUsageMetadata {
+  promptTokenCount?: number;
+  candidatesTokenCount?: number;
+  totalTokenCount?: number;
+}
+
+interface GeminiPart {
+  text?: string;
+  thought?: boolean | string;
+}
+
+interface GeminiCandidate {
+  content?: { parts?: GeminiPart[] };
+  groundingMetadata?: {
+    groundingChunks?: Array<Record<string, any>>;
+    webSearchQueries?: string[];
+  };
+  finishReason?: string;
+}
+
+interface GeminiStreamChunk {
+  candidates?: GeminiCandidate[];
+  usageMetadata?: GeminiUsageMetadata;
 }
 
 import { auth, db } from "./firebase";
@@ -284,8 +416,10 @@ import { doc, getDoc } from "firebase/firestore";
 import {
   LOCAL_MODEL_ID,
   OPENROUTER_BASE_URL,
+  CAPABILITY_ORDER,
   type ChatProvider,
   type CustomModel,
+  type ModelCapability,
 } from "../constants";
 
 let globalDefaultApiKey = "";
@@ -312,24 +446,51 @@ export function setGlobalCustomModels(models: CustomModel[]) {
   globalCustomModels = Array.isArray(models) ? models : [];
 }
 
+export interface OpenRouterModelMeta {
+  contextLength?: number;
+  capabilities?: ModelCapability[];
+}
+
 /**
- * Busca a janela de contexto (context_length) de um modelo no catálogo do OpenRouter.
- * Best-effort: retorna undefined se não encontrar ou se a requisição falhar. O
- * endpoint /models é público; a chave é enviada só se disponível.
+ * Busca metadados de um modelo no catálogo do OpenRouter: janela de contexto
+ * (context_length) e capacidades (modalidades de entrada + tool calling).
+ * Best-effort: retorna {} se não encontrar ou se a requisição falhar.
  */
-export async function fetchOpenRouterContextLength(modelId: string): Promise<number | undefined> {
+export async function fetchOpenRouterModelMeta(modelId: string): Promise<OpenRouterModelMeta> {
   try {
     const headers: Record<string, string> = {};
     if (globalOpenRouterApiKey) headers['Authorization'] = `Bearer ${globalOpenRouterApiKey}`;
     const res = await fetch(`${OPENROUTER_BASE_URL}/models`, { headers });
-    if (!res.ok) return undefined;
+    if (!res.ok) return {};
     const data = await res.json();
     const models: any[] = data?.data || [];
     const found = models.find(m => m?.id === modelId);
-    const ctx = found?.context_length ?? found?.top_provider?.context_length;
-    return typeof ctx === 'number' && ctx > 0 ? ctx : undefined;
+    if (!found) return {};
+
+    const ctxRaw = found.context_length ?? found.top_provider?.context_length;
+    const contextLength = typeof ctxRaw === 'number' && ctxRaw > 0 ? ctxRaw : undefined;
+
+    // Modalidades de entrada: preferimos `architecture.input_modalities` (array);
+    // fallback para a string legada `architecture.modality` (ex.: "text+image->text").
+    const arch = found.architecture || {};
+    const inputs: string[] = Array.isArray(arch.input_modalities)
+      ? arch.input_modalities
+      : (typeof arch.modality === 'string' ? arch.modality.split('->')[0].split('+') : []);
+
+    const caps = new Set<ModelCapability>(['text']); // todo modelo de chat entende texto
+    for (const m of inputs) {
+      const v = String(m).toLowerCase();
+      if (v.includes('image')) caps.add('image');
+      else if (v.includes('audio')) caps.add('audio');
+      else if (v.includes('file') || v.includes('pdf')) caps.add('file');
+    }
+    const params: string[] = found.supported_parameters || [];
+    if (params.includes('tools') || params.includes('tool_choice')) caps.add('tools');
+
+    const capabilities = CAPABILITY_ORDER.filter(c => caps.has(c));
+    return { contextLength, capabilities };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -634,8 +795,8 @@ async function* streamOpenAICompatibleContent(
         if (!data || data === "[DONE]") continue;
 
         try {
-          const json = JSON.parse(data);
-          const delta = json.choices?.[0]?.delta || {};
+          const json = JSON.parse(data) as OpenAIStreamChunk;
+          const delta: OpenAIDelta = json.choices?.[0]?.delta || {};
 
           let chunkText = "";
           let chunkThoughts = "";
@@ -772,7 +933,7 @@ function buildOpenAIConfig(
   // - `response_format`: saída em JSON quando solicitado (ex.: organização de memórias).
   const extraBody: Record<string, any> = {};
   if (thinking) extraBody.reasoning = { enabled: true };
-  if (webSearch) extraBody.plugins = [{ id: "web", max_results: 50 }];
+  if (webSearch) extraBody.plugins = [{ id: "web", max_results: 4 }];
   if (jsonMode) extraBody.response_format = { type: "json_object" };
 
   return {
@@ -1007,10 +1168,10 @@ export async function* streamGeminiContent(
       for (const line of lines) {
         if (line.startsWith("data: ")) {
           try {
-            const json = JSON.parse(line.substring(6));
+            const json = JSON.parse(line.substring(6)) as GeminiStreamChunk;
             if (json.candidates && json.candidates[0]) {
               const candidate = json.candidates[0];
-              const parts = candidate.content?.parts || [];
+              const parts: GeminiPart[] = candidate.content?.parts || [];
               const metadata = candidate.groundingMetadata;
               const chunkGrounded = !!metadata;
 
@@ -1059,8 +1220,15 @@ export async function* streamGeminiContent(
                   accumulatedSources.push(src);
                 }
               });
-              if (json.usageMetadata) {
-                finalUsage = json.usageMetadata;
+              const usageMeta = json.usageMetadata
+                ? {
+                    promptTokenCount: json.usageMetadata.promptTokenCount ?? 0,
+                    candidatesTokenCount: json.usageMetadata.candidatesTokenCount ?? 0,
+                    totalTokenCount: json.usageMetadata.totalTokenCount ?? 0,
+                  }
+                : undefined;
+              if (usageMeta) {
+                finalUsage = usageMeta;
               }
 
               yield {
@@ -1069,7 +1237,7 @@ export async function* streamGeminiContent(
                 isGrounded: chunkGrounded,
                 isSearching: chunkIsSearching,
                 sources: chunkSources,
-                usage: json.usageMetadata,
+                usage: usageMeta,
               };
 
               // DIAGNÓSTICO: Log do finishReason e estrutura se o texto estiver vazio mas o pensamento não
@@ -1152,6 +1320,127 @@ export async function generateGeminiContent(
   return { text: fullText, thoughts: fullThoughts, isGrounded, usage };
 }
 
+// ── Tool calling no chat (F3) ────────────────────────────────────────────────
+// Ferramentas embutidas expostas ao chat (subconjunto seguro). O executor é o
+// mesmo do modo LIVE (handleLiveToolCall no App), injetado por callback.
+
+export interface ChatToolDef {
+  id: string;
+  label: string;
+  // Declaração no formato Gemini (functionDeclarations).
+  gemini: { name: string; description: string; parameters: any };
+}
+
+export const CHAT_TOOLS: ChatToolDef[] = [
+  {
+    id: "calculate",
+    label: "Calculadora",
+    gemini: {
+      name: "calculate",
+      description: "Avalia uma expressão matemática e retorna o resultado. Use para contas precisas.",
+      parameters: {
+        type: "OBJECT",
+        properties: { expression: { type: "STRING", description: "Expressão matemática, ex.: '2*(3+4)/5'." } },
+        required: ["expression"],
+      },
+    },
+  },
+  {
+    id: "get_weather",
+    label: "Clima",
+    gemini: {
+      name: "get_weather",
+      description: "Consulta o clima atual e a previsão do dia de uma cidade (ou da localização do usuário).",
+      parameters: {
+        type: "OBJECT",
+        properties: { location: { type: "STRING", description: "Cidade/local. Vazio usa a localização do dispositivo." } },
+      },
+    },
+  },
+  {
+    id: "get_current_time",
+    label: "Hora atual",
+    gemini: {
+      name: "get_current_time",
+      description: "Retorna a data e hora atuais do sistema do usuário.",
+      parameters: { type: "OBJECT", properties: {} },
+    },
+  },
+];
+
+export type ChatToolExecutor = (name: string, args: any) => Promise<{ result: string }>;
+
+/**
+ * Loop agêntico (não-streaming) de tool calling para modelos GEMINI. Envia o
+ * pedido com as ferramentas declaradas; se o modelo chamar uma ferramenta,
+ * executa via `executor` e devolve o resultado, repetindo até a resposta final.
+ * Retorna o texto final e os nomes das ferramentas usadas. Limite de 5 iterações.
+ */
+export async function runGeminiToolLoop(
+  text: string,
+  model: string,
+  history: { role: string; parts: any[] }[],
+  systemInstruction: string | undefined,
+  toolIds: string[],
+  executor: ChatToolExecutor,
+  signal?: AbortSignal,
+  manualApiKey?: string,
+): Promise<{ text: string; toolsUsed: string[] }> {
+  const key = await getApiKey(manualApiKey);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  const declarations = CHAT_TOOLS.filter(t => toolIds.includes(t.id)).map(t => t.gemini);
+
+  const contents: any[] = [...history, { role: "user", parts: [{ text }] }];
+  const toolsUsed: string[] = [];
+
+  for (let iter = 0; iter < 5; iter++) {
+    const payload: any = {
+      contents,
+      tools: [{ functionDeclarations: declarations }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+    };
+    if (systemInstruction) payload.systemInstruction = { role: "system", parts: [{ text: systemInstruction }] };
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `Erro na API (${res.status})`);
+    }
+    const data = await res.json();
+    const parts: any[] = data?.candidates?.[0]?.content?.parts || [];
+    const calls = parts.filter(p => p.functionCall);
+
+    if (calls.length === 0) {
+      const finalText = parts.map(p => p.text || "").join("").trim();
+      return { text: finalText, toolsUsed };
+    }
+
+    // Registra a chamada do modelo e executa cada ferramenta, devolvendo os resultados.
+    contents.push({ role: "model", parts: calls.map(c => ({ functionCall: c.functionCall })) });
+    const responseParts: any[] = [];
+    for (const c of calls) {
+      const name = c.functionCall.name;
+      const args = c.functionCall.args || {};
+      toolsUsed.push(name);
+      let result = "";
+      try {
+        result = (await executor(name, args)).result;
+      } catch (e) {
+        result = `Erro ao executar ${name}: ${e instanceof Error ? e.message : "desconhecido"}`;
+      }
+      responseParts.push({ functionResponse: { name, response: { result } } });
+    }
+    contents.push({ role: "user", parts: responseParts });
+  }
+
+  return { text: "Não foi possível concluir com as ferramentas (limite de iterações atingido).", toolsUsed };
+}
+
 /**
  * Delegação de busca: usa o Gemma 4 31B (que suporta google_search) para pesquisar
  * na web e retornar um resumo factual + fontes. Serve para modelos que não fazem
@@ -1161,8 +1450,9 @@ export async function performWebSearch(
   query: string,
   signal?: AbortSignal,
   manualApiKey?: string,
+  modelId: string = "gemma-4-31b-it",
 ): Promise<{ summary: string; sources: { title: string; uri: string }[] }> {
-  const model = "gemma-4-31b-it";
+  const model = modelId;
   const systemInstruction =
     "Você é um mecanismo de pesquisa. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web " +
     "e retorne um resumo CONCISO (no máximo 6 linhas ou tópicos curtos) apenas com os fatos mais relevantes " +
@@ -1245,8 +1535,9 @@ export async function generateImagenContent(
 export async function performFactCheck(
   text: string,
   signal?: AbortSignal,
+  modelId: string = "gemma-4-31b-it",
 ): Promise<FactCheckResult[]> {
-  const model = "gemma-4-31b-it";
+  const model = modelId;
   const prompt = `Analise o texto a seguir e REALIZE PESQUISAS NA WEB (usando a ferramenta google_search) para verificar cada afirmação de fato.
   
   TEXTO PARA CHECAGEM:

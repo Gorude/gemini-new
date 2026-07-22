@@ -1,7 +1,11 @@
 {
+  "id": "/",
   "short_name": "Nemon",
   "name": "Nemon - Inteligência Coletiva Persistente",
   "description": "Seu assistente pessoal e inteligência artificial persistente com DNA de Memória.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
       "src": "icon-192x192.png",
@@ -14,9 +18,16 @@
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
+    },
+    {
+      "src": "icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
   ],
   "start_url": "./",
+  "scope": "./",
   "background_color": "#131314",
   "theme_color": "#131314",
   "display": "standalone",

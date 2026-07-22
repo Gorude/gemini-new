@@ -18,14 +18,16 @@ import {
   Trash2,
   Plus,
   Star,
-  ChevronDown
+  ChevronDown,
+  Wand2
 } from 'lucide-react';
 import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS, FONT_OPTIONS, CUSTOM_MODEL_PROVIDERS, formatTokenCount, type CustomModel, type CustomModelProvider } from '../constants';
-import { fetchOpenRouterContextLength } from '../services/gemini';
+import { fetchOpenRouterModelMeta } from '../services/gemini';
 import NemonIcon from './NemonIcon';
 import PersonalitiesPanel from './PersonalitiesPanel';
+import SkillsPanel from './SkillsPanel';
 import DnaPanel from './DnaPanel';
-import { type Personality, type MemoryFact } from '../types';
+import { type Personality, type MemoryFact, type Skill } from '../types';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -39,6 +41,10 @@ interface SettingsModalProps {
   onSetDefaultModelId: (id: string) => void;
   memoryModelId: string;
   onSetMemoryModelId: (id: string) => void;
+  searchModelId: string;
+  onSetSearchModelId: (id: string) => void;
+  factCheckModelId: string;
+  onSetFactCheckModelId: (id: string) => void;
   appFont: string;
   onSetAppFont: (id: string) => void;
   retroMode: boolean;
@@ -56,10 +62,16 @@ interface SettingsModalProps {
   liveModel: string;
   onSetLiveModel: (model: string) => void;
   inline?: boolean;
-  initialTab?: 'geral' | 'modelos' | 'api' | 'personalidades' | 'dna';
+  initialTab?: 'geral' | 'modelos' | 'api' | 'personalidades' | 'skills' | 'dna';
   personalities: Personality[];
   onSavePersonality: (p: Personality) => void;
   onDeletePersonality: (id: string) => void;
+  skills: Skill[];
+  onSaveSkill: (s: Skill) => void;
+  onDeleteSkill: (id: string) => void;
+  chatTools: { id: string; label: string }[];
+  enabledChatToolIds: string[];
+  onToggleChatTool: (id: string) => void;
   memoryFacts: MemoryFact[];
   onDeleteMemoryFact: (id: string) => void;
   onSaveMemoryFact: (fact: MemoryFact) => void;
@@ -78,6 +90,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetDefaultModelId,
   memoryModelId,
   onSetMemoryModelId,
+  searchModelId,
+  onSetSearchModelId,
+  factCheckModelId,
+  onSetFactCheckModelId,
   appFont,
   onSetAppFont,
   retroMode,
@@ -99,6 +115,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   personalities,
   onSavePersonality,
   onDeletePersonality,
+  skills,
+  onSaveSkill,
+  onDeleteSkill,
+  chatTools,
+  enabledChatToolIds,
+  onToggleChatTool,
   memoryFacts,
   onDeleteMemoryFact,
   onSaveMemoryFact,
@@ -106,7 +128,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   isCategorizingMemory,
   categorizationProgress
 }) => {
-  const [activeTab, setActiveTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'dna'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'geral' | 'modelos' | 'api' | 'personalidades' | 'skills' | 'dna'>(initialTab);
   const [valDefaultStatus, setValDefaultStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [valPaidStatus, setValPaidStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [tempDefaultKey, setTempDefaultKey] = useState(defaultApiKey);
@@ -226,18 +248,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // Evita ids duplicados (o id é a chave de roteamento).
     if (customModels.some(m => m.id === id)) return;
 
-    // Busca a janela de contexto real no OpenRouter (best-effort) para o indicador.
+    // Busca contexto + capacidades reais no OpenRouter (best-effort) p/ o indicador e os emojis.
     setAddingModel(provider);
-    let contextLength: number | undefined;
+    let meta: { contextLength?: number; capabilities?: CustomModel['capabilities'] } = {};
     try {
       if (provider === 'openrouter') {
-        contextLength = await fetchOpenRouterContextLength(id);
+        meta = await fetchOpenRouterModelMeta(id);
       }
     } finally {
       setAddingModel(null);
     }
 
-    onSetCustomModels([...customModels, { id, name, provider, contextLength }]);
+    onSetCustomModels([...customModels, { id, name, provider, contextLength: meta.contextLength, capabilities: meta.capabilities }]);
     // Modelo recém-cadastrado já entra habilitado (aparece no seletor do chat).
     if (!enabledModelIds.includes(id)) onSetEnabledModelIds([...enabledModelIds, id]);
     setModelDrafts(prev => ({ ...prev, [provider]: { name: '', id: '' } }));
@@ -378,6 +400,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <User size={15} style={{ color: activeTab === 'personalidades' ? 'white' : 'var(--accent-text)' }} /> Personalidades
           </button>
           <button
+            onClick={() => setActiveTab('skills')}
+            className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'skills' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-(--text-secondary) hover:bg-(--bg-chat-hover) hover:text-(--text-primary) md:hover:translate-x-1'}`}
+            style={activeTab === 'skills' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
+          >
+            <Wand2 size={15} className="text-violet-400" /> Skills
+          </button>
+          <button
             onClick={() => setActiveTab('dna')}
             className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'dna' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-(--text-secondary) hover:bg-(--bg-chat-hover) hover:text-(--text-primary) md:hover:translate-x-1'}`}
             style={activeTab === 'dna' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
@@ -392,10 +421,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <header className="p-4 md:p-5 flex justify-between items-center bg-(--bg-sidebar)/30 border-b border-(--border-light) backdrop-blur-md">
           <div>
             <h3 className="text-xs md:text-sm font-black uppercase tracking-[0.2em]" style={{ color: 'var(--accent-text)' }}>
-              {activeTab === 'geral' ? 'Preferências de Interface' : activeTab === 'modelos' ? 'Gerenciamento de IA' : activeTab === 'api' ? 'Configurações de API' : activeTab === 'personalidades' ? 'Comportamento da IA' : 'Inteligência Coletiva Persistente'}
+              {activeTab === 'geral' ? 'Preferências de Interface' : activeTab === 'modelos' ? 'Gerenciamento de IA' : activeTab === 'api' ? 'Configurações de API' : activeTab === 'personalidades' ? 'Comportamento da IA' : activeTab === 'skills' ? 'Skills' : 'Inteligência Coletiva Persistente'}
             </h3>
             <p className="text-[10px] md:text-xs text-(--text-secondary) mt-1">
-              {activeTab === 'geral' ? 'Ajuste o visual e o layout do sistema.' : activeTab === 'modelos' ? 'Escolha quais modelos estarão disponíveis no chat.' : activeTab === 'api' ? 'Configurações de API e Chaves de Acesso.' : activeTab === 'personalidades' ? 'Defina diretrizes de instrução e perfis do sistema.' : 'DNA de Memória - Visualização e Edição de Fatos.'}
+              {activeTab === 'geral' ? 'Ajuste o visual e o layout do sistema.' : activeTab === 'modelos' ? 'Escolha quais modelos estarão disponíveis no chat.' : activeTab === 'api' ? 'Configurações de API e Chaves de Acesso.' : activeTab === 'personalidades' ? 'Defina diretrizes de instrução e perfis do sistema.' : activeTab === 'skills' ? 'Templates de prompt reutilizáveis (atalho / no chat).' : 'DNA de Memória - Visualização e Edição de Fatos.'}
             </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-(--bg-chat-hover) rounded-xl text-(--text-placeholder) transition-colors hover:scale-105 active:scale-95 duration-200">
@@ -512,42 +541,53 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 );
               })}
 
-              {/* Modelo usado para organizar as memórias (DNA) */}
-              <div className="pt-4 mt-2 border-t border-(--border-light)">
-                <div className="flex items-center gap-2 px-2 mb-2">
+              {/* Modelos das tarefas internas (memória, busca, fact-check) */}
+              <div className="pt-4 mt-2 border-t border-(--border-light) space-y-5">
+                <div className="flex items-center gap-2 px-2">
                   <Zap size={14} className="text-emerald-400" />
-                  <h4 className="text-sm font-bold text-(--text-primary)">Organização de memórias (DNA)</h4>
+                  <h4 className="text-sm font-bold text-(--text-primary)">Modelos de tarefas internas</h4>
                 </div>
-                <p className="text-[11px] text-(--text-placeholder) px-2 mb-3">
-                  Modelo usado para categorizar e conectar os fatos da memória. Deve saber responder em JSON.
-                </p>
-                <div className="relative px-2">
-                  <select
-                    value={memoryModelId}
-                    onChange={(e) => onSetMemoryModelId(e.target.value)}
-                    className="w-full appearance-none bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 pl-3 pr-9 text-sm text-(--text-primary) outline-none transition-all cursor-pointer"
-                    onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
-                    onBlur={(e) => e.currentTarget.style.borderColor = ''}
-                  >
-                    <optgroup label="Google AI Studio">
-                      {MODEL_OPTIONS.map(o => (
-                        <option key={o.id} value={o.id}>{o.name}</option>
-                      ))}
-                    </optgroup>
-                    {CUSTOM_MODEL_PROVIDERS.map(provider => {
-                      const models = customModels.filter(m => m.provider === provider.id);
-                      if (models.length === 0) return null;
-                      return (
-                        <optgroup key={provider.id} label={provider.name}>
-                          {models.map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </optgroup>
-                      );
-                    })}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-5 top-1/2 -translate-y-1/2 text-(--text-placeholder) pointer-events-none" />
-                </div>
+
+                {([
+                  { key: 'mem', label: 'Organização de memórias (DNA)', hint: 'Categoriza e conecta os fatos da memória. Deve responder em JSON.', value: memoryModelId, onChange: onSetMemoryModelId, custom: true },
+                  { key: 'search', label: 'Busca web (delegada)', hint: 'Executa o google_search quando a busca está ligada. Apenas modelos com busca.', value: searchModelId, onChange: onSetSearchModelId, custom: false },
+                  { key: 'fact', label: 'Checagem de fatos', hint: 'Verifica afirmações via google_search. Apenas modelos com busca.', value: factCheckModelId, onChange: onSetFactCheckModelId, custom: false },
+                ] as const).map(task => {
+                  const builtins = task.custom ? MODEL_OPTIONS : MODEL_OPTIONS.filter(o => o.hasSearch);
+                  return (
+                    <div key={task.key} className="px-2">
+                      <label className="text-[11px] font-bold text-(--text-secondary) block mb-1">{task.label}</label>
+                      <p className="text-[10px] text-(--text-placeholder) mb-2">{task.hint}</p>
+                      <div className="relative">
+                        <select
+                          value={task.value}
+                          onChange={(e) => task.onChange(e.target.value)}
+                          className="w-full appearance-none bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-2.5 pl-3 pr-9 text-sm text-(--text-primary) outline-none transition-all cursor-pointer"
+                          onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                          onBlur={(e) => e.currentTarget.style.borderColor = ''}
+                        >
+                          <optgroup label="Google AI Studio">
+                            {builtins.map(o => (
+                              <option key={o.id} value={o.id}>{o.name}</option>
+                            ))}
+                          </optgroup>
+                          {task.custom && CUSTOM_MODEL_PROVIDERS.map(provider => {
+                            const models = customModels.filter(m => m.provider === provider.id);
+                            if (models.length === 0) return null;
+                            return (
+                              <optgroup key={provider.id} label={provider.name}>
+                                {models.map(m => (
+                                  <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                              </optgroup>
+                            );
+                          })}
+                        </select>
+                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-(--text-placeholder) pointer-events-none" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -846,6 +886,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               personalities={personalities}
               onSave={onSavePersonality}
               onDelete={onDeletePersonality}
+            />
+          )}
+
+          {activeTab === 'skills' && (
+            <SkillsPanel
+              skills={skills}
+              onSave={onSaveSkill}
+              onDelete={onDeleteSkill}
+              chatTools={chatTools}
+              enabledChatToolIds={enabledChatToolIds}
+              onToggleChatTool={onToggleChatTool}
             />
           )}
 

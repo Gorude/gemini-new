@@ -1,18 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Plus, 
-  Globe, 
-  Lightbulb, 
-  Image, 
-  ChevronDown, 
-  Send, 
-  X, 
+import {
+  Plus,
+  Globe,
+  Lightbulb,
+  Image,
+  ChevronDown,
+  Send,
+  X,
   FileText,
   Headphones,
-  Square
+  Square,
+  Search,
+  Columns2,
+  Type,
+  Eye,
+  AudioLines,
+  Wrench,
+  type LucideIcon
 } from 'lucide-react';
-import { MODEL_OPTIONS, IMAGEN_OPTIONS, LIVE_MODEL_OPTIONS, CUSTOM_MODEL_PROVIDERS, getModelContextWindow, estimateTokens, formatTokenCount, type CustomModel } from '../constants';
+import { MODEL_OPTIONS, IMAGEN_OPTIONS, LIVE_MODEL_OPTIONS, CUSTOM_MODEL_PROVIDERS, getModelContextWindow, getModelCapabilities, CAPABILITY_META, estimateTokens, formatTokenCount, type CustomModel, type ModelCapability } from '../constants';
 import { type PendingFile } from '../types';
+
+// Ícone (lucide) de cada capacidade de modelo, para os badges do seletor.
+const CAPABILITY_ICON: Record<ModelCapability, LucideIcon> = {
+  text: Type,
+  image: Eye,
+  audio: AudioLines,
+  file: FileText,
+  tools: Wrench,
+};
 
 interface ChatInputProps {
   isLoading: boolean;
@@ -29,6 +45,10 @@ interface ChatInputProps {
   personalityName: string;
   onSend: (text: string, files: PendingFile[]) => void;
   onStartLive: () => void;
+  onOpenFind?: () => void;
+  onOpenCompare?: () => void;
+  // Templates de prompt (skills) para o atalho "/".
+  promptSkills?: { id: string; name: string; description?: string; prompt: string }[];
   isLiveActive: boolean;
   liveModel: string;
   onSetLiveModel: (model: string) => void;
@@ -62,6 +82,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   personalityName,
   onSend,
   onStartLive,
+  onOpenFind,
+  onOpenCompare,
+  promptSkills = [],
   isLiveActive,
   liveModel,
   onSetLiveModel,
@@ -118,7 +141,35 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setInput(e.target.value);
   };
 
+  // Menu "/" de skills: ativo quando o texto é apenas "/" seguido de uma palavra
+  // (sem espaço). Filtra os templates pelo trecho após a barra.
+  const slashMatch = /^\/(\S*)$/.exec(input);
+  const slashQuery = slashMatch ? slashMatch[1].toLowerCase() : null;
+  const skillMatches = slashQuery !== null
+    ? promptSkills.filter(s => s.name.toLowerCase().includes(slashQuery))
+    : [];
+  // Mostra o menu sempre que "/" está ativo (mesmo sem templates: exibimos uma dica
+  // para criá-los, para o recurso ser descoberto).
+  const showSkillMenu = slashQuery !== null;
+
+  const applySkill = (prompt: string) => {
+    // O menu abre quando o campo só tem o comando "/", então não há texto do usuário
+    // para {{input}} — substituímos por vazio. (Se houver, é preservado.)
+    const filled = prompt.replace(/\{\{\s*input\s*\}\}/gi, '');
+    setInput(filled);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showSkillMenu && skillMatches.length > 0 && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      applySkill(skillMatches[0].prompt);
+      return;
+    }
+    if (showSkillMenu && e.key === 'Escape') {
+      setInput('');
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleInternalSend();
@@ -173,6 +224,24 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // Cor do indicador conforme o preenchimento (verde → âmbar → vermelho).
   const contextColor = contextPct >= 90 ? '#ef4444' : contextPct >= 70 ? '#f59e0b' : 'var(--accent)';
 
+  // Ícones das capacidades do modelo (visão, áudio, arquivos, ferramentas…) no seletor.
+  const renderCaps = (modelId: string) => {
+    const caps = getModelCapabilities(modelId, customModels);
+    if (caps.length === 0) return null;
+    return (
+      <span className="flex items-center gap-1 shrink-0 text-(--text-placeholder)">
+        {caps.map(c => {
+          const Icon = CAPABILITY_ICON[c];
+          return (
+            <span key={c} title={CAPABILITY_META[c].label} className="inline-flex">
+              <Icon className="w-3.5 h-3.5" />
+            </span>
+          );
+        })}
+      </span>
+    );
+  };
+
   return (
     <footer 
       className="p-3 bg-(--bg-main) relative z-10 chat-container-responsive"
@@ -203,6 +272,26 @@ const ChatInput: React.FC<ChatInputProps> = ({
         )}
         
         <div className={`input-wrapper p-3 shadow-2xl relative bg-(--bg-input) rounded-[12px] border transition-all duration-500 ${isLoading ? 'generating-glow' : isLiveActive ? 'border-zinc-500 shadow-[0_0_20px_rgba(255,255,255,0.15)]' : 'border-(--border-light)'}`} style={isLoading ? { borderColor: 'color-mix(in srgb, var(--accent) 50%, transparent)', boxShadow: '0 0 15px var(--accent-glow)' } : {}}>
+          {showSkillMenu && (
+            <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 mx-auto max-w-md bg-(--bg-sidebar-solid) border border-(--border-light) rounded-2xl shadow-2xl py-2 z-50 max-h-64 overflow-y-auto animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">Skills (templates)</div>
+              {promptSkills.length === 0 ? (
+                <div className="px-3 py-2 text-[12px] text-(--text-placeholder)">Nenhum template ainda. Crie em <span className="font-semibold text-(--text-secondary)">Configurações → Skills</span>.</div>
+              ) : skillMatches.length > 0 ? skillMatches.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => applySkill(s.prompt)}
+                  className="w-full text-left px-3 py-2 hover:bg-white/5 transition"
+                >
+                  <div className="text-[13px] font-semibold text-(--text-primary) truncate">{s.name}</div>
+                  {s.description && <div className="text-[11px] text-(--text-placeholder) truncate">{s.description}</div>}
+                </button>
+              )) : (
+                <div className="px-3 py-2 text-[12px] text-(--text-placeholder)">Nenhum template para “{slashQuery}”.</div>
+              )}
+            </div>
+          )}
           {showScrollButton && (
             <button 
               onClick={onScrollToBottom}
@@ -262,6 +351,26 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 <Headphones className="w-4 h-4 sm:w-5 sm:h-5" />
                 {isLiveActive && <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.4)]"></span>}
               </button>
+
+              {onOpenFind && !isLiveActive && (
+                <button
+                  onClick={onOpenFind}
+                  className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 hover:bg-(--bg-chat-hover) text-(--text-placeholder)"
+                  title="Buscar nesta conversa (Ctrl+F)"
+                >
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              )}
+
+              {onOpenCompare && !isLiveActive && (
+                <button
+                  onClick={onOpenCompare}
+                  className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 hover:bg-(--bg-chat-hover) text-(--text-placeholder)"
+                  title="Comparar modelos"
+                >
+                  <Columns2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              )}
 
               <div className="relative">
                 <button 
@@ -361,6 +470,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                             <div className="flex items-center gap-2">
                               <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
                               {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-60 text-blue-400" />}
+                              {renderCaps(opt.id)}
                             </div>
                             <span className="text-[11px] text-(--text-placeholder)">{opt.desc}</span>
                           </button>
@@ -375,7 +485,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
                               <div className="px-3.5 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">{provider.name}</div>
                               {providerModels.map(opt => (
                                 <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
-                                  <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
+                                    {renderCaps(opt.id)}
+                                  </div>
                                   <span className="text-[11px] text-(--text-placeholder) font-mono truncate max-w-full">{opt.id}</span>
                                 </button>
                               ))}

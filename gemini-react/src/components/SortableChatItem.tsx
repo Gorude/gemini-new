@@ -1,8 +1,8 @@
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Pin, Edit2, Archive, Trash2, MoreVertical, GripVertical } from 'lucide-react';
-import { type ChatSession } from '../types';
+import { Pin, Edit2, Archive, Trash2, MoreVertical, GripVertical, Download, FileJson, Folder as FolderIcon, FolderMinus } from 'lucide-react';
+import { type ChatSession, type Folder } from '../types';
 
 interface SortableChatItemProps {
   chat: ChatSession;
@@ -20,6 +20,9 @@ interface SortableChatItemProps {
   onArchive: (id: string) => void;
   onDelete: (e: React.MouseEvent, id: string) => void;
   onSetEditingId: (id: string, title: string) => void;
+  onExport: (chat: ChatSession, format: 'md' | 'json') => void;
+  folders: Folder[];
+  onSetFolder: (chatId: string, folderId: string | null) => void;
 }
 
 const SortableChatItem: React.FC<SortableChatItemProps> = ({
@@ -36,7 +39,10 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
   onTogglePin,
   onArchive,
   onDelete,
-  onSetEditingId
+  onSetEditingId,
+  onExport,
+  folders,
+  onSetFolder
 }) => {
   const {
     attributes,
@@ -119,8 +125,44 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
           >
             <Pin className="w-4 h-4 opacity-60" /> {chat.pinned ? 'Desafixar' : 'Fixar'}
           </button>
-          <button 
-            onClick={() => { onArchive(chat.id); onToggleMenu(''); }} 
+          <button
+            onClick={() => { onExport(chat, 'md'); onToggleMenu(''); }}
+            className="w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
+          >
+            <Download className="w-4 h-4 opacity-60" /> Exportar Markdown
+          </button>
+          <button
+            onClick={() => { onExport(chat, 'json'); onToggleMenu(''); }}
+            className="w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
+          >
+            <FileJson className="w-4 h-4 opacity-60" /> Exportar JSON
+          </button>
+          {(folders.length > 0 || chat.folderId) && (
+            <>
+              <div className="h-px bg-(--border-light) my-1 opacity-50"></div>
+              <div className="px-3 pt-1 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-(--text-placeholder)">Mover para pasta</div>
+              {folders.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => { onSetFolder(chat.id, f.id); onToggleMenu(''); }}
+                  className={`w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2 ${chat.folderId === f.id ? 'font-bold' : ''}`}
+                >
+                  <FolderIcon className="w-4 h-4 opacity-60" /> <span className="truncate">{f.name}</span>
+                </button>
+              ))}
+              {chat.folderId && (
+                <button
+                  onClick={() => { onSetFolder(chat.id, null); onToggleMenu(''); }}
+                  className="w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
+                >
+                  <FolderMinus className="w-4 h-4 opacity-60" /> Remover da pasta
+                </button>
+              )}
+              <div className="h-px bg-(--border-light) my-1 opacity-50"></div>
+            </>
+          )}
+          <button
+            onClick={() => { onArchive(chat.id); onToggleMenu(''); }}
             className="w-full text-left px-3 py-2 hover:bg-white/5 transition text-sm flex items-center gap-2"
           >
             <Archive className="w-4 h-4 opacity-60" /> Arquivar

@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { X, Trash2, Edit2, List, Plus, Search, Layers, Sparkles, Loader2 } from 'lucide-react';
 import { type MemoryFact } from '../types';
-import DnaGraph from './DnaGraph';
+import ErrorBoundary from './ErrorBoundary';
+
+// react-force-graph-2d é pesado e só é usado na visão de grafo do DNA — carregado sob demanda.
+const DnaGraph = lazy(() => import('./DnaGraph'));
 
 interface DnaPanelProps {
   memoryFacts: MemoryFact[];
@@ -171,11 +174,15 @@ const DnaPanel: React.FC<DnaPanelProps> = ({
             )}
           </div>
         ) : (
-          <DnaGraph 
-            facts={memoryFacts} 
-            focusMode={focusMode} 
-            onNodeClick={(fact) => setEditingFact(fact)} 
-          />
+          <ErrorBoundary compact label="Gráfico de memória">
+            <Suspense fallback={<div className="flex items-center justify-center h-full text-(--text-placeholder)"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
+              <DnaGraph
+                facts={memoryFacts}
+                focusMode={focusMode}
+                onNodeClick={(fact) => setEditingFact(fact)}
+              />
+            </Suspense>
+          </ErrorBoundary>
         )}
       </div>
 

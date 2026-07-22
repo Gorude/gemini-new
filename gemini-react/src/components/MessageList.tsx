@@ -30,7 +30,10 @@ interface MessageListProps {
   onSaveEdit: (id: string) => void;
   onSetEditingMsgText: (text: string) => void;
   onCancelEdit: () => void;
-  onRegenerate: (id: string) => void;
+  onRegenerate: (id: string, modelId?: string) => void;
+  onBranch: (id: string) => void;
+  onPreviewCode?: (code: string, lang: string) => void;
+  regenModels: { id: string; name: string }[];
   onDelete: (id: string) => void;
   onCopy: (text: string, id: string) => void;
   onToggleSources: (id: string | null) => void;
@@ -66,6 +69,9 @@ const MessageList: React.FC<MessageListProps> = ({
   onSetEditingMsgText,
   onCancelEdit,
   onRegenerate,
+  onBranch,
+  onPreviewCode,
+  regenModels,
   onDelete,
   onCopy,
   onToggleSources,
@@ -298,6 +304,9 @@ const MessageList: React.FC<MessageListProps> = ({
                 onSetEditingMsgText={onSetEditingMsgText}
                 onCancelEdit={onCancelEdit}
                 onRegenerate={onRegenerate}
+                onBranch={onBranch}
+                onPreviewCode={onPreviewCode}
+                regenModels={regenModels}
                 onDelete={onDelete}
                 onCopy={onCopy}
                 onToggleSources={onToggleSources}
