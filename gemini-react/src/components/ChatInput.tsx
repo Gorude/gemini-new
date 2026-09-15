@@ -456,40 +456,35 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   >
                     {isLiveActive ? (
                       LIVE_MODEL_OPTIONS.map(opt => (
-                        <button key={opt.id} onClick={() => { onSetLiveModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${liveModel === opt.id ? 'font-bold' : ''}`} style={liveModel === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
-                          </div>
-                          <span className="text-[11px] text-(--text-placeholder)">{opt.desc}</span>
+                        <button key={opt.id} onClick={() => { onSetLiveModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex items-center justify-between px-3.5 py-2 hover:bg-white/5 transition text-left ${liveModel === opt.id ? 'font-bold' : ''}`} style={liveModel === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
+                          <span className="text-[13px] font-medium text-(--text-primary)">{opt.name}</span>
                         </button>
                       ))
                     ) : (
                       <>
                         {MODEL_OPTIONS.filter(opt => enabledModelIds.includes(opt.id)).map(opt => (
-                          <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
+                          <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex items-center justify-between gap-3 px-3.5 py-2 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
+                            <span className="text-[13px] font-medium text-(--text-primary)">{opt.name}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
                               {opt.hasSearch && <Globe className="w-3.5 h-3.5 opacity-60 text-blue-400" />}
                               {renderCaps(opt.id)}
                             </div>
-                            <span className="text-[11px] text-(--text-placeholder)">{opt.desc}</span>
                           </button>
                         ))}
 
-                        {/* Modelos customizados (OpenRouter), agrupados por provedor. */}
+                        {/* Modelos customizados (OpenRouter / OrcaRouter), agrupados por provedor. */}
                         {CUSTOM_MODEL_PROVIDERS.map(provider => {
                           const providerModels = customModels.filter(m => m.provider === provider.id && enabledModelIds.includes(m.id));
                           if (providerModels.length === 0) return null;
                           return (
                             <div key={provider.id} className="w-full">
-                              <div className="px-3.5 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">{provider.name}</div>
+                              <div className="px-3.5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-(--text-placeholder)">{provider.name}</div>
                               {providerModels.map(opt => (
-                                <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex flex-col px-3.5 py-3 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[13px] font-semibold text-(--text-primary)">{opt.name}</span>
+                                <button key={opt.id} onClick={() => { onSetModel(opt.id); setIsModelMenuOpen(false); }} className={`w-full flex items-center justify-between gap-3 px-3.5 py-2 hover:bg-white/5 transition text-left ${model === opt.id ? 'font-bold' : ''}`} style={model === opt.id ? { background: 'var(--accent-bg)', color: 'var(--accent-text)' } : {}}>
+                                  <span className="text-[13px] font-medium text-(--text-primary)">{opt.name}</span>
+                                  <div className="flex items-center gap-1.5 shrink-0">
                                     {renderCaps(opt.id)}
                                   </div>
-                                  <span className="text-[11px] text-(--text-placeholder) font-mono truncate max-w-full">{opt.id}</span>
                                 </button>
                               ))}
                             </div>

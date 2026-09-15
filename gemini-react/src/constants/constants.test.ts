@@ -34,6 +34,9 @@ describe('getModelContextWindow', () => {
   it('prioriza o contextLength do modelo customizado', () => {
     const custom: CustomModel[] = [{ id: 'x/y', name: 'Y', provider: 'openrouter', contextLength: 256_000 }];
     expect(getModelContextWindow('x/y', custom)).toBe(256_000);
+
+    const customOrca: CustomModel[] = [{ id: 'orcarouter/auto', name: 'Auto', provider: 'orcarouter', contextLength: 128_000 }];
+    expect(getModelContextWindow('orcarouter/auto', customOrca)).toBe(128_000);
   });
 
   it('cai no fallback quando o custom não tem contextLength', () => {

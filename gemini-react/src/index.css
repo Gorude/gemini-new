@@ -53,6 +53,8 @@
   --message-bold-weight: 500;
   --nemon-logo-fill: #ffffff;
   --nemon-logo-stroke: #ffffff;
+  --nemon-logo-main: #ffffff;
+  --nemon-logo-accent: #ff5500;
   --accent: #27272a;
   --accent-hover: #3f3f46;
   --accent-text: #ffffff;
@@ -870,3 +872,120 @@ body {
 .response-body .code-block:hover .code-preview-btn { opacity: 1; }
 .response-body .code-preview-btn:hover { color: var(--accent-text); background: rgba(20, 20, 20, 0.8); border-color: var(--accent-border); }
 .response-body .code-preview-btn svg { width: 13px; height: 13px; }
+
+/* ==========================================================================
+   Nemon Official Circular Logo & Generation Spinner Animation
+   ========================================================================== */
+.nemon-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.nemon-ring-group {
+  transform-origin: 50px 50px;
+  transform-box: view-box;
+}
+
+.nemon-ring-spinning {
+  transform-origin: 50px 50px;
+  transform-box: view-box;
+  animation: nemon-ring-rotate 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.nemon-detached-group {
+  transform-origin: 50px 50px;
+  transform-box: view-box;
+}
+
+.nemon-detached-pulsing {
+  transform-origin: 50px 50px;
+  transform-box: view-box;
+  animation: nemon-detached-step 0.9s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+}
+
+/* Afastamento radial da fatia solta: vai para diagonal superior-direita (+5px, -5px) e volta */
+@keyframes nemon-detached-step {
+  0% {
+    transform: translate(0px, 0px);
+  }
+  26% {
+    transform: translate(5.5px, -5.5px);
+  }
+  52% {
+    transform: translate(0px, 0px);
+  }
+  100% {
+    transform: translate(0px, 0px);
+  }
+}
+
+/* Giro sequencial de 90° no sentido horário em 4 passos sincronizados (3.6s = 4 x 0.9s) */
+@keyframes nemon-ring-rotate {
+  0%, 13.5% {
+    transform: rotate(0deg);
+  }
+  22.5%, 38.5% {
+    transform: rotate(90deg);
+  }
+  47.5%, 63.5% {
+    transform: rotate(180deg);
+  }
+  72.5%, 88.5% {
+    transform: rotate(270deg);
+  }
+  97.5%, 100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Sandpack VS Code styling overrides */
+.sp-wrapper {
+  height: 100% !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+.sp-layout {
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+.sp-code-editor {
+  height: 100% !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.sp-cm, .cm-editor, .cm-scroller {
+  height: 100% !important;
+  width: 100% !important;
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+}
+.sp-preview-container {
+  height: 100% !important;
+  width: 100% !important;
+  background: #0d1117 !important;
+}
+.sp-preview-iframe {
+  height: 100% !important;
+  width: 100% !important;
+  border: none !important;
+}
+
+

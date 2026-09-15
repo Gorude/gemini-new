@@ -27,6 +27,7 @@ import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
 import { mapEmbedUrl, mapLinkUrl } from '../utils/mapMarkers';
 import LiveAudioPlayer from './LiveAudioPlayer';
+import NemonIcon from './NemonIcon';
 interface MessageItemProps {
   msg: Message;
   isLoading: boolean;
@@ -277,13 +278,8 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
         <div className="ai-msg w-full">
           <div className="flex items-center gap-2 mb-2">
             {isGenerating && (
-              <div className="w-10 h-10 flex items-center justify-center relative shrink-0">
-                <div className="breathing-dots-container">
-                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-                  <div className="breathing-dot bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-                </div>
+              <div className="w-8 h-8 flex items-center justify-center relative shrink-0" title="Gerando resposta...">
+                <NemonIcon animated size={24} />
               </div>
             )}
 
@@ -291,9 +287,19 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             {(msg.sources && msg.sources.length > 0 || msg.isSearching) && (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500 ml-1">
                 {msg.isSearching && (!msg.sources || msg.sources.length === 0) && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-500 animate-pulse">
-                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce"></div>
-                    {msg.thoughts && !msg.text ? "RACIOCINANDO..." : "PESQUISANDO..."}
+                  <div className="flex items-center gap-2 px-3 py-1 bg-white/[0.04] hover:bg-white/[0.07] border border-white/10 rounded-full text-xs font-medium text-(--text-secondary) shadow-sm backdrop-blur-md transition-all animate-in fade-in zoom-in-95 duration-300">
+                    {msg.thoughts && !msg.text ? (
+                      <>
+                        <Brain className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                        <span className="text-[11px] text-purple-300/90 font-medium">Pensando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Globe className="w-3.5 h-3.5 text-blue-400 animate-spin" style={{ animationDuration: '3s' }} />
+                        <span className="text-[11px] text-blue-200/90 font-medium">Pesquisando na web...</span>
+                      </>
+                    )}
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_6px_rgba(96,165,250,0.8)] animate-pulse" />
                   </div>
                 )}
                 

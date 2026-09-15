@@ -416,6 +416,7 @@ import { doc, getDoc } from "firebase/firestore";
 import {
   LOCAL_MODEL_ID,
   OPENROUTER_BASE_URL,
+  ORCAROUTER_BASE_URL,
   CAPABILITY_ORDER,
   type ChatProvider,
   type CustomModel,
@@ -426,6 +427,7 @@ let globalDefaultApiKey = "";
 let globalPaidApiKey = "";
 let globalLocalEndpoint = "";
 let globalOpenRouterApiKey = "";
+let globalOrcaRouterApiKey = "";
 // Registro dos modelos customizados cadastrados pelo usuário. Serve para resolver
 // o provedor (e portanto a URL/chave/cabeçalhos) a partir do id do modelo escolhido.
 let globalCustomModels: CustomModel[] = [];
@@ -442,6 +444,10 @@ export function setGlobalOpenRouterApiKey(key: string) {
   globalOpenRouterApiKey = (key || "").trim();
 }
 
+export function setGlobalOrcaRouterApiKey(key: string) {
+  globalOrcaRouterApiKey = (key || "").trim();
+}
+
 export function setGlobalCustomModels(models: CustomModel[]) {
   globalCustomModels = Array.isArray(models) ? models : [];
 }
@@ -449,6 +455,51 @@ export function setGlobalCustomModels(models: CustomModel[]) {
 export interface OpenRouterModelMeta {
   contextLength?: number;
   capabilities?: ModelCapability[];
+}
+
+export type OrcaRouterModelMeta = OpenRouterModelMeta;
+
+/**
+ * Busca metadados de um modelo no catálogo do OrcaRouter: janela de contexto
+ * (context_length) e capacidades (modalidades de entrada + tool calling).
+ * Best-effort: retorna {} se não encontrar ou se a requisição falhar.
+ */
+export async function fetchOrcaRouterModelMeta(modelId: string): Promise<OrcaRouterModelMeta> {
+  try {
+    const headers: Record<string, string> = {};
+    if (globalOrcaRouterApiKey) headers['Authorization'] = `Bearer ${globalOrcaRouterApiKey}`;
+    const res = await fetch(`${ORCAROUTER_BASE_URL}/models`, { headers });
+    if (!res.ok) return {};
+    const data = await res.json();
+    const models: any[] = data?.data || (Array.isArray(data) ? data : []);
+    const found = models.find(m => m?.id === modelId);
+    if (!found) return {};
+
+    const ctxRaw = found.context_length ?? found.max_tokens ?? found.context_window ?? found.top_provider?.context_length;
+    const contextLength = typeof ctxRaw === 'number' && ctxRaw > 0 ? ctxRaw : undefined;
+
+    const arch = found.architecture || {};
+    const inputs: string[] = Array.isArray(arch.input_modalities)
+      ? arch.input_modalities
+      : (Array.isArray(found.modalities)
+          ? found.modalities
+          : (typeof arch.modality === 'string' ? arch.modality.split('->')[0].split('+') : []));
+
+    const caps = new Set<ModelCapability>(['text']);
+    for (const m of inputs) {
+      const v = String(m).toLowerCase();
+      if (v.includes('image')) caps.add('image');
+      else if (v.includes('audio')) caps.add('audio');
+      else if (v.includes('file') || v.includes('pdf')) caps.add('file');
+    }
+    const params: string[] = found.supported_parameters || [];
+    if (params.includes('tools') || params.includes('tool_choice')) caps.add('tools');
+
+    const capabilities = CAPABILITY_ORDER.filter(c => caps.has(c));
+    return { contextLength, capabilities };
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -615,8 +666,8 @@ interface OpenAIEndpointConfig {
   label: string;
   // Mensagem amigável exibida quando a conexão de rede falha.
   connectErrorMsg: string;
-  // Teto de tokens de saída.
-  maxTokens: number;
+  // Teto de tokens de saída (opcional: se omitido, o modelo usa seu próprio limite nativo).
+  maxTokens?: number;
   // Campos extras a serem mesclados no corpo da requisição (ex.: `reasoning` do OpenRouter).
   extraBody?: Record<string, any>;
 }
@@ -676,13 +727,13 @@ async function* streamOpenAICompatibleContent(
     messages.push({ role: "user", content: text });
   }
 
-  const payload = {
+  const payload: Record<string, any> = {
     model: cfg.modelId,
     messages,
     stream: true,
     stream_options: { include_usage: true },
     temperature: 0.7,
-    max_tokens: cfg.maxTokens,
+    ...(cfg.maxTokens !== undefined ? { max_tokens: cfg.maxTokens } : {}),
     ...(cfg.extraBody || {}),
   };
 
@@ -895,7 +946,7 @@ async function* streamOpenAICompatibleContent(
 function buildOpenAIConfig(
   provider: Exclude<ChatProvider, "gemini">,
   model: string,
-  maxTokens: number,
+  maxTokens: number | undefined,
   thinking: boolean,
   webSearch: boolean,
   jsonMode: boolean,
@@ -919,38 +970,66 @@ function buildOpenAIConfig(
     };
   }
 
-  // provider === 'openrouter'
-  if (!globalOpenRouterApiKey) {
+  if (provider === "openrouter") {
+    if (!globalOpenRouterApiKey) {
+      throw new Error(
+        "Chave da API do OpenRouter não configurada. Vá em Configurações > API para adicioná-la.",
+      );
+    }
+    // Campos extras específicos do OpenRouter:
+    // - `reasoning`: quando o "pensar" está ligado, pede os tokens de raciocínio
+    //   (campo `reasoning`). Modelos que não suportam ignoram.
+    // - `plugins: [{ id: 'web' }]`: busca web NATIVA do OpenRouter quando o usuário liga
+    //   o botão de busca. As citações voltam como `annotations` (url_citation) e viram fontes.
+    // - `response_format`: saída em JSON quando solicitado (ex.: organização de memórias).
+    const extraBody: Record<string, any> = {};
+    if (thinking) extraBody.reasoning = { enabled: true };
+    if (webSearch) extraBody.plugins = [{ id: "web", max_results: 4 }];
+    if (jsonMode) extraBody.response_format = { type: "json_object" };
+
+    return {
+      url: `${OPENROUTER_BASE_URL}/chat/completions`,
+      modelId: model,
+      headers: {
+        Authorization: `Bearer ${globalOpenRouterApiKey}`,
+        // Cabeçalhos recomendados pelo OpenRouter para atribuição do app.
+        "HTTP-Referer":
+          typeof location !== "undefined"
+            ? location.origin
+            : "https://nemon.chat",
+        "X-Title": "Nemon Chat",
+      },
+      label: "openrouter",
+      connectErrorMsg:
+        "Não foi possível conectar ao OpenRouter. Verifique sua conexão e a chave de API.",
+      maxTokens,
+      extraBody: Object.keys(extraBody).length > 0 ? extraBody : undefined,
+    };
+  }
+
+  // provider === 'orcarouter'
+  if (!globalOrcaRouterApiKey) {
     throw new Error(
-      "Chave da API do OpenRouter não configurada. Vá em Configurações > API para adicioná-la.",
+      "Chave da API do OrcaRouter não configurada. Vá em Configurações > API para adicioná-la.",
     );
   }
-  // Campos extras específicos do OpenRouter:
-  // - `reasoning`: quando o "pensar" está ligado, pede os tokens de raciocínio
-  //   (campo `reasoning`). Modelos que não suportam ignoram.
-  // - `plugins: [{ id: 'web' }]`: busca web NATIVA do OpenRouter quando o usuário liga
-  //   o botão de busca. As citações voltam como `annotations` (url_citation) e viram fontes.
-  // - `response_format`: saída em JSON quando solicitado (ex.: organização de memórias).
   const extraBody: Record<string, any> = {};
-  if (thinking) extraBody.reasoning = { enabled: true };
-  if (webSearch) extraBody.plugins = [{ id: "web", max_results: 4 }];
   if (jsonMode) extraBody.response_format = { type: "json_object" };
 
   return {
-    url: `${OPENROUTER_BASE_URL}/chat/completions`,
+    url: `${ORCAROUTER_BASE_URL}/chat/completions`,
     modelId: model,
     headers: {
-      Authorization: `Bearer ${globalOpenRouterApiKey}`,
-      // Cabeçalhos recomendados pelo OpenRouter para atribuição do app.
+      Authorization: `Bearer ${globalOrcaRouterApiKey}`,
       "HTTP-Referer":
         typeof location !== "undefined"
           ? location.origin
           : "https://nemon.chat",
       "X-Title": "Nemon Chat",
     },
-    label: "openrouter",
+    label: "orcarouter",
     connectErrorMsg:
-      "Não foi possível conectar ao OpenRouter. Verifique sua conexão e a chave de API.",
+      "Não foi possível conectar ao OrcaRouter. Verifique sua conexão e a chave de API.",
     maxTokens,
     extraBody: Object.keys(extraBody).length > 0 ? extraBody : undefined,
   };
@@ -967,7 +1046,7 @@ export async function* streamGeminiContent(
   thinking: boolean = false,
   jsonMode: boolean = false,
   manualApiKey?: string,
-  maxOutputTokens: number = 8192,
+  maxOutputTokens?: number,
 ): AsyncGenerator<{
   text?: string;
   thoughts?: string;
@@ -1020,16 +1099,22 @@ export async function* streamGeminiContent(
   const payload: any = {
     contents: [...history, { role: "user", parts: currentParts }],
     generationConfig: {
-      maxOutputTokens,
       temperature: 0.7,
+      ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
       ...(jsonMode ? { response_mime_type: "application/json" } : {}),
     },
   };
 
   if (thinking) {
-    // Apenas modelos específicos suportam o parâmetro thinkingConfig nativo (como Gemini Thinking)
+    // Modelos com raciocínio nativo (Gemini 2.0/2.5/3.x, incl. Flash Lite) aceitam
+    // thinkingConfig. Eles NÃO emitem tags <thinking> no texto — devolvem partes com
+    // part.thought === true, que só chegam quando includeThoughts: true é enviado.
+    // Sem isso, o modo thinking não retorna nenhum raciocínio.
     const supportsThinkingConfig =
-      model.includes("thinking") || model.includes("gemini-2.0");
+      model.includes("thinking") ||
+      model.includes("gemini-2.0") ||
+      model.includes("gemini-2.5") ||
+      model.includes("gemini-3");
 
     if (supportsThinkingConfig) {
       payload.generationConfig.thinkingConfig = {
@@ -1397,7 +1482,7 @@ export async function runGeminiToolLoop(
     const payload: any = {
       contents,
       tools: [{ functionDeclarations: declarations }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+      generationConfig: { temperature: 0.7 },
     };
     if (systemInstruction) payload.systemInstruction = { role: "system", parts: [{ text: systemInstruction }] };
 
@@ -1460,7 +1545,7 @@ export async function performWebSearch(
     "conclusões. Não invente; baseie-se somente nos resultados da busca.";
   const prompt = `Pesquise na web e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
 
-  // Teto de tokens baixo: o resumo é curto, então gera muito mais rápido que o padrão (8192).
+  // Teto de tokens baixo intencional: o resumo é curto, gerando muito mais rápido.
   const gen = streamGeminiContent(
     prompt,
     model,

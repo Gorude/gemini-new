@@ -1,30 +1,12 @@
 <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    .nemon-logo-path {
-      fill: #002b80;
-    }
-    .nemon-logo-stroke {
-      stroke: #002b80;
-    }
-    @media (prefers-color-scheme: dark) {
-      .nemon-logo-path {
-        fill: #60a5fa;
-      }
-      .nemon-logo-stroke {
-        stroke: #60a5fa;
-      }
-    }
-  </style>
-  <!-- Antenna Bulb -->
-  <circle cx="50" cy="18" r="11" class="nemon-logo-path" />
-  
-  <!-- Antenna Shaft -->
-  <rect x="46" y="24" width="8" height="20" class="nemon-logo-path" />
-  
-  <!-- Head Rect -->
-  <rect x="18" y="42" width="64" height="50" class="nemon-logo-stroke" stroke-width="6" fill="none" />
-  
-  <!-- Eyes -->
-  <circle cx="36" cy="67" r="14" class="nemon-logo-path" />
-  <circle cx="64" cy="67" r="14" class="nemon-logo-path" />
+  <!-- Parte maior do círculo (270 graus): Branca -->
+  <path
+    d="M 89.95 52 A 40 40 0 1 1 48 10.05 L 48 28.09 A 22 22 0 1 0 71.91 52 Z"
+    fill="#FFFFFF"
+  />
+  <!-- Sessão solta (90 graus): Laranja vivo -->
+  <path
+    d="M 52 10.05 A 40 40 0 0 1 89.95 48 L 71.91 48 A 22 22 0 0 0 52 28.09 Z"
+    fill="#FF5500"
+  />
 </svg>

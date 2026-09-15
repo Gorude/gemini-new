@@ -22,7 +22,7 @@ import {
   Wand2
 } from 'lucide-react';
 import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS, FONT_OPTIONS, CUSTOM_MODEL_PROVIDERS, formatTokenCount, type CustomModel, type CustomModelProvider } from '../constants';
-import { fetchOpenRouterModelMeta } from '../services/gemini';
+import { fetchOpenRouterModelMeta, fetchOrcaRouterModelMeta } from '../services/gemini';
 import NemonIcon from './NemonIcon';
 import PersonalitiesPanel from './PersonalitiesPanel';
 import SkillsPanel from './SkillsPanel';
@@ -55,6 +55,8 @@ interface SettingsModalProps {
   onUpdateDefaultApiKey: (key: string) => void;
   openRouterApiKey: string;
   onUpdateOpenRouterApiKey: (key: string) => void;
+  orcaRouterApiKey: string;
+  onUpdateOrcaRouterApiKey: (key: string) => void;
   customModels: CustomModel[];
   onSetCustomModels: (models: CustomModel[]) => void;
   localEndpoint: string;
@@ -104,6 +106,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateDefaultApiKey,
   openRouterApiKey,
   onUpdateOpenRouterApiKey,
+  orcaRouterApiKey,
+  onUpdateOrcaRouterApiKey,
   customModels,
   onSetCustomModels,
   localEndpoint,
@@ -137,9 +141,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [valLocalStatus, setValLocalStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [tempOpenRouterKey, setTempOpenRouterKey] = useState(openRouterApiKey);
   const [valOpenRouterStatus, setValOpenRouterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  // Rascunho do formulário "adicionar modelo" por provedor: { openrouter: {name,id} }.
+  const [tempOrcaRouterKey, setTempOrcaRouterKey] = useState(orcaRouterApiKey);
+  const [valOrcaRouterStatus, setValOrcaRouterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  // Rascunho do formulário "adicionar modelo" por provedor: { openrouter: {name,id}, orcarouter: {name,id} }.
   const [modelDrafts, setModelDrafts] = useState<Record<CustomModelProvider, { name: string; id: string }>>({
     openrouter: { name: '', id: '' },
+    orcarouter: { name: '', id: '' },
   });
 
   useEffect(() => {
@@ -161,6 +168,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     setTempOpenRouterKey(openRouterApiKey);
   }, [openRouterApiKey]);
+
+  useEffect(() => {
+    setTempOrcaRouterKey(orcaRouterApiKey);
+  }, [orcaRouterApiKey]);
 
   const validateDefaultKey = async (key: string) => {
     if (!key) {
@@ -238,6 +249,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const validateOrcaRouterKey = async (rawKey: string) => {
+    const key = (rawKey || '').trim();
+    onUpdateOrcaRouterApiKey(key);
+    if (!key) {
+      setValOrcaRouterStatus('idle');
+      return;
+    }
+    setValOrcaRouterStatus('loading');
+    try {
+      const res = await fetch('https://api.orcarouter.ai/v1/models', {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      setValOrcaRouterStatus(res.ok ? 'success' : 'error');
+    } catch {
+      setValOrcaRouterStatus('error');
+    }
+  };
+
   const [addingModel, setAddingModel] = useState<CustomModelProvider | null>(null);
 
   const addCustomModel = async (provider: CustomModelProvider) => {
@@ -248,12 +277,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // Evita ids duplicados (o id é a chave de roteamento).
     if (customModels.some(m => m.id === id)) return;
 
-    // Busca contexto + capacidades reais no OpenRouter (best-effort) p/ o indicador e os emojis.
+    // Busca contexto + capacidades reais no catálogo (best-effort) p/ o indicador e os emojis.
     setAddingModel(provider);
     let meta: { contextLength?: number; capabilities?: CustomModel['capabilities'] } = {};
     try {
       if (provider === 'openrouter') {
         meta = await fetchOpenRouterModelMeta(id);
+      } else if (provider === 'orcarouter') {
+        meta = await fetchOrcaRouterModelMeta(id);
       }
     } finally {
       setAddingModel(null);
@@ -728,10 +759,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   <div className="h-px bg-(--border-light) opacity-35"></div>
 
-                  {/* Provedor externo compatível com OpenAI: OpenRouter.
+                  {/* Provedores externos compatíveis com OpenAI: OpenRouter e OrcaRouter.
                       Chave de API + modelos customizados (por id) que aparecem no seletor do chat. */}
                   {([
                     { id: 'openrouter' as CustomModelProvider, temp: tempOpenRouterKey, setTemp: setTempOpenRouterKey, status: valOpenRouterStatus, onSave: validateOpenRouterKey, placeholder: 'sk-or-v1-...' },
+                    { id: 'orcarouter' as CustomModelProvider, temp: tempOrcaRouterKey, setTemp: setTempOrcaRouterKey, status: valOrcaRouterStatus, onSave: validateOrcaRouterKey, placeholder: 'sk-orca-...' },
                   ]).map(p => {
                     const meta = CUSTOM_MODEL_PROVIDERS.find(m => m.id === p.id)!;
                     const models = customModels.filter(m => m.provider === p.id);

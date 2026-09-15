@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Edit2,
   Folder as FolderIcon,
-  FolderPlus
+  FolderPlus,
+  Code2
 } from 'lucide-react';
 import { auth, db } from './services/firebase';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
@@ -63,9 +64,11 @@ import {
   setGlobalPaidApiKey,
   setGlobalDefaultApiKey,
   setGlobalOpenRouterApiKey,
+  setGlobalOrcaRouterApiKey,
   setGlobalCustomModels,
   resolveProvider,
   fetchOpenRouterModelMeta,
+  fetchOrcaRouterModelMeta,
   listLiveModels,
   setGlobalLocalEndpoint,
   performWebSearch,
@@ -249,6 +252,7 @@ import LogWindow from './components/LogWindow';
 const SettingsModal = lazyWithSuspense(() => import('./components/SettingsModal'));
 const CodePreviewPanel = lazyWithSuspense(() => import('./components/CodePreviewPanel'));
 const ModelCompareModal = lazyWithSuspense(() => import('./components/ModelCompareModal'));
+const CodeIdeView = lazyWithSuspense(() => import('./components/code-ide/CodeIdeView').then(m => ({ default: m.CodeIdeView })));
 import {
   LIVE_MODEL_MAP,
   DEFAULT_LIVE_MODEL,
@@ -470,7 +474,7 @@ function App() {
   const [appFont, setAppFont] = useState<string>(() => localStorage.getItem('nemon_app_font') || DEFAULT_FONT_ID);
   const [retroMode, setRetroMode] = useState<boolean>(() => localStorage.getItem('nemon_retro_mode') === 'true');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'settings'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'files' | 'settings' | 'code'>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nemon_sidebar_open');
@@ -484,6 +488,7 @@ function App() {
   const [paidApiKey, setPaidApiKey] = useState('');
   const [defaultApiKey, setDefaultApiKey] = useState('');
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
+  const [orcaRouterApiKey, setOrcaRouterApiKey] = useState('');
   const [localEndpoint, setLocalEndpoint] = useState(() => localStorage.getItem('nemon_local_endpoint') || DEFAULT_LOCAL_ENDPOINT);
   // Modelos de chat customizados (OpenRouter) cadastrados pelo usuário.
   // Persistidos localmente e no Firestore (settings.customModels).
@@ -594,7 +599,7 @@ function App() {
     return unsubscribe;
   }, []);
 
-  const saveConfig = useCallback((config: { paidApiKey?: string; defaultApiKey?: string; openRouterApiKey?: string }) => {
+  const saveConfig = useCallback((config: { paidApiKey?: string; defaultApiKey?: string; openRouterApiKey?: string; orcaRouterApiKey?: string }) => {
     if (config.paidApiKey !== undefined) {
       setPaidApiKey(config.paidApiKey);
       setGlobalPaidApiKey(config.paidApiKey);
@@ -606,6 +611,10 @@ function App() {
     if (config.openRouterApiKey !== undefined) {
       setOpenRouterApiKey(config.openRouterApiKey);
       setGlobalOpenRouterApiKey(config.openRouterApiKey);
+    }
+    if (config.orcaRouterApiKey !== undefined) {
+      setOrcaRouterApiKey(config.orcaRouterApiKey);
+      setGlobalOrcaRouterApiKey(config.orcaRouterApiKey);
     }
     if (auth.currentUser) {
       const userDocRef = doc(db, 'users', auth.currentUser.uid);
@@ -695,28 +704,59 @@ function App() {
   // Templates de prompt (para o menu "/" do chat).
   const promptSkills = useMemo(() => skills.filter(s => s.kind === 'prompt'), [skills]);
 
-  // Backfill: modelos OpenRouter cadastrados antes destes recursos podem não ter
-  // `contextLength` e/ou `capabilities`. Busca os metadados no OpenRouter uma vez e
-  // salva, para o indicador de contexto e os emojis de capacidade aparecerem.
+  // Rastreia modelos customizados já consultados para metadados (contextLength / capabilities)
+  // para evitar loops infinitos de atualização quando o provedor não retorna esses campos.
+  const probedCustomModelIdsRef = useRef<Set<string>>(new Set());
+
+  // Para modelos customizados salvos sem janela de contexto ou capacidades, busca
+  // esses metadados via API e atualiza a lista salva, para o indicador de contexto
+  // e os emojis de capacidade aparecerem.
   useEffect(() => {
-    if (!openRouterApiKey) return;
-    const missing = customModels.filter(m => m.provider === 'openrouter' && (!m.contextLength || !m.capabilities));
+    if (!openRouterApiKey && !orcaRouterApiKey) return;
+    const missing = customModels.filter(m =>
+      !probedCustomModelIdsRef.current.has(m.id) && (!m.contextLength || !m.capabilities)
+    );
     if (missing.length === 0) return;
+
+    // Marca imediatamente como consultado para não disparar em requisições concorrentes
+    missing.forEach(m => probedCustomModelIdsRef.current.add(m.id));
+
     let cancelled = false;
     (async () => {
       const resolved = await Promise.all(
-        missing.map(async m => ({ id: m.id, meta: await fetchOpenRouterModelMeta(m.id) }))
+        missing.map(async m => {
+          let meta: { contextLength?: number; capabilities?: any } = {};
+          if (m.provider === 'openrouter' && openRouterApiKey) {
+            meta = await fetchOpenRouterModelMeta(m.id);
+          } else if (m.provider === 'orcarouter' && orcaRouterApiKey) {
+            meta = await fetchOrcaRouterModelMeta(m.id);
+          }
+          return { id: m.id, meta };
+        })
       );
       if (cancelled) return;
       const metaById = new Map(resolved.filter(r => r.meta.contextLength || r.meta.capabilities).map(r => [r.id, r.meta]));
-      if (metaById.size === 0) return; // nada resolvido: não re-dispara (customModels inalterado)
-      saveCustomModels(customModels.map(m => {
+      if (metaById.size === 0) return; // nada resolvido: não re-dispara
+
+      let hasAnyChange = false;
+      const nextModels = customModels.map(m => {
         const meta = metaById.get(m.id);
-        return meta ? { ...m, contextLength: m.contextLength ?? meta.contextLength, capabilities: m.capabilities ?? meta.capabilities } : m;
-      }));
+        if (!meta) return m;
+        const nextCtx = m.contextLength ?? meta.contextLength;
+        const nextCaps = m.capabilities ?? meta.capabilities;
+        if (nextCtx !== m.contextLength || nextCaps !== m.capabilities) {
+          hasAnyChange = true;
+          return { ...m, contextLength: nextCtx, capabilities: nextCaps };
+        }
+        return m;
+      });
+
+      if (hasAnyChange) {
+        saveCustomModels(nextModels);
+      }
     })();
     return () => { cancelled = true; };
-  }, [customModels, openRouterApiKey, saveCustomModels]);
+  }, [customModels, openRouterApiKey, orcaRouterApiKey, saveCustomModels]);
 
   // Mantém o endpoint do modelo local (llama.cpp) sincronizado com o serviço e o localStorage.
   // É guardado localmente (não no Firestore) por ser específico do dispositivo.
@@ -850,10 +890,15 @@ function App() {
     return exists ? defaultModelId : FALLBACK_MODEL;
   }, [defaultModelId, customModels]);
 
+  const prevActiveChatIdRef = useRef<string | null>(null);
+
   // Ao trocar de chat: restaura o modelo salvo naquela conversa; num chat novo
-  // (sem id), pré-seleciona o modelo padrão. Usa chatsRef p/ não re-disparar a
-  // cada atualização de `chats` (ex.: streaming) — só depende do id ativo.
+  // (sem id), pré-seleciona o modelo padrão. Só re-dispara se activeChatId realmente
+  // mudou, evitando sobrescrever a escolha do usuário num chat novo.
   useEffect(() => {
+    if (prevActiveChatIdRef.current === activeChatId) return;
+    prevActiveChatIdRef.current = activeChatId;
+
     if (activeChatId === '') { setModel(resolveStartModel()); return; }
     const chat = chatsRef.current.find(c => c.id === activeChatId);
     setModel(chat?.model || resolveStartModel());
@@ -1190,6 +1235,7 @@ function App() {
           let dbPaidApiKey = '';
           let dbDefaultApiKey = '';
           let dbOpenRouterApiKey = '';
+          let dbOrcaRouterApiKey = '';
           let dbCustomModels: CustomModel[] = [];
           let dbFolders: Folder[] = [];
           let dbSkills: Skill[] = [];
@@ -1205,6 +1251,7 @@ function App() {
             dbPaidApiKey = data.paidApiKey || '';
             dbDefaultApiKey = data.defaultApiKey || '';
             dbOpenRouterApiKey = data.openRouterApiKey || '';
+            dbOrcaRouterApiKey = data.orcaRouterApiKey || '';
             dbCustomModels = Array.isArray(data.customModels) ? data.customModels : [];
             dbFolders = Array.isArray(data.folders) ? data.folders : [];
             dbSkills = Array.isArray(data.skills) ? data.skills : [];
@@ -1248,6 +1295,7 @@ function App() {
               paidApiKey: '',
               defaultApiKey: '',
               openRouterApiKey: '',
+              orcaRouterApiKey: '',
               customModels: [],
               folders: [],
               skills: [],
@@ -1282,6 +1330,8 @@ function App() {
           setGlobalDefaultApiKey(dbDefaultApiKey);
           setOpenRouterApiKey(dbOpenRouterApiKey);
           setGlobalOpenRouterApiKey(dbOpenRouterApiKey);
+          setOrcaRouterApiKey(dbOrcaRouterApiKey);
+          setGlobalOrcaRouterApiKey(dbOrcaRouterApiKey);
           setCustomModels(dbCustomModels);
           setGlobalCustomModels(dbCustomModels);
           setFolders(dbFolders);
@@ -2746,6 +2796,7 @@ function App() {
       }
       case 'create_new_chat': {
         setActiveChatId('');
+        setModel(resolveStartModel());
         setActiveTab('chat');
         return { result: 'Nova conversa criada.' };
       }
@@ -2998,6 +3049,7 @@ function App() {
     if (!activeChatId) {
       targetId = Date.now().toString();
       const newChat: ChatSession = { id: targetId, title: 'Nova Conversa', messages: [], isNaming: true, personalityId: selectedPersonalityId, model };
+      chatsRef.current = [newChat, ...chatsRef.current];
       setChats(prev => [newChat, ...prev]);
       setActiveChatId(targetId);
       isFirst = true;
@@ -3504,11 +3556,24 @@ function App() {
 
         <div className="px-3 mb-8">
           <button
-            onClick={() => { setActiveChatId(''); setVisibleMessagesCount(15); setActiveTab('chat'); }}
+            onClick={() => { setActiveChatId(''); setModel(resolveStartModel()); setVisibleMessagesCount(15); setActiveTab('chat'); }}
             className="flex items-center gap-3 px-3 py-3 w-full rounded-full hover:bg-(--bg-chat-hover) transition text-(--text-primary) font-medium"
           >
             <SquarePen className="w-5 h-5 opacity-70" />
             <span>Nova conversa</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('code'); setIsSidebarOpen(false); }}
+            className={`flex items-center gap-3 px-3 py-2.5 mt-1.5 w-full rounded-full transition text-sm font-medium border border-transparent ${
+              activeTab === 'code' ? 'bg-(--bg-chat-active) text-(--text-primary) border-(--border-light)' : 'hover:bg-(--bg-chat-hover) text-(--text-secondary) hover:text-(--text-primary)'
+            }`}
+          >
+            <Code2 className="w-4 h-4 opacity-70" style={{ color: activeTab === 'code' ? '#ff5500' : undefined }} />
+            <span>Aba de Código</span>
+            <span className="ml-auto text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#ff5500]/15 text-[#ff5500]">
+              IDE
+            </span>
           </button>
 
           <button
@@ -3720,8 +3785,21 @@ function App() {
 
           {/* Centered Header Controls Wrapper */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[45] flex items-center gap-2 sm:gap-4">
-            {/* Left Side: Files Button */}
-            <div className="w-20 sm:w-24 flex justify-end">
+            {/* Left Side: Code IDE & Files Buttons */}
+            <div className="w-24 sm:w-28 flex justify-end items-center gap-1.5">
+              <button
+                onClick={() => setActiveTab(activeTab === 'code' ? 'chat' : 'code')}
+                className={`flex items-center justify-center rounded-full border transition-all duration-200 hover:scale-105 active:scale-95 w-9 h-9 ${
+                  activeTab === 'code'
+                    ? 'text-white shadow-lg'
+                    : 'bg-(--bg-chat-hover) hover:bg-(--bg-chat-active) border-(--border-light) hover:border-(--glow-active)'
+                }`}
+                style={activeTab === 'code' ? { background: '#ff5500', borderColor: '#ff5500', boxShadow: '0 10px 15px -3px rgba(255, 85, 0, 0.4)' } : {}}
+                title={activeTab === 'code' ? 'Voltar para o Chat' : 'Aba de Código (IDE)'}
+              >
+                <Code2 className={`w-4 h-4 ${activeTab === 'code' ? 'text-white' : ''}`} style={activeTab !== 'code' ? { color: 'var(--accent-text)' } : {}} />
+              </button>
+
               {activeChatId && (
                 <button
                   onClick={() => setActiveTab(activeTab === 'chat' ? 'files' : 'chat')}
@@ -3850,7 +3928,14 @@ function App() {
         {/* Removida a fita de LED do topo */}
 
         <div className="flex-1 overflow-hidden flex flex-col relative">
-          {activeTab === 'files' && activeChatId ? (
+          {activeTab === 'code' ? (
+            <CodeIdeView
+              onBackToChat={() => { setActiveTab('chat'); setIsSidebarOpen(true); }}
+              selectedModel={model}
+              onSelectModel={handleSetModel}
+              customModels={customModels}
+            />
+          ) : activeTab === 'files' && activeChatId ? (
             <ChatFileHub messages={messages} onClose={() => setActiveTab('chat')} />
           ) : activeTab === 'settings' ? (
             <SettingsModal
@@ -3889,6 +3974,10 @@ function App() {
               openRouterApiKey={openRouterApiKey}
               onUpdateOpenRouterApiKey={(key) => {
                 saveConfig({ openRouterApiKey: key });
+              }}
+              orcaRouterApiKey={orcaRouterApiKey}
+              onUpdateOrcaRouterApiKey={(key) => {
+                saveConfig({ orcaRouterApiKey: key });
               }}
               customModels={customModels}
               onSetCustomModels={saveCustomModels}

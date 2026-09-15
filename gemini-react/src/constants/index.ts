@@ -2,15 +2,16 @@
 export const LOCAL_MODEL_ID = "local-model";
 
 // Provedores de modelos de chat suportados. `gemini` usa a API nativa do Google;
-// `local` e `openrouter` falam a API compatível com OpenAI (/v1/chat/completions)
+// `local`, `openrouter` e `orcarouter` falam a API compatível com OpenAI (/v1/chat/completions)
 // através do mesmo caminho de streaming.
-export type ChatProvider = "gemini" | "local" | "openrouter";
+export type ChatProvider = "gemini" | "local" | "openrouter" | "orcarouter";
 
 // Provedores que o usuário pode cadastrar modelos customizados (por id).
-export type CustomModelProvider = "openrouter";
+export type CustomModelProvider = "openrouter" | "orcarouter";
 
-// URL base (compatível com OpenAI) do provedor externo.
+// URL base (compatível com OpenAI) dos provedores externos.
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+export const ORCAROUTER_BASE_URL = "https://api.orcarouter.ai/v1";
 
 // URL padrão do servidor local (llama.cpp / llama-server) rodando em localhost.
 export const DEFAULT_LOCAL_ENDPOINT = "http://localhost:8080";
@@ -30,6 +31,12 @@ export const CUSTOM_MODEL_PROVIDERS: {
     name: "OpenRouter",
     example: "deepseek/deepseek-r1:free",
     keysUrl: "https://openrouter.ai/keys",
+  },
+  {
+    id: "orcarouter",
+    name: "OrcaRouter",
+    example: "orcarouter/auto",
+    keysUrl: "https://orcarouter.ai/keys",
   },
 ];
 

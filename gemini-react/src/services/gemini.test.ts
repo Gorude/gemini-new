@@ -77,9 +77,13 @@ describe('resolveProvider', () => {
   });
 
   it('modelo customizado cadastrado resolve pelo provider do registro', () => {
-    const models: CustomModel[] = [{ id: 'deepseek/deepseek-r1', name: 'R1', provider: 'openrouter' }];
+    const models: CustomModel[] = [
+      { id: 'deepseek/deepseek-r1', name: 'R1', provider: 'openrouter' },
+      { id: 'orcarouter/auto', name: 'Auto', provider: 'orcarouter' },
+    ];
     setGlobalCustomModels(models);
     expect(resolveProvider('deepseek/deepseek-r1')).toBe('openrouter');
+    expect(resolveProvider('orcarouter/auto')).toBe('orcarouter');
   });
 
   it('modelo desconhecido cai em gemini (nativo)', () => {
