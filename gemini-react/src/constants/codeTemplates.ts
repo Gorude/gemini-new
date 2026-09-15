@@ -23,7 +23,8 @@ import './styles.css';
 export default function App() {
   return (
     <div className="app">
-      <h1>Projeto React</h1>
+      <h1>Projeto React + TypeScript</h1>
+      <p>Edite o arquivo para começar.</p>
     </div>
   );
 }`,
@@ -47,15 +48,32 @@ body {
   text-align: center;
   padding: 2rem;
 }`,
-      '/index.tsx': `import React from 'react';
+      '/index.tsx': `import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './styles.css';
 import App from './App';
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = createRoot(rootElement);
-  root.render(<App />);
-}`
+const container = document.getElementById('root') || document.getElementById('app');
+if (container) {
+  const root = createRoot(container);
+  root.render(
+    <StrictMode>
+      <App />
+    </StrictMode>
+  );
+}`,
+      '/public/index.html': `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="app"></div>
+  </body>
+</html>`
     }
   },
   'react': {
@@ -72,6 +90,7 @@ export default function App() {
   return (
     <div className="app">
       <h1>Projeto React</h1>
+      <p>Edite o arquivo para começar.</p>
     </div>
   );
 }`,
@@ -95,15 +114,32 @@ body {
   text-align: center;
   padding: 2rem;
 }`,
-      '/index.js': `import React from 'react';
+      '/index.js': `import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './styles.css';
 import App from './App';
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = createRoot(rootElement);
-  root.render(<App />);
-}`
+const container = document.getElementById('root') || document.getElementById('app');
+if (container) {
+  const root = createRoot(container);
+  root.render(
+    <StrictMode>
+      <App />
+    </StrictMode>
+  );
+}`,
+      '/public/index.html': `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="app"></div>
+  </body>
+</html>`
     }
   },
   'vanilla-ts': {
@@ -117,17 +153,27 @@ if (rootElement) {
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <title>App</title>
+    <title>Vanilla TS</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div id="app">
       <h1>Projeto TypeScript</h1>
+      <p>Edite o index.ts para começar.</p>
     </div>
-    <script type="module" src="/index.ts"></script>
+    <div id="root"></div>
+    <script src="index.ts"></script>
   </body>
 </html>`,
-      '/index.ts': `console.log('App pronto');`,
+      '/index.ts': `import './styles.css';
+
+const app = document.getElementById('app');
+if (app) {
+  app.innerHTML = \`
+    <h1>Projeto TypeScript</h1>
+    <p>Edite o index.ts para começar.</p>
+  \`;
+}`,
       '/styles.css': `* {
   box-sizing: border-box;
   margin: 0;
@@ -161,17 +207,27 @@ body {
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8">
-    <title>App</title>
+    <title>Web App</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <div id="app">
       <h1>Projeto Web</h1>
+      <p>Edite o index.js ou index.html para começar.</p>
     </div>
-    <script src="/index.js"></script>
+    <div id="root"></div>
+    <script src="index.js"></script>
   </body>
 </html>`,
-      '/index.js': `console.log('App pronto');`,
+      '/index.js': `import './styles.css';
+
+const app = document.getElementById('app');
+if (app) {
+  app.innerHTML = \`
+    <h1>Projeto Web</h1>
+    <p>Edite o index.js ou index.html para começar.</p>
+  \`;
+}`,
       '/styles.css': `* {
   box-sizing: border-box;
   margin: 0;
@@ -207,6 +263,7 @@ body {
 <template>
   <div class="app">
     <h1>Projeto Vue 3</h1>
+    <p>Edite o App.vue para começar.</p>
   </div>
 </template>
 
@@ -217,7 +274,19 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   color: #c9d1d9;
 }
-</style>`
+</style>`,
+      '/public/index.html': `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vue App</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="root"></div>
+  </body>
+</html>`
     }
   }
 };

@@ -75,19 +75,24 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
     return (localStorage.getItem('nemon_code_template') as ProjectTemplate) || 'react-ts';
   });
 
+  const TEMPLATE_VERSION = 'v4_robust_clean';
+
   const [files, setFiles] = useState<Record<string, string>>(() => {
+    // Limpa cache corrompido ou legado de versões anteriores
+    if (localStorage.getItem('nemon_code_template_version') !== TEMPLATE_VERSION) {
+      const keys = ['react-ts', 'react', 'vanilla-ts', 'vanilla', 'vue-ts'];
+      for (const k of keys) {
+        localStorage.removeItem(`nemon_code_files_${k}`);
+      }
+      localStorage.setItem('nemon_code_template_version', TEMPLATE_VERSION);
+      return CODE_TEMPLATES[template].files;
+    }
+
     const saved = localStorage.getItem(`nemon_code_files_${template}`);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const appCode = parsed['/App.tsx'] || parsed['/App.js'] || parsed['/index.html'] || '';
-        // Se contiver códigos de exemplo antigos (Contador Interativo, Olá Desenvolvedor, Todo, etc.), descarta e carrega o template limpo
-        if (
-          !appCode.includes('Contador Interativo') &&
-          !appCode.includes('Olá, Desenvolvedor!') &&
-          !appCode.includes('Lista de Tarefas') &&
-          !appCode.includes('updateClock')
-        ) {
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
           return parsed;
         }
       } catch {
@@ -377,21 +382,21 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
     }
   };
 
-  // Mapeia template do Nemon para o template do Sandpack
+  // Mapeia template do Nemon para o template client-side do Sandpack
   const getSandpackTemplate = (t: ProjectTemplate): any => {
     switch (t) {
       case 'react-ts':
-        return 'vite-react-ts';
+        return 'react-ts';
       case 'react':
-        return 'vite-react';
+        return 'react';
       case 'vanilla-ts':
         return 'vanilla-ts';
       case 'vanilla':
         return 'vanilla';
       case 'vue-ts':
-        return 'vite-vue-ts';
+        return 'vue';
       default:
-        return 'vite-react-ts';
+        return 'react-ts';
     }
   };
 
