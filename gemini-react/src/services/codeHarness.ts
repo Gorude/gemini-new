@@ -64,8 +64,9 @@ Você tem acesso a 4 ferramentas essenciais (Harness Primitives):
 DIRETRIZES DE EXECUÇÃO:
 - Antes de editar um arquivo desconhecido, use sempre "read_file" para ler o código atual e garantir que suas edições sejam precisas.
 - Você pode emitir múltiplos <tool_call> na mesma mensagem se precisar executar ações sequenciais.
-- Após executar as ferramentas necessárias, forneça uma explicação concisa e amigável ao usuário sobre o que foi feito.
-- Nunca invente caminhos; normalize sempre com barra inicial (ex: /App.tsx ou /styles.css).`;
+- SUPORTE A ARQUIVO ÚNICO HTML: Se o usuário pedir um arquivo único HTML, jogo, página ou componente em um só arquivo (ou se o projeto for HTML puro), você PODE e DEVE colocar o CSS em tags <style> e o JavaScript em tags <script> diretamente dentro de /index.html. O ambiente sandbox suporta perfeitamente arquivos HTML autocontidos; NÃO divida em múltiplos arquivos a menos que o usuário peça explicitamente.
+- Após executar as ferramentas necessárias, forneça uma explicação concisa e amigável ao usuário sobre o que foi feito com formatação Markdown clara.
+- Nunca invente caminhos; normalize sempre com barra inicial (ex: /App.tsx, /index.html ou /styles.css).`;
 
 export interface RunHarnessOptions {
   prompt: string;

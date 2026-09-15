@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { AgentChatMessage, HarnessAction } from '../../types/codeIde';
 import { MODEL_OPTIONS, type CustomModel } from '../../constants';
+import { safeMarkdown } from '../../services/gemini';
 
 interface CodeAgentDrawerProps {
   isOpen: boolean;
@@ -304,7 +305,14 @@ export const CodeAgentDrawer: React.FC<CodeAgentDrawerProps> = ({
                   </div>
                 )}
 
-                <div className="whitespace-pre-wrap text-[12px]">{msg.content}</div>
+                {msg.role === 'assistant' ? (
+                  <div
+                    className="response-body text-[12px] leading-relaxed break-words space-y-1.5 [&_pre]:bg-black/50 [&_pre]:p-2.5 [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-white/10 [&_pre]:overflow-x-auto [&_code]:font-mono [&_code]:text-[11px] [&_code]:bg-white/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0.5 [&_strong]:font-semibold [&_strong]:text-white [&_h1]:text-sm [&_h1]:font-bold [&_h2]:text-xs [&_h2]:font-bold [&_blockquote]:border-l-2 [&_blockquote]:border-[#ff5500] [&_blockquote]:pl-2.5"
+                    dangerouslySetInnerHTML={{ __html: safeMarkdown(msg.content) }}
+                  />
+                ) : (
+                  <div className="whitespace-pre-wrap text-[12px]">{msg.content}</div>
+                )}
               </div>
             </div>
           ))

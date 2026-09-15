@@ -247,7 +247,82 @@ body {
 #app {
   text-align: center;
   padding: 2rem;
-}`
+}`,
+      '/package.json': JSON.stringify({
+        name: 'vanilla-app',
+        main: 'index.html',
+        dependencies: {}
+      }, null, 2)
+    }
+  },
+  'html': {
+    id: 'html',
+    name: 'HTML5 (Arquivo Único)',
+    description: 'HTML, CSS (<style>) e JS (<script>) integrados em um único arquivo .html',
+    icon: 'FileCode',
+    activeFile: '/index.html',
+    files: {
+      '/index.html': `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minha Aplicação</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background-color: #0d1117;
+        color: #c9d1d9;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 2rem;
+      }
+      .card {
+        background: #161b22;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 2rem;
+        max-width: 480px;
+        width: 100%;
+      }
+      h1 {
+        color: #ffffff;
+        margin-bottom: 0.75rem;
+      }
+      p {
+        color: #8b949e;
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div id="app">
+        <h1>Aplicação HTML5</h1>
+        <p>HTML, CSS e JavaScript integrados em um único arquivo.</p>
+      </div>
+      <div id="root"></div>
+    </div>
+
+    <script>
+      console.log('Aplicação iniciada com sucesso!');
+    </script>
+  </body>
+</html>`,
+      '/package.json': JSON.stringify({
+        name: 'html-single-file-app',
+        main: 'index.html',
+        dependencies: {}
+      }, null, 2)
     }
   },
   'vue-ts': {

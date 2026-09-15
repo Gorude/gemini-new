@@ -1,4 +1,4 @@
-export type ProjectTemplate = 'react-ts' | 'react' | 'vanilla-ts' | 'vanilla' | 'vue-ts';
+export type ProjectTemplate = 'react-ts' | 'react' | 'vanilla-ts' | 'vanilla' | 'html' | 'vue-ts';
 
 export interface CodeProject {
   id: string;
