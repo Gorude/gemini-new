@@ -34,6 +34,8 @@ interface CodeAgentDrawerProps {
   onSelectModel: (modelId: string) => void;
   customModels: CustomModel[];
   activeFile: string;
+  width?: number;
+  isDragging?: boolean;
 }
 
 export const CodeAgentDrawer: React.FC<CodeAgentDrawerProps> = ({
@@ -48,6 +50,8 @@ export const CodeAgentDrawer: React.FC<CodeAgentDrawerProps> = ({
   onSelectModel,
   customModels,
   activeFile,
+  width = 380,
+  isDragging = false,
 }) => {
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -110,8 +114,9 @@ export const CodeAgentDrawer: React.FC<CodeAgentDrawerProps> = ({
 
   return (
     <aside
-      className={`h-full border-l border-white/10 bg-[#0d1117] flex flex-col z-30 transition-all duration-300 shadow-2xl relative shrink-0 ${
-        isExpanded ? 'w-[550px] max-w-[90vw]' : 'w-[380px] max-w-[85vw]'
+      style={{ width: isExpanded ? 580 : width }}
+      className={`h-full border-l border-white/10 bg-[#0d1117] flex flex-col z-30 shadow-2xl relative shrink-0 ${
+        isDragging ? '' : 'transition-[width] duration-150'
       }`}
     >
       {/* Header do Drawer */}
@@ -215,29 +220,15 @@ export const CodeAgentDrawer: React.FC<CodeAgentDrawerProps> = ({
       {/* Área de Mensagens */}
       <div className="flex-1 overflow-y-auto p-3 space-y-4 text-xs font-sans">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-4 text-zinc-400 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-[#ff5500]">
-              <Bot className="w-6 h-6" />
+          <div className="h-full flex flex-col items-center justify-center text-center p-4 text-zinc-400 space-y-2.5">
+            <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-[#ff5500]">
+              <Bot className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-bold text-zinc-200 text-sm">Harness de Código Ativo</h4>
-              <p className="text-[11px] text-zinc-400 mt-1 max-w-[240px] leading-relaxed">
-                Peça para o agente inspecionar, criar ou refatorar arquivos no projeto com comandos cirúrgicos.
+              <h4 className="font-bold text-zinc-200 text-xs">Harness de Código</h4>
+              <p className="text-[11px] text-zinc-500 mt-1 max-w-[220px] leading-relaxed">
+                Instrua o agente a inspecionar, criar ou refatorar arquivos no projeto.
               </p>
-            </div>
-            <div className="grid gap-1.5 w-full max-w-[260px] text-left pt-2">
-              <button
-                onClick={() => setInput('Adicione um botão de alternância de tema claro/escuro no App.tsx')}
-                className="p-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 text-[11px] text-zinc-300 transition text-left"
-              >
-                💡 &quot;Adicione um tema claro/escuro no App.tsx&quot;
-              </button>
-              <button
-                onClick={() => setInput('Crie um componente de Card com props de título e descrição')}
-                className="p-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 text-[11px] text-zinc-300 transition text-left"
-              >
-                📦 &quot;Crie um componente Card reutilizável&quot;
-              </button>
             </div>
           </div>
         ) : (

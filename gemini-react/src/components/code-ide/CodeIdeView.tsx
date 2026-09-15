@@ -79,7 +79,17 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
     const saved = localStorage.getItem(`nemon_code_files_${template}`);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        const appCode = parsed['/App.tsx'] || parsed['/App.js'] || parsed['/index.html'] || '';
+        // Se contiver códigos de exemplo antigos (Contador Interativo, Olá Desenvolvedor, Todo, etc.), descarta e carrega o template limpo
+        if (
+          !appCode.includes('Contador Interativo') &&
+          !appCode.includes('Olá, Desenvolvedor!') &&
+          !appCode.includes('Lista de Tarefas') &&
+          !appCode.includes('updateClock')
+        ) {
+          return parsed;
+        }
       } catch {
         /* fallback */
       }
@@ -96,6 +106,78 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
   const [bottomTab, setBottomTab] = useState<'preview' | 'terminal'>('preview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+
+  // Resizing de painéis (VS Code Style)
+  const [explorerWidth, setExplorerWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('nemon_code_explorer_width');
+    return saved ? Math.max(160, Math.min(550, parseInt(saved, 10))) : 240;
+  });
+
+  const [bottomPanelHeight, setBottomPanelHeight] = useState<number>(() => {
+    const saved = localStorage.getItem('nemon_code_bottom_height');
+    return saved ? Math.max(80, Math.min(650, parseInt(saved, 10))) : 240;
+  });
+
+  const [drawerWidth, setDrawerWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('nemon_code_drawer_width');
+    return saved ? Math.max(280, Math.min(750, parseInt(saved, 10))) : 380;
+  });
+
+  const [activeResize, setActiveResize] = useState<'explorer' | 'bottom' | 'drawer' | null>(null);
+  const dragStartRef = useRef<{ startX: number; startY: number; startDim: number }>({
+    startX: 0,
+    startY: 0,
+    startDim: 0,
+  });
+
+  const handleStartResize = (type: 'explorer' | 'bottom' | 'drawer', e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveResize(type);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startDim: type === 'explorer' ? explorerWidth : type === 'bottom' ? bottomPanelHeight : drawerWidth,
+    };
+  };
+
+  useEffect(() => {
+    if (!activeResize) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (activeResize === 'explorer') {
+        const delta = e.clientX - dragStartRef.current.startX;
+        const next = Math.max(160, Math.min(550, dragStartRef.current.startDim + delta));
+        setExplorerWidth(next);
+      } else if (activeResize === 'bottom') {
+        const delta = dragStartRef.current.startY - e.clientY;
+        const next = Math.max(80, Math.min(window.innerHeight * 0.75, dragStartRef.current.startDim + delta));
+        setBottomPanelHeight(next);
+      } else if (activeResize === 'drawer') {
+        const delta = dragStartRef.current.startX - e.clientX;
+        const next = Math.max(280, Math.min(window.innerWidth * 0.65, dragStartRef.current.startDim + delta));
+        setDrawerWidth(next);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (activeResize === 'explorer') {
+        localStorage.setItem('nemon_code_explorer_width', explorerWidth.toString());
+      } else if (activeResize === 'bottom') {
+        localStorage.setItem('nemon_code_bottom_height', bottomPanelHeight.toString());
+      } else if (activeResize === 'drawer') {
+        localStorage.setItem('nemon_code_drawer_width', drawerWidth.toString());
+      }
+      setActiveResize(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [activeResize, explorerWidth, bottomPanelHeight, drawerWidth]);
 
   // Chat do Agente Harness
   const [messages, setMessages] = useState<AgentChatMessage[]>(() => {
@@ -378,7 +460,12 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
 
       {/* Sidebar do Explorador de Arquivos (VS Code Explorer) */}
       {isSidebarOpen && (
-        <aside className="w-60 h-full bg-[#161b22] border-r border-white/10 flex flex-col shrink-0 z-10 animate-in fade-in slide-in-from-left-2 duration-150">
+        <aside
+          style={{ width: explorerWidth }}
+          className={`h-full bg-[#161b22] border-r border-white/10 flex flex-col shrink-0 z-10 select-none ${
+            activeResize === 'explorer' ? '' : 'transition-[width] duration-150'
+          }`}
+        >
           <div className="h-10 px-3 border-b border-white/10 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-zinc-400">
             <span className="truncate">EXPLORADOR</span>
             <div className="flex items-center gap-1">
@@ -430,6 +517,21 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
             })}
           </div>
         </aside>
+      )}
+
+      {/* Divisor de Resize do Explorador */}
+      {isSidebarOpen && (
+        <div
+          onMouseDown={(e) => handleStartResize('explorer', e)}
+          onDoubleClick={() => {
+            setExplorerWidth(240);
+            localStorage.setItem('nemon_code_explorer_width', '240');
+          }}
+          className="w-1.5 -ml-1 hover:w-2 hover:-ml-1.5 bg-transparent hover:bg-[#ff5500]/60 active:bg-[#ff5500] cursor-col-resize transition-all duration-150 z-20 shrink-0 select-none group flex items-center justify-center"
+          title="Arrastar para redimensionar o Explorador (Duplo clique para redefinir)"
+        >
+          <div className="w-0.5 h-8 rounded-full bg-white/10 group-hover:bg-[#ff5500] transition-colors" />
+        </div>
       )}
 
       {/* Área Central (Editor + Painel Inferior de Terminal/Preview) */}
@@ -521,8 +623,26 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
               />
             </div>
 
+            {/* Divisor de Resize do Painel Inferior */}
+            <div
+              onMouseDown={(e) => handleStartResize('bottom', e)}
+              onDoubleClick={() => {
+                setBottomPanelHeight(240);
+                localStorage.setItem('nemon_code_bottom_height', '240');
+              }}
+              className="h-1.5 -mt-1 hover:h-2 hover:-mt-1.5 bg-transparent hover:bg-[#ff5500]/60 active:bg-[#ff5500] cursor-row-resize transition-all duration-150 z-20 shrink-0 select-none group flex items-center justify-center"
+              title="Arrastar para redimensionar o Console / Live Preview (Duplo clique para redefinir)"
+            >
+              <div className="h-0.5 w-10 rounded-full bg-white/10 group-hover:bg-[#ff5500] transition-colors" />
+            </div>
+
             {/* Painel Inferior: Terminal & Preview ao Vivo */}
-            <div className="h-64 border-t border-white/10 flex flex-col bg-[#161b22] shrink-0">
+            <div
+              style={{ height: bottomPanelHeight }}
+              className={`border-t border-white/10 flex flex-col bg-[#161b22] shrink-0 ${
+                activeResize === 'bottom' ? '' : 'transition-[height] duration-150'
+              }`}
+            >
               {/* Abas do Painel Inferior */}
               <div className="h-9 px-3 border-b border-white/10 flex items-center justify-between text-xs bg-[#0d1117]/80">
                 <div className="flex items-center gap-2">
@@ -573,6 +693,21 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
         </SandpackProvider>
       </main>
 
+      {/* Divisor de Resize do Harness Agent Drawer */}
+      {isDrawerOpen && (
+        <div
+          onMouseDown={(e) => handleStartResize('drawer', e)}
+          onDoubleClick={() => {
+            setDrawerWidth(380);
+            localStorage.setItem('nemon_code_drawer_width', '380');
+          }}
+          className="w-1.5 -mr-1 hover:w-2 hover:-mr-1.5 bg-transparent hover:bg-[#ff5500]/60 active:bg-[#ff5500] cursor-col-resize transition-all duration-150 z-20 shrink-0 select-none group flex items-center justify-center"
+          title="Arrastar para redimensionar o Harness Agent (Duplo clique para redefinir)"
+        >
+          <div className="w-0.5 h-8 rounded-full bg-white/10 group-hover:bg-[#ff5500] transition-colors" />
+        </div>
+      )}
+
       {/* Drawer de Chat do Agente Harness (Direita) */}
       <CodeAgentDrawer
         isOpen={isDrawerOpen}
@@ -586,7 +721,18 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
         onSelectModel={onSelectModel}
         customModels={customModels}
         activeFile={activeFile}
+        width={drawerWidth}
+        isDragging={activeResize === 'drawer'}
       />
+
+      {/* Overlay transparente para prevenir que iframes capturem eventos durante drag */}
+      {activeResize && (
+        <div
+          className={`fixed inset-0 z-[9999] select-none ${
+            activeResize === 'bottom' ? 'cursor-row-resize' : 'cursor-col-resize'
+          }`}
+        />
+      )}
 
       {/* Modal de Troca de Template */}
       {showTemplateModal && (
