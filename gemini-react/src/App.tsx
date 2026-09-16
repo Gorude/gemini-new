@@ -4044,6 +4044,7 @@ function App() {
               selectedModel={model}
               onSelectModel={handleSetModel}
               customModels={customModels}
+              theme={theme}
             />
           ) : activeTab === 'files' && activeChatId ? (
             <ChatFileHub messages={messages} onClose={() => setActiveTab('chat')} />
