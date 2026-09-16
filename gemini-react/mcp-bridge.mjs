@@ -41,19 +41,31 @@ let requestIdCounter = 1;
 
 function startMcpProcess() {
   try {
-    console.log(`🚀 Iniciando processo MCP: ${mcpConfig.command} ${mcpConfig.args ? mcpConfig.args.join(' ') : ''}`);
-    mcpProcess = spawn(mcpConfig.command, mcpConfig.args || [], {
+    let cmd = mcpConfig.command;
+    let args = mcpConfig.args || [];
+
+    // Se o comando for flatpak-spawn mas estivermos no Windows ou sem flatpak:
+    if (cmd === 'flatpak-spawn' && process.platform === 'win32') {
+      console.log('ℹ️ flatpak-spawn detectado no Windows. Adaptando para uvx/direct search.');
+      cmd = 'uvx';
+      args = ['duckduckgo-mcp-server'];
+    }
+
+    console.log(`🚀 Iniciando processo MCP: ${cmd} ${args.join(' ')}`);
+    mcpProcess = spawn(cmd, args, {
       stdio: ['pipe', 'pipe', 'inherit'],
       shell: process.platform === 'win32'
     });
 
     mcpProcess.on('error', (err) => {
-      console.warn(`⚠️ Não foi possível iniciar ${mcpConfig.command}: ${err.message}. O bridge usará fallback direto.`);
+      console.warn(`⚠️ Não foi possível iniciar processo MCP (${cmd}): ${err.message}. O bridge usará fallback direto via Node.js.`);
       isMcpAlive = false;
     });
 
     mcpProcess.on('exit', (code) => {
-      console.log(`Processo MCP finalizado (código ${code}).`);
+      if (code !== 0) {
+        console.log(`Processo MCP finalizado (código ${code}). O bridge continuará atendendo buscas via Node.js.`);
+      }
       isMcpAlive = false;
     });
 

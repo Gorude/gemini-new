@@ -124,6 +124,106 @@ function chatHistoryApi() {
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ error: err.message }))
             })
+        } else if ((req.url === '/health' || req.url === '/api/mcp/health') && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          res.end(JSON.stringify({ status: 'ok', service: 'vite-duckduckgo-mcp-bridge' }))
+        } else if ((req.url === '/search' || req.url === '/api/mcp/search') && req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: string) => body += chunk)
+          req.on('end', async () => {
+            try {
+              const { query, max_results = 5 } = JSON.parse(body || '{}')
+              const resDDG = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+              })
+              const html = await resDDG.text()
+              const results: { title: string; uri: string; snippet: string }[] = []
+              const blocks = html.split('class="result ')
+              for (let i = 1; i < blocks.length && results.length < max_results; i++) {
+                const b = blocks[i]
+                const linkMatch = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i)
+                const snippetMatch = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+                if (linkMatch) {
+                  let rawUrl = linkMatch[1]
+                  if (rawUrl.includes('uddg=')) {
+                    try {
+                      const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://duckduckgo.com' + rawUrl)
+                      const realUrl = u.searchParams.get('uddg')
+                      if (realUrl) rawUrl = decodeURIComponent(realUrl)
+                    } catch {}
+                  }
+                  const title = linkMatch[2].replace(/<[^>]+>/g, '').trim()
+                  const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : ''
+                  if (title && rawUrl) results.push({ title, uri: rawUrl, snippet })
+                }
+              }
+              res.setHeader('Content-Type', 'application/json')
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(JSON.stringify({ success: true, via: 'vite-mcp-internal', results }))
+            } catch (err: any) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(JSON.stringify({ error: err.message }))
+            }
+          })
+        } else if ((req.url === '/tools/call' || req.url === '/api/mcp/tools/call') && req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: string) => body += chunk)
+          req.on('end', async () => {
+            try {
+              const payload = JSON.parse(body || '{}')
+              const toolArgs = payload.params?.arguments || payload.arguments || {}
+              const query = toolArgs.query || ''
+              const max_results = toolArgs.max_results || toolArgs.count || 5
+
+              const resDDG = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+              })
+              const html = await resDDG.text()
+              const results: { title: string; uri: string; snippet: string }[] = []
+              const blocks = html.split('class="result ')
+              for (let i = 1; i < blocks.length && results.length < max_results; i++) {
+                const b = blocks[i]
+                const linkMatch = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i)
+                const snippetMatch = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i)
+                if (linkMatch) {
+                  let rawUrl = linkMatch[1]
+                  if (rawUrl.includes('uddg=')) {
+                    try {
+                      const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://duckduckgo.com' + rawUrl)
+                      const realUrl = u.searchParams.get('uddg')
+                      if (realUrl) rawUrl = decodeURIComponent(realUrl)
+                    } catch {}
+                  }
+                  const title = linkMatch[2].replace(/<[^>]+>/g, '').trim()
+                  const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : ''
+                  if (title && rawUrl) results.push({ title, uri: rawUrl, snippet })
+                }
+              }
+
+              res.setHeader('Content-Type', 'application/json')
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(JSON.stringify({
+                jsonrpc: '2.0',
+                id: payload.id || 1,
+                result: {
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify(results)
+                    }
+                  ]
+                }
+              }))
+            } catch (err: any) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(JSON.stringify({ error: err.message }))
+            }
+          })
         } else {
           next()
         }

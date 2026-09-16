@@ -117,21 +117,43 @@ export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
  * Verifica primeiro o endpoint de saúde com timeout curto para evitar poluir o console do navegador
  * com ERR_CONNECTION_REFUSED caso o bridge local não esteja em execução.
  */
+let lastMcpOfflineCheck = 0;
+const MCP_OFFLINE_COOLDOWN_MS = 30000; // 30s cooldown se offline
+
+export function resetMcpOfflineState() {
+  lastMcpOfflineCheck = 0;
+}
+
 export async function searchDuckDuckGoMcp(
   query: string,
   mcpEndpoint: string = globalMcpEndpoint,
   signal?: AbortSignal
 ): Promise<{ summary: string; sources: { title: string; uri: string }[] } | null> {
-  const endpoint = (mcpEndpoint || 'http://localhost:3333').replace(/\/+$/, '');
+  const isLocalDev = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-  // 0. Probe rápido de saúde (1.2s): se o servidor não estiver online, não gera múltiplos erros de conexão
+  // Se estiver no dev server do Vite (porta 5173, etc), prioriza a rota interna do Vite
+  const endpoint = (mcpEndpoint || (isLocalDev ? window.location.origin : 'http://localhost:3333')).replace(/\/+$/, '');
+
+  if (!endpoint) return null;
+
+  // Evita bombardear o console com ERR_CONNECTION_REFUSED a cada busca se o bridge estiver offline
+  if (Date.now() - lastMcpOfflineCheck < MCP_OFFLINE_COOLDOWN_MS) {
+    return null;
+  }
+
+  // 0. Probe rápido de saúde (1.2s): se o servidor não estiver online, marca cooldown
   try {
     const healthSig = AbortSignal.timeout(1200);
     const combinedHealth = signal ? AbortSignal.any([signal, healthSig]) : healthSig;
     const healthRes = await fetch(`${endpoint}/health`, { method: 'GET', signal: combinedHealth });
-    if (!healthRes.ok) return null;
+    if (!healthRes.ok) {
+      lastMcpOfflineCheck = Date.now();
+      return null;
+    }
   } catch {
     // Bridge MCP não está em execução no momento
+    lastMcpOfflineCheck = Date.now();
     return null;
   }
 

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS, FONT_OPTIONS, CUSTOM_MODEL_PROVIDERS, formatTokenCount, type CustomModel, type CustomModelProvider } from '../constants';
 import { fetchOpenRouterModelMeta, fetchOrcaRouterModelMeta } from '../services/gemini';
+import { resetMcpOfflineState } from '../services/duckduckgoSearch';
 import NemonIcon from './NemonIcon';
 import PersonalitiesPanel from './PersonalitiesPanel';
 import SkillsPanel from './SkillsPanel';
@@ -240,6 +241,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const validateMcpEndpoint = async (rawUrl: string) => {
+    resetMcpOfflineState();
     const url = (rawUrl || '').trim().replace(/\/+$/, '');
     if (onUpdateMcpEndpoint) onUpdateMcpEndpoint(url);
     if (!url) {
