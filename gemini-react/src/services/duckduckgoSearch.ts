@@ -98,33 +98,40 @@ export function parseDuckDuckGoHtml(html: string): DuckDuckGoResult[] {
 }
 
 /**
- * Avalia a qualidade e autoridade técnica de um link para pesquisa de IA e benchmarks.
- * Prioriza plataformas primárias de avaliação sobre blogs e portais jornalísticos generalistas de consumo.
+ * Detecta se uma consulta busca especificamente benchmarks técnicos ou comparações de inteligência de modelos de IA.
  */
-export function getUrlTechnicalQuality(url: string, title: string): number {
+export function isAiBenchmarkQuery(query: string): boolean {
+  return /benchmark|leaderboard|score\s*aa|artificial\s*analysis|lmsys|arena|mais\s*inteligent|melhor(es)?\s*(modelo|ia|llm)|ranking\s*(de\s*)?(ia|llm|modelos)/i.test(query || '');
+}
+
+/**
+ * Avalia se um link deve ser priorizado para o 'fetch' em consultas especializadas de benchmark de IA.
+ * Em pesquisas normais (notícias, esportes, política, receitas, etc.), retorna 0 para preservar 
+ * 100% da ordem orgânica e autoridade natural do motor de busca.
+ */
+export function getFetchPriorityScore(url: string, title: string, query?: string): number {
+  if (!query || !isAiBenchmarkQuery(query)) {
+    // Para pesquisas gerais fora de IA: neutro, preserva a ordem do motor de busca
+    return 0;
+  }
+
   let score = 0;
   const lowerUrl = (url || '').toLowerCase();
   const lowerTitle = (title || '').toLowerCase();
 
-  // Plataformas primárias de benchmark, métricas e avaliação independente
+  // Apenas no contexto específico de benchmarks de IA:
   if (/benchmark|leaderboard|artificialanalysis|lmsys|chatbot-arena|huggingface\.co\/spaces|open-llm|swebench|epochai|paperswithcode|swen\.ia\.br/i.test(lowerUrl)) {
     score += 25;
   }
   if (/benchmark|ranking|leaderboard|score aa|intelligence index|arena/i.test(lowerTitle)) {
     score += 15;
   }
-
-  // Laboratórios oficiais de IA
   if (/anthropic\.com|openai\.com|deepmind\.google|meta\.com\/ai|x\.ai/i.test(lowerUrl)) {
     score += 10;
   }
-
-  // Portais generalistas de notícias de consumo e entretenimento (comentários secundários, defasados em semanas ou meses)
-  if (/techtudo|tecmundo|canaltech|olhardigital|globo\.com|uol\.com|exame\.com|folha|estadao/i.test(lowerUrl)) {
-    score -= 15;
-  }
-  if (/portalprompts|cpdf\.ai|dio\.me|startse/i.test(lowerUrl)) {
-    score -= 8;
+  // Blogs de consumo leigo comentando rankings técnicos
+  if (/techtudo|tecmundo|canaltech|olhardigital|portalprompts|cpdf\.ai|dio\.me|startse/i.test(lowerUrl)) {
+    score -= 10;
   }
 
   return score;
@@ -132,6 +139,8 @@ export function getUrlTechnicalQuality(url: string, title: string): number {
 
 /**
  * Formata os resultados do DuckDuckGo em um resumo factual textual + lista de fontes.
+ * Preserva a relevância do motor de busca, elevando apenas os resultados cujo conteúdo
+ * completo da página foi lido e extraído.
  */
 export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
   summary: string;
@@ -139,13 +148,11 @@ export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
 } {
   const sources: { title: string; uri: string }[] = [];
 
-  // Ordena os resultados para que dados com tabelas/conteúdo técnico extraído fiquem no topo
+  // Páginas com conteúdo aprofundado via fetch aparecem no topo para dar contexto à IA
   const sorted = [...results].sort((a, b) => {
-    const hasContentA = (a.snippet && a.snippet.includes('[Conteúdo da página]')) ? 20 : 0;
-    const hasContentB = (b.snippet && b.snippet.includes('[Conteúdo da página]')) ? 20 : 0;
-    const qA = getUrlTechnicalQuality(a.uri, a.title) + hasContentA;
-    const qB = getUrlTechnicalQuality(b.uri, b.title) + hasContentB;
-    return qB - qA;
+    const hasContentA = (a.snippet && a.snippet.includes('[Conteúdo da página]')) ? 1 : 0;
+    const hasContentB = (b.snippet && b.snippet.includes('[Conteúdo da página]')) ? 1 : 0;
+    return hasContentB - hasContentA;
   });
 
   const lines: string[] = [];
@@ -219,11 +226,11 @@ export async function searchDuckDuckGoMcp(
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.results) && data.results.length > 0) {
-        // Enriquecimento com ferramenta 'fetch' (ilimitada): lê conteúdos dos links em paralelo
-        // Prioriza fontes com maior autoridade técnica (benchmarks, tabelas, rankings oficiais)
-        const rankedForFetch = [...data.results].sort((a, b) => {
-          return getUrlTechnicalQuality(b.uri, b.title) - getUrlTechnicalQuality(a.uri, a.title);
-        });
+        // Enriquecimento com ferramenta 'fetch' (ilimitada): lê conteúdos dos links em paralelo.
+        // Em consultas de benchmark de IA, prioriza fontes técnicas; em consultas normais, mantém o top 3 orgânico.
+        const rankedForFetch = isAiBenchmarkQuery(query)
+          ? [...data.results].sort((a, b) => getFetchPriorityScore(b.uri, b.title, query) - getFetchPriorityScore(a.uri, a.title, query))
+          : data.results;
         const linksToFetch = rankedForFetch.slice(0, 3);
         await Promise.allSettled(linksToFetch.map(async (linkItem: any) => {
           if (!linkItem?.uri) return;
