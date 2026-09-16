@@ -559,12 +559,17 @@ body {
   background: rgba(255, 255, 255, 0.015);
 }
 
-/* Scroll button premium glassmorphism */
+/* Scroll button 100% solid (nunca transparente sobre texto) */
 .scroll-to-bottom-btn {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--glass-border);
+  background-color: var(--bg-sidebar-solid, #18181b) !important;
+  opacity: 1 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-main) !important;
+}
+.scroll-to-bottom-btn:hover {
+  background-color: var(--bg-sidebar-solid, #18181b) !important;
+  filter: brightness(1.25);
+  border-color: var(--accent) !important;
 }
 
 @keyframes slideUpFade {

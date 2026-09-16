@@ -1,0 +1,13 @@
+{
+  "duckduckgo": {
+    "command": "flatpak-spawn",
+    "args": [
+      "--host",
+      "--directory=/tmp",
+      "env",
+      "PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin",
+      "/home/linuxbrew/.linuxbrew/bin/uvx",
+      "duckduckgo-mcp-server"
+    ]
+  }
+}

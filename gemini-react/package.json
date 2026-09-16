@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "mcp": "node mcp-bridge.mjs"
   },
   "dependencies": {
     "@codesandbox/sandpack-react": "^2.20.0",

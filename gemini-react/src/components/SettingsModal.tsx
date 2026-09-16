@@ -61,6 +61,8 @@ interface SettingsModalProps {
   onSetCustomModels: (models: CustomModel[]) => void;
   localEndpoint: string;
   onUpdateLocalEndpoint: (url: string) => void;
+  mcpEndpoint?: string;
+  onUpdateMcpEndpoint?: (url: string) => void;
   liveModel: string;
   onSetLiveModel: (model: string) => void;
   inline?: boolean;
@@ -112,6 +114,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetCustomModels,
   localEndpoint,
   onUpdateLocalEndpoint,
+  mcpEndpoint = 'http://localhost:3333',
+  onUpdateMcpEndpoint,
   liveModel,
   onSetLiveModel,
   inline = false,
@@ -139,6 +143,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [tempPaidKey, setTempPaidKey] = useState(paidApiKey);
   const [tempLocalEndpoint, setTempLocalEndpoint] = useState(localEndpoint);
   const [valLocalStatus, setValLocalStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [tempMcpEndpoint, setTempMcpEndpoint] = useState(mcpEndpoint);
+  const [valMcpStatus, setValMcpStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [tempOpenRouterKey, setTempOpenRouterKey] = useState(openRouterApiKey);
   const [valOpenRouterStatus, setValOpenRouterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [tempOrcaRouterKey, setTempOrcaRouterKey] = useState(orcaRouterApiKey);
@@ -156,6 +162,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     setTempLocalEndpoint(localEndpoint);
   }, [localEndpoint]);
+
+  useEffect(() => {
+    setTempMcpEndpoint(mcpEndpoint);
+  }, [mcpEndpoint]);
 
   useEffect(() => {
     setTempDefaultKey(defaultApiKey);
@@ -226,6 +236,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setValLocalStatus(res.ok ? 'success' : 'error');
     } catch {
       setValLocalStatus('error');
+    }
+  };
+
+  const validateMcpEndpoint = async (rawUrl: string) => {
+    const url = (rawUrl || '').trim().replace(/\/+$/, '');
+    if (onUpdateMcpEndpoint) onUpdateMcpEndpoint(url);
+    if (!url) {
+      setValMcpStatus('idle');
+      return;
+    }
+    setValMcpStatus('loading');
+    try {
+      const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) });
+      setValMcpStatus(res.ok ? 'success' : 'error');
+    } catch {
+      setValMcpStatus('error');
     }
   };
 
@@ -754,6 +780,51 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                     <p className="text-[10px] text-(--text-placeholder) mt-2">
                       URL do servidor do llama.cpp (<code>llama-server</code>). O padrão é <code>http://localhost:8080</code>. O app usará o endpoint compatível com OpenAI <code>/v1/chat/completions</code>. Depois é só escolher "Modelo Local" no seletor de modelos do chat.
+                    </p>
+                  </div>
+
+                  <div className="h-px bg-(--border-light) opacity-35"></div>
+
+                  {/* Servidor MCP DuckDuckGo Search */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <label className="flex items-center gap-2 text-[10px] font-bold text-(--text-secondary) uppercase tracking-widest">
+                        <Globe className="w-3.5 h-3.5" style={{ color: 'var(--accent-text)' }} />
+                        Pesquisa Web (MCP DuckDuckGo)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {valMcpStatus === 'loading' && <Loader2 className="w-3 h-3 text-amber-500 animate-spin" />}
+                        {valMcpStatus === 'success' && <div className="flex items-center gap-1 text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md"><Check className="w-3 h-3" /> MCP ATIVO</div>}
+                        {valMcpStatus === 'error' && <div className="flex items-center gap-1 text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md"><AlertCircle className="w-3 h-3" /> FALLBACK WEB DIRETO</div>}
+                        {valMcpStatus === 'idle' && <div className="flex items-center gap-1 text-[10px] text-(--text-placeholder) font-bold bg-(--bg-sidebar) px-2 py-0.5 rounded-md">Prioritário</div>}
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        spellCheck={false}
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        placeholder="http://localhost:3333"
+                        className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 px-3 text-sm text-(--text-primary) outline-none transition-all pr-24"
+                        onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = ''}
+                        value={tempMcpEndpoint}
+                        onChange={(e) => setTempMcpEndpoint(e.target.value)}
+                      />
+                      <button
+                        onClick={() => validateMcpEndpoint(tempMcpEndpoint)}
+                        disabled={valMcpStatus === 'loading'}
+                        className="absolute right-2 top-2 bottom-2 px-3 disabled:bg-gray-600 text-white text-[10px] font-bold rounded-lg transition-all cursor-pointer"
+                        style={{ background: 'var(--accent)' }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--accent)'}
+                      >
+                        SALVAR
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-(--text-placeholder) mt-2">
+                      Endpoint do bridge MCP do <strong>DuckDuckGo</strong>. O Nemon realiza buscas na web priorizando o DuckDuckGo e usando o <strong>Gemma 4 31B</strong> (Google Search) apenas como fallback se a busca falhar. Para iniciar o bridge MCP local configurado com <code>duckduckgo-mcp-server</code> (ou flatpak-spawn), rode <code>npm run mcp</code> no terminal.
                     </p>
                   </div>
 

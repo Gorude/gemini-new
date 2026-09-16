@@ -298,7 +298,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           {showScrollButton && (
             <button 
               onClick={onScrollToBottom}
-              className="absolute -top-14 left-0 right-0 mx-auto w-fit bg-(--bg-sidebar-solid) hover:bg-(--bg-chat-hover) text-(--text-secondary) hover:text-(--text-primary) border border-(--border-light) shadow-xl rounded-full px-3.5 py-1.5 text-xs font-semibold flex items-center gap-2 hover-glow scroll-to-bottom-btn animate-scroll-button whitespace-nowrap"
+              className="absolute -top-14 left-0 right-0 mx-auto w-fit bg-(--bg-sidebar-solid) hover:bg-(--bg-sidebar-solid) hover:brightness-125 text-(--text-secondary) hover:text-(--text-primary) border border-(--border-main) shadow-2xl rounded-full px-3.5 py-1.5 text-xs font-semibold flex items-center gap-2 scroll-to-bottom-btn animate-scroll-button whitespace-nowrap"
             >
                <ChevronDown className="w-4 h-4 animate-bounce" />
               Ir para o final

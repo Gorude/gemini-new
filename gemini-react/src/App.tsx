@@ -71,6 +71,7 @@ import {
   fetchOrcaRouterModelMeta,
   listLiveModels,
   setGlobalLocalEndpoint,
+  setGlobalMcpEndpoint,
   performWebSearch,
   runGeminiToolLoop,
   CHAT_TOOLS,
@@ -490,6 +491,7 @@ function App() {
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
   const [orcaRouterApiKey, setOrcaRouterApiKey] = useState('');
   const [localEndpoint, setLocalEndpoint] = useState(() => localStorage.getItem('nemon_local_endpoint') || DEFAULT_LOCAL_ENDPOINT);
+  const [mcpEndpoint, setMcpEndpoint] = useState(() => localStorage.getItem('nemon_mcp_endpoint') || 'http://localhost:3333');
   // Modelos de chat customizados (OpenRouter) cadastrados pelo usuário.
   // Persistidos localmente e no Firestore (settings.customModels).
   const [customModels, setCustomModels] = useState<CustomModel[]>(() => {
@@ -764,6 +766,11 @@ function App() {
     setGlobalLocalEndpoint(localEndpoint);
     localStorage.setItem('nemon_local_endpoint', localEndpoint);
   }, [localEndpoint]);
+
+  useEffect(() => {
+    setGlobalMcpEndpoint(mcpEndpoint);
+    localStorage.setItem('nemon_mcp_endpoint', mcpEndpoint);
+  }, [mcpEndpoint]);
 
   useEffect(() => {
     localStorage.setItem('gemini_advanced_usage_v1', JSON.stringify(dailyUsage));
@@ -1735,16 +1742,21 @@ function App() {
       if (webSearchEnabled && activeModel !== SEARCH_MODEL && !isOpenRouterModel) {
         let searchFound = false;
         try {
-          const searchRes = await performWebSearch(userText, controller.signal, undefined, searchModelId);
+          const searchRes = await performWebSearch(userText, controller.signal, undefined, searchModelId, mcpEndpoint);
           // Consideramos a busca bem-sucedida se houver resumo OU ao menos uma fonte.
           if (searchRes.summary || searchRes.sources.length > 0) {
             searchFound = true;
+            const providerLabel = searchRes.provider === 'duckduckgo-mcp'
+              ? 'DuckDuckGo Search (via MCP Server local)'
+              : searchRes.provider === 'duckduckgo'
+              ? 'DuckDuckGo Web Search'
+              : 'Gemma 4 31B (Fallback via Google Search)';
             effectiveSystemInstruction = systemInstruction +
-              `\n\nRESULTADOS DE PESQUISA WEB ATUAL (obtidos via Gemma 4 31B + google_search). Use estas informações atualizadas para responder com precisão e cite/mencione quando pertinente:\n${searchRes.summary}`;
+              `\n\nRESULTADOS DE PESQUISA WEB ATUAL (obtidos via ${providerLabel}). Use estas informações atualizadas para responder com precisão e cite/mencione quando pertinente:\n${searchRes.summary}`;
           }
           preSources.push(...searchRes.sources);
         } catch (e) {
-          console.warn('Falha na pesquisa delegada (Gemma 4 31B):', e);
+          console.warn('Falha na pesquisa web delegada:', e);
         }
         // Busca vazia ou com falha: instruímos o modelo a NÃO inventar dados atuais e a
         // avisar o usuário. Evita respostas desatualizadas silenciosas (ex.: Grok-2 em vez
@@ -3983,6 +3995,8 @@ function App() {
               onSetCustomModels={saveCustomModels}
               localEndpoint={localEndpoint}
               onUpdateLocalEndpoint={setLocalEndpoint}
+              mcpEndpoint={mcpEndpoint}
+              onUpdateMcpEndpoint={setMcpEndpoint}
               liveModel={liveModel}
               onSetLiveModel={handleSetLiveModel}
               personalities={personalities}

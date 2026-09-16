@@ -100,6 +100,30 @@ function chatHistoryApi() {
               res.end(JSON.stringify({ error: true }))
             }
           })
+        } else if (req.url?.startsWith('/api/duckduckgo') && req.method === 'GET') {
+          const urlObj = new URL(req.url, 'http://localhost')
+          const q = urlObj.searchParams.get('q') || ''
+          if (!q) {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify([]))
+            return
+          }
+          fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+          })
+            .then(r => r.text())
+            .then(html => {
+              res.setHeader('Content-Type', 'text/html; charset=utf-8')
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(html)
+            })
+            .catch(err => {
+              res.statusCode = 502
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: err.message }))
+            })
         } else {
           next()
         }

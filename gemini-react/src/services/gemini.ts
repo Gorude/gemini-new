@@ -1,6 +1,7 @@
 import { marked } from "marked";
 import markedKatex from "marked-katex-extension";
 import { logger } from "./logger";
+import { executeDuckDuckGoSearch, setGlobalMcpEndpoint, getGlobalMcpEndpoint } from "./duckduckgoSearch";
 // Usamos o core do highlight.js e registramos só as linguagens comuns, em vez do
 // import padrão (que empacota TODAS as linguagens, ~900 KB). Linguagens não
 // registradas caem em texto simples (o renderer já faz esse fallback).
@@ -1527,16 +1528,37 @@ export async function runGeminiToolLoop(
 }
 
 /**
- * Delegação de busca: usa o Gemma 4 31B (que suporta google_search) para pesquisar
- * na web e retornar um resumo factual + fontes. Serve para modelos que não fazem
- * busca nativa poderem responder com dados atuais.
+ * Delegação de busca:
+ * 1. Prioridade: busca na web via DuckDuckGo (MCP Server local ou busca direta).
+ * 2. Fallback: Se o DuckDuckGo falhar ou não retornar dados, aciona o Gemma 4 31B
+ *    com a ferramenta google_search.
  */
 export async function performWebSearch(
   query: string,
   signal?: AbortSignal,
   manualApiKey?: string,
   modelId: string = "gemma-4-31b-it",
-): Promise<{ summary: string; sources: { title: string; uri: string }[] }> {
+  mcpEndpoint?: string
+): Promise<{ 
+  summary: string; 
+  sources: { title: string; uri: string }[];
+  provider: 'duckduckgo-mcp' | 'duckduckgo' | 'gemma-fallback';
+}> {
+  // 1. Prioridade: DuckDuckGo (MCP / Web)
+  try {
+    const ddgResult = await executeDuckDuckGoSearch(query, signal, mcpEndpoint);
+    if (ddgResult && (ddgResult.summary || ddgResult.sources.length > 0)) {
+      return {
+        summary: ddgResult.summary,
+        sources: ddgResult.sources,
+        provider: ddgResult.provider
+      };
+    }
+  } catch (err) {
+    console.warn("Falha no DuckDuckGo search, acionando fallback para Gemma 4 31B:", err);
+  }
+
+  // 2. Fallback: Gemma 4 31B (google_search)
   const model = modelId;
   const systemInstruction =
     "Você é um mecanismo de pesquisa. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web " +
@@ -1570,8 +1592,14 @@ export async function performWebSearch(
       });
     }
   }
-  return { summary: summary.trim(), sources: [...sourceMap.values()] };
+  return { 
+    summary: summary.trim(), 
+    sources: [...sourceMap.values()],
+    provider: 'gemma-fallback'
+  };
 }
+
+export { setGlobalMcpEndpoint, getGlobalMcpEndpoint };
 
 export async function generateImagenContent(
   prompt: string,

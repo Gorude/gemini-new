@@ -1,0 +1,275 @@
+/**
+ * Serviço de Busca DuckDuckGo (MCP & Web Direct) com Fallback.
+ * 
+ * Permite buscar na web prioritariamente usando DuckDuckGo (via servidor MCP local
+ * ou busca web direta) e extrair títulos, snippets e links reais.
+ */
+
+export interface DuckDuckGoResult {
+  title: string;
+  uri: string;
+  snippet: string;
+}
+
+export interface DuckDuckGoSearchOutput {
+  summary: string;
+  sources: { title: string; uri: string }[];
+  provider: 'duckduckgo-mcp' | 'duckduckgo';
+}
+
+let globalMcpEndpoint = typeof localStorage !== 'undefined' 
+  ? (localStorage.getItem('nemon_mcp_endpoint') || 'http://localhost:3333')
+  : 'http://localhost:3333';
+
+export function setGlobalMcpEndpoint(url: string) {
+  globalMcpEndpoint = (url || '').trim().replace(/\/+$/, '');
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('nemon_mcp_endpoint', globalMcpEndpoint);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function getGlobalMcpEndpoint(): string {
+  return globalMcpEndpoint;
+}
+
+function unescapeHtml(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]+>/g, '')
+    .trim();
+}
+
+/**
+ * Faz o parse do HTML retornado pela página de busca do DuckDuckGo (html.duckduckgo.com).
+ */
+export function parseDuckDuckGoHtml(html: string): DuckDuckGoResult[] {
+  const results: DuckDuckGoResult[] = [];
+  if (!html) return results;
+
+  const blocks = html.split('class="result ');
+  for (let i = 1; i < blocks.length && results.length < 6; i++) {
+    const b = blocks[i];
+    const linkMatch = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    const snippetMatch = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
+
+    if (linkMatch) {
+      let rawUrl = linkMatch[1];
+      // Desfaz o redirecionamento interno do DDG (/l/?uddg=https%3A%2F%2F...)
+      if (rawUrl.includes('uddg=')) {
+        try {
+          const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://duckduckgo.com' + rawUrl);
+          const realUrl = u.searchParams.get('uddg');
+          if (realUrl) rawUrl = decodeURIComponent(realUrl);
+        } catch {
+          // fallback para rawUrl
+        }
+      }
+
+      const title = unescapeHtml(linkMatch[2]);
+      const snippet = snippetMatch ? unescapeHtml(snippetMatch[1]) : '';
+
+      if (title && rawUrl) {
+        results.push({ title, uri: rawUrl, snippet });
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Formata os resultados do DuckDuckGo em um resumo factual textual + lista de fontes.
+ */
+export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
+  summary: string;
+  sources: { title: string; uri: string }[];
+} {
+  const sources: { title: string; uri: string }[] = [];
+  const lines: string[] = [];
+
+  for (const r of results) {
+    if (!sources.some(s => s.uri === r.uri)) {
+      sources.push({ title: r.title, uri: r.uri });
+    }
+    const snippetText = r.snippet ? `: ${r.snippet}` : '';
+    lines.push(`- **${r.title}** (${r.uri})${snippetText}`);
+  }
+
+  const summary = `Resultados da pesquisa no DuckDuckGo:\n${lines.join('\n')}`;
+  return { summary, sources };
+}
+
+/**
+ * Tenta buscar através de um servidor MCP local (MCP Server Bridge).
+ */
+export async function searchDuckDuckGoMcp(
+  query: string,
+  mcpEndpoint: string = globalMcpEndpoint,
+  signal?: AbortSignal
+): Promise<{ summary: string; sources: { title: string; uri: string }[] } | null> {
+  const endpoint = (mcpEndpoint || 'http://localhost:3333').replace(/\/+$/, '');
+
+  // 1. Tenta POST /search simplificado do bridge
+  try {
+    const res = await fetch(`${endpoint}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, max_results: 5 }),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(4000)]) : AbortSignal.timeout(4000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.results) && data.results.length > 0) {
+        return formatDuckDuckGoSummary(data.results);
+      }
+      if (data.summary && Array.isArray(data.sources)) {
+        return { summary: data.summary, sources: data.sources };
+      }
+    }
+  } catch {
+    // Falha silenciosa no /search, tenta o protocolo JSON-RPC standard do MCP
+  }
+
+  // 2. Tenta protocolo standard do MCP: POST /tools/call
+  try {
+    const payload = {
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'tools/call',
+      params: {
+        name: 'search',
+        arguments: { query, count: 5, max_results: 5 }
+      }
+    };
+
+    const res = await fetch(`${endpoint}/tools/call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(4000)]) : AbortSignal.timeout(4000)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const content = data.result?.content;
+      if (Array.isArray(content) && content.length > 0) {
+        const textContent = content.map(c => c.text || '').join('\n');
+        // Se o MCP retornou JSON em string
+        try {
+          const parsed = JSON.parse(textContent);
+          if (Array.isArray(parsed)) {
+            const mapped = parsed.map((item: any) => ({
+              title: item.title || item.name || 'DuckDuckGo Result',
+              uri: item.url || item.uri || item.link || '',
+              snippet: item.snippet || item.body || item.description || ''
+            })).filter(x => x.uri);
+            if (mapped.length > 0) return formatDuckDuckGoSummary(mapped);
+          }
+        } catch {
+          // Retornou markdown ou texto puro
+        }
+
+        // Extrai fontes do texto se houver URLs
+        const sources: { title: string; uri: string }[] = [];
+        const urlMatches = textContent.match(/https?:\/\/[^\s)\]]+/g) || [];
+        for (const u of urlMatches) {
+          if (!sources.some(s => s.uri === u)) {
+            sources.push({ title: u, uri: u });
+          }
+        }
+        return { summary: textContent, sources };
+      }
+    }
+  } catch {
+    // MCP indisponível
+  }
+
+  return null;
+}
+
+/**
+ * Tenta buscar diretamente no DuckDuckGo Web via proxy Vite local ou proxies CORS públicos.
+ */
+export async function searchDuckDuckGoWeb(
+  query: string,
+  signal?: AbortSignal
+): Promise<{ summary: string; sources: { title: string; uri: string }[] } | null> {
+  const encoded = encodeURIComponent(query);
+
+  const targets = [
+    `/api/duckduckgo?q=${encoded}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encoded}`)}`,
+    `https://corsproxy.io/?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encoded}`)}`
+  ];
+
+  for (const url of targets) {
+    try {
+      const timeoutSig = AbortSignal.timeout(4500);
+      const combinedSignal = signal ? AbortSignal.any([signal, timeoutSig]) : timeoutSig;
+
+      const res = await fetch(url, { signal: combinedSignal });
+      if (res.ok) {
+        const html = await res.text();
+        const results = parseDuckDuckGoHtml(html);
+        if (results.length > 0) {
+          return formatDuckDuckGoSummary(results);
+        }
+      }
+    } catch {
+      // Tenta próximo mirror
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Executa a busca primária pelo DuckDuckGo:
+ * 1. Tenta o servidor MCP (se houver bridge rodando).
+ * 2. Tenta a busca Web do DuckDuckGo (direto / proxies).
+ * 3. Retorna null se ambos falharem, permitindo o fallback imediato para o Gemma 4 31B.
+ */
+export async function executeDuckDuckGoSearch(
+  query: string,
+  signal?: AbortSignal,
+  mcpEndpoint: string = globalMcpEndpoint
+): Promise<DuckDuckGoSearchOutput | null> {
+  // 1. Tenta MCP
+  try {
+    const mcpRes = await searchDuckDuckGoMcp(query, mcpEndpoint, signal);
+    if (mcpRes && (mcpRes.summary || mcpRes.sources.length > 0)) {
+      return {
+        ...mcpRes,
+        provider: 'duckduckgo-mcp'
+      };
+    }
+  } catch (err) {
+    console.debug('MCP DuckDuckGo não respondeu:', err);
+  }
+
+  // 2. Tenta DuckDuckGo Web direto
+  try {
+    const webRes = await searchDuckDuckGoWeb(query, signal);
+    if (webRes && (webRes.summary || webRes.sources.length > 0)) {
+      return {
+        ...webRes,
+        provider: 'duckduckgo'
+      };
+    }
+  } catch (err) {
+    console.debug('DuckDuckGo Web direto falhou:', err);
+  }
+
+  return null;
+}
