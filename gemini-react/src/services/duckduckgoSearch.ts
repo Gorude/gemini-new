@@ -57,7 +57,7 @@ export function parseDuckDuckGoHtml(html: string): DuckDuckGoResult[] {
   if (!html) return results;
 
   const blocks = html.split('class="result ');
-  for (let i = 1; i < blocks.length && results.length < 6; i++) {
+  for (let i = 1; i < blocks.length; i++) {
     const b = blocks[i];
     const linkMatch = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
     const snippetMatch = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
@@ -162,33 +162,32 @@ export async function searchDuckDuckGoMcp(
     const res = await fetch(`${endpoint}/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, max_results: 5 }),
+      body: JSON.stringify({ query }),
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(4000)]) : AbortSignal.timeout(4000)
     });
 
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.results) && data.results.length > 0) {
-        // Enriquecimento com ferramenta 'fetch': lê o link mais relevante sem fazer múltiplas buscas
-        const topLink = data.results[0];
-        if (topLink?.uri) {
+        // Enriquecimento com ferramenta 'fetch' (ilimitada): lê conteúdos dos links em paralelo
+        const linksToFetch = data.results.slice(0, 3);
+        await Promise.allSettled(linksToFetch.map(async (linkItem: any) => {
+          if (!linkItem?.uri) return;
           try {
             const fetchRes = await fetch(`${endpoint}/fetch`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: topLink.uri }),
+              body: JSON.stringify({ url: linkItem.uri }),
               signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3500)]) : AbortSignal.timeout(3500)
             });
             if (fetchRes.ok) {
               const fetchJson = await fetchRes.json();
               if (fetchJson.content) {
-                topLink.snippet = (topLink.snippet ? `${topLink.snippet}\n` : '') + `[Conteúdo principal]: ${fetchJson.content.slice(0, 1200)}`;
+                linkItem.snippet = (linkItem.snippet ? `${linkItem.snippet}\n` : '') + `[Conteúdo principal]: ${fetchJson.content.slice(0, 1200)}`;
               }
             }
-          } catch {
-            // Segue com snippet padrão se fetch falhar
-          }
-        }
+          } catch {}
+        }));
         return formatDuckDuckGoSummary(data.results);
       }
       if (data.summary && Array.isArray(data.sources)) {
@@ -207,7 +206,7 @@ export async function searchDuckDuckGoMcp(
       method: 'tools/call',
       params: {
         name: 'search',
-        arguments: { query, count: 5, max_results: 5 }
+        arguments: { query }
       }
     };
 
@@ -301,7 +300,7 @@ export async function searchDuckDuckGoWeb(
 
       if (Array.isArray(data.RelatedTopics)) {
         for (const t of data.RelatedTopics) {
-          if (t.Text && t.FirstURL && results.length < 5) {
+          if (t.Text && t.FirstURL) {
             results.push({
               title: t.Text.slice(0, 70),
               uri: t.FirstURL,

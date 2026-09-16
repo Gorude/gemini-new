@@ -45,4 +45,22 @@ describe('duckduckgoSearch', () => {
     expect(formatted.summary).toContain('**Doc 1**');
     expect(formatted.summary).toContain('Snippet 1');
   });
+
+  it('should parse more than 5 links without artificial limit', () => {
+    let mockHtml = '<html><body>';
+    for (let i = 1; i <= 8; i++) {
+      mockHtml += `
+        <div class="result results_links">
+          <h2 class="result__title">
+            <a class="result__a" href="https://example.com/page${i}">Title ${i}</a>
+          </h2>
+          <a class="result__snippet" href="#">Snippet ${i}</a>
+        </div>
+      `;
+    }
+    mockHtml += '</body></html>';
+
+    const results = parseDuckDuckGoHtml(mockHtml);
+    expect(results).toHaveLength(8);
+  });
 });

@@ -16,7 +16,7 @@ if (!fs.existsSync(configFile)) fs.writeFileSync(configFile, JSON.stringify({ pa
 const uploadsDir = path.resolve(__dirname, 'public/uploads')
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 
-async function fetchDuckDuckGoLiteOrHtml(query: string, max_results: number = 5) {
+async function fetchDuckDuckGoLiteOrHtml(query: string, max_results: number = 50) {
   const results: { title: string; uri: string; snippet: string }[] = [];
 
   // 1. Tenta DuckDuckGo Lite (POST): não sofre bloqueio por captcha / desafio bot (HTTP 202)
@@ -205,7 +205,7 @@ function chatHistoryApi() {
           req.on('data', (chunk: string) => body += chunk)
           req.on('end', async () => {
             try {
-              const { query, max_results = 5 } = JSON.parse(body || '{}')
+              const { query, max_results = 50 } = JSON.parse(body || '{}')
               const results = await fetchDuckDuckGoLiteOrHtml(query, max_results)
               res.setHeader('Content-Type', 'application/json')
               res.setHeader('Access-Control-Allow-Origin', '*')
@@ -263,7 +263,7 @@ function chatHistoryApi() {
               const toolName = payload.params?.name || payload.name
               const toolArgs = payload.params?.arguments || payload.arguments || {}
               const query = toolArgs.query || ''
-              const max_results = toolArgs.max_results || toolArgs.count || 5
+              const max_results = toolArgs.max_results || toolArgs.count || 50
 
               // Tool: fetch
               if (toolName === 'fetch' || toolArgs.url) {

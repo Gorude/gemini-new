@@ -137,7 +137,7 @@ function sendJsonRpc(method, params, timeoutMs = 6000) {
 }
 
 // Fallback direto de busca web via fetch caso o processo stdio não esteja disponível
-async function directDuckDuckGoSearch(query, count = 5) {
+async function directDuckDuckGoSearch(query, count = 50) {
   const results = [];
 
   // 1. Tenta DuckDuckGo Lite (POST): não sofre bloqueio por desafio bot / captcha (HTTP 202)
@@ -306,7 +306,7 @@ const server = http.createServer(async (req, res) => {
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
-        const { query, max_results = 5 } = JSON.parse(body || '{}');
+        const { query, max_results = 50 } = JSON.parse(body || '{}');
         if (!query) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: 'Parâmetro query é obrigatório' }));
@@ -385,8 +385,8 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        // Ferramenta 'search': busca links no DuckDuckGo
-        const results = await directDuckDuckGoSearch(q, toolArgs.max_results || 5);
+        // Ferramenta 'search': busca links no DuckDuckGo (sem limitação artificial de 5 links)
+        const results = await directDuckDuckGoSearch(q, toolArgs.max_results || toolArgs.count || 50);
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({
           jsonrpc: '2.0',
