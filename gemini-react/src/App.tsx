@@ -400,7 +400,18 @@ function App() {
   const [factCheckModelId, setFactCheckModelId] = useState(() => localStorage.getItem('nemon_factcheck_model') || FALLBACK_MODEL);
   // Ferramentas de chat (tool calling) habilitadas globalmente (F3). Ex.: ['calculate','get_weather'].
   const [enabledChatToolIds, setEnabledChatToolIds] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('nemon_chat_tools') || '[]'); } catch { return []; }
+    try {
+      const saved = localStorage.getItem('nemon_chat_tools');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.includes('get_current_time') ? parsed : ['get_current_time', ...parsed];
+        }
+      }
+      return ['get_current_time', 'calculate', 'get_weather'];
+    } catch {
+      return ['get_current_time', 'calculate', 'get_weather'];
+    }
   });
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
@@ -1707,7 +1718,7 @@ function App() {
       (selectedPersonality.prompt ? `INSTRUÇÃO DE PERSONALIDADE ATIVA: "${selectedPersonality.prompt}"\n\n` : "") +
       (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f: MemoryFact) => `[ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n") + "\n\n" : "") +
       "Regras de Pesquisa e Memória:\n" +
-      "1. Quando houver uma seção 'RESULTADOS DE PESQUISA WEB ATUAL' no contexto (ou a ferramenta google_search estiver disponível), baseie sua resposta nesses dados com senso crítico e verificação factual. ATENÇÃO CONTRA MODELOS NÃO LANÇADOS: Verifique se os modelos citados em rankings foram de fato lançados comercialmente e estão disponíveis (por exemplo, modelos anunciados mas com lançamento adiado ou não disponíveis ao público, como Gemini 3.5 Pro, não devem ser listados como modelos ativos). DIRETRIZES DE FERRAMENTAS WEB (DUCKDUCKGO/MCP): A ferramenta 'search' tem limite de até 3 chamadas por pesquisa (apenas para obter links). A ferramenta 'fetch' é ILIMITADA — use fetch livremente para ler e extrair o conteúdo de quantas páginas forem necessárias. NUNCA escreva marcadores ou rótulos internos como 'WEB SEARCH ON' na resposta.\n" +
+      "1. Quando houver uma seção 'RESULTADOS DE PESQUISA WEB ATUAL' no contexto (ou ferramentas de busca estiverem disponíveis), baseie sua resposta nesses dados com senso crítico e rigor factual. DIRETRIZES DE FERRAMENTAS WEB (DUCKDUCKGO/MCP): A ferramenta 'search' tem limite de até 3 chamadas por pesquisa (apenas para obter links). A ferramenta 'fetch' é ILIMITADA — use fetch livremente para ler e extrair o conteúdo de quantas páginas forem necessárias. NUNCA escreva marcadores ou rótulos internos como 'WEB SEARCH ON' na resposta.\n" +
       "2. Regras de DNA (Memória Persistente):\n" +
       "   - Cada memória DEVE conter apenas um fato atômico, simples e específico (ex: 'O usuário se chama José Gabriel', 'O usuário tem 19 anos', 'O usuário estuda ADS'). NUNCA agrupe múltiplos fatos diferentes ou informações complementares em um único texto.\n" +
       "   - NOVA INFORMAÇÃO vs CONTRADIÇÃO (MUITO IMPORTANTE):\n" +
@@ -1788,13 +1799,21 @@ function App() {
       let effectiveWebSearch = webSearchEnabled;
       let effectiveSystemInstruction = systemInstruction;
       const preSources: { title: string; uri: string }[] = [];
+      const toolsUsedForMessage: string[] = [];
+
       if (webSearchEnabled && activeModel !== SEARCH_MODEL && !isOpenRouterModel) {
         let searchFound = false;
         try {
+          // A ferramenta de saber tempo/data é obrigatória para ancorar buscas atualizadas
+          toolsUsedForMessage.push('get_current_time');
           const searchRes = await performWebSearch(userText, controller.signal, undefined, searchModelId, mcpEndpoint);
           // Consideramos a busca bem-sucedida se houver resumo OU ao menos uma fonte.
           if (searchRes.summary || searchRes.sources.length > 0) {
             searchFound = true;
+            toolsUsedForMessage.push(searchRes.provider === 'gemma-fallback' ? 'google_search' : 'duckduckgo_search');
+            if (searchRes.provider !== 'gemma-fallback') {
+              toolsUsedForMessage.push('fetch');
+            }
             const providerLabel = searchRes.provider === 'duckduckgo-mcp'
               ? 'DuckDuckGo Search (via MCP Server local)'
               : searchRes.provider === 'duckduckgo'
@@ -1815,6 +1834,9 @@ function App() {
             `\n\nAVISO: A pesquisa na web foi solicitada mas NÃO retornou resultados atuais. NÃO invente fatos recentes (datas, versões, números, nomes ou eventos). Responda apenas com o que você sabe com segurança e DEIXE CLARO ao usuário, de forma breve, que não foi possível obter informações atualizadas da web para esta pergunta.`;
         }
         effectiveWebSearch = false; // o modelo principal recebe o contexto já pesquisado
+      } else if (webSearchEnabled && activeModel === SEARCH_MODEL) {
+        toolsUsedForMessage.push('get_current_time');
+        toolsUsedForMessage.push('google_search');
       }
 
       // PDFs: o Gemini processa nativamente (inlineData). Provedores compatíveis com
@@ -1865,6 +1887,7 @@ function App() {
             isGrounded,
             isSearching,
             sources: [...allSources],
+            toolsUsed: toolsUsedForMessage.length > 0 ? Array.from(new Set(toolsUsedForMessage)) : m.toolsUsed,
             duration: currentDuration
           } : m)
         } : c));
@@ -1881,7 +1904,10 @@ function App() {
             : Promise.resolve({ result: 'Ferramenta indisponível.' }),
           controller.signal,
         );
-        toolRun.toolsUsed.forEach(n => { try { liveToolUsedRef.current?.(n); } catch { /* ignore */ } });
+        toolRun.toolsUsed.forEach(n => {
+          toolsUsedForMessage.push(n);
+          try { liveToolUsedRef.current?.(n); } catch { /* ignore */ }
+        });
         fullText = toolRun.text;
         smoother.setTargets(stripMapMarkers(stripSearchMarkers(parseMemoryTags(fullText).trim())), '');
       } else {
@@ -2024,6 +2050,7 @@ function App() {
           isGrounded,
           isVerifying: false,
           sources: [...allSources],
+          toolsUsed: toolsUsedForMessage.length > 0 ? Array.from(new Set(toolsUsedForMessage)) : m.toolsUsed,
           maps: isAppending ? (m.maps || finalMaps) : (finalMaps.length > 0 ? finalMaps : undefined),
           pendingMemoryUpdates: updatesFound.length > 0
             ? [...(m.pendingMemoryUpdates || []), ...updatesFound]

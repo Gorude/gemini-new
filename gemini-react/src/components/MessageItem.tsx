@@ -393,7 +393,68 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
               </div>
             )}
 
-            {(msg.isGrounded || (msg.sources && msg.sources.length > 0)) && (
+            {msg.toolsUsed && msg.toolsUsed.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 animate-in fade-in duration-300">
+                {msg.toolsUsed.map((tool) => {
+                  if (tool === 'get_current_time') {
+                    return (
+                      <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/25 rounded-full text-[10px] font-bold text-amber-400 shadow-xs">
+                        <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                        HORA E DATA CONSULTADAS
+                      </div>
+                    );
+                  }
+                  if (tool === 'duckduckgo_search' || tool === 'search') {
+                    return (
+                      <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/25 rounded-full text-[10px] font-bold text-blue-400 shadow-xs">
+                        <Globe className="w-3 h-3 text-blue-400 shrink-0" />
+                        DUCKDUCKGO SEARCH
+                      </div>
+                    );
+                  }
+                  if (tool === 'google_search') {
+                    return (
+                      <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/25 rounded-full text-[10px] font-bold text-indigo-400 shadow-xs">
+                        <Globe className="w-3 h-3 text-indigo-400 shrink-0" />
+                        GOOGLE SEARCH
+                      </div>
+                    );
+                  }
+                  if (tool === 'fetch') {
+                    return (
+                      <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/25 rounded-full text-[10px] font-bold text-cyan-400 shadow-xs">
+                        <ExternalLink className="w-3 h-3 text-cyan-400 shrink-0" />
+                        PÁGINAS LIDAS (FETCH)
+                      </div>
+                    );
+                  }
+                  if (tool === 'calculate') {
+                    return (
+                      <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/25 rounded-full text-[10px] font-bold text-emerald-400 shadow-xs">
+                        <span className="text-[11px] font-bold leading-none">±</span>
+                        CÁLCULO
+                      </div>
+                    );
+                  }
+                  if (tool === 'get_weather') {
+                    return (
+                      <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-sky-500/10 border border-sky-500/25 rounded-full text-[10px] font-bold text-sky-400 shadow-xs">
+                        <Globe className="w-3 h-3 text-sky-400 shrink-0" />
+                        CLIMA
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 border border-purple-500/25 rounded-full text-[10px] font-bold text-purple-400 shadow-xs">
+                      <span className="text-[10px]">⚙</span>
+                      {tool.toUpperCase()}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {(!msg.toolsUsed || !msg.toolsUsed.some(t => t.includes('search'))) && (msg.isGrounded || (msg.sources && msg.sources.length > 0)) && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-bold text-blue-400 animate-in fade-in slide-in-from-left-2 duration-500">
                 <Globe className="w-3 h-3 text-blue-400" />
                 PESQUISADO NA WEB

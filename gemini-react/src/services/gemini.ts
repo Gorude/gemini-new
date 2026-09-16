@@ -354,6 +354,7 @@ export interface Message {
   continuationText?: string;
   // Mapas embutidos (F8): locais extraídos de marcadores [MAP: …] na resposta.
   maps?: Array<{ query: string }>;
+  toolsUsed?: string[];
 }
 
 // ── Contratos de streaming das APIs (parsing de rede) ──────────────────────────
@@ -1575,11 +1576,10 @@ export async function performWebSearch(
   const model = modelId;
   const systemInstruction =
     `Você é um mecanismo de pesquisa factual de alta precisão. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web. ` +
-    `ÂNCORA TEMPORAL OBRIGATÓRIA: Hoje é ${formattedDate}, ${formattedTime} (Ano: ${currentYear}). ` +
-    `REGRA CRÍTICA DE ATUALIDADE: Você DEVE buscar e filtrar estritamente fatos e sites ATUALIZADOS para o ano de ${currentYear}. ` +
-    `Rejeite informações e rankings antigos de anos anteriores. ` +
+    `ÂNCORA TEMPORAL: Hoje é ${formattedDate}, ${formattedTime} (Ano: ${currentYear}). ` +
+    `REGRA DE ATUALIDADE: Busque e priorize informações e sites atualizados para o ano de ${currentYear}. ` +
     `DIRETRIZES DE FERRAMENTAS: Limite a no máximo 3 chamadas da ferramenta search para obter links. O uso da ferramenta fetch para acessar e ler o conteúdo das páginas é ILIMITADO. ` +
-    `CUIDADO COM MODELOS NÃO LANÇADOS: Verifique se os modelos citados foram de fato lançados e estão disponíveis ao público (evite modelos anunciados mas não lançados ou adiados, como Gemini 3.5 Pro). Baseie-se apenas em modelos e fatos reais de ${currentYear}. Vá direto ao ponto, sem introduções nem conclusões.`;
+    `Vá direto ao ponto com fatos verificados, sem introduções nem conclusões.`;
   const prompt = `Pesquise na web (ano de referência: ${currentYear}) e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
 
   let summary = "";
