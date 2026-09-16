@@ -138,37 +138,84 @@ function sendJsonRpc(method, params, timeoutMs = 6000) {
 
 // Fallback direto de busca web via fetch caso o processo stdio não esteja disponível
 async function directDuckDuckGoSearch(query, count = 5) {
-  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-  });
-  const html = await res.text();
   const results = [];
-  const blocks = html.split('class="result ');
 
-  for (let i = 1; i < blocks.length && results.length < count; i++) {
-    const b = blocks[i];
-    const linkMatch = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-    const snippetMatch = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
+  // 1. Tenta DuckDuckGo Lite (POST): não sofre bloqueio por desafio bot / captcha (HTTP 202)
+  try {
+    const resLite = await fetch('https://lite.duckduckgo.com/lite/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      body: 'q=' + encodeURIComponent(query),
+      signal: AbortSignal.timeout(5000)
+    });
 
-    if (linkMatch) {
-      let rawUrl = linkMatch[1];
-      if (rawUrl.includes('uddg=')) {
-        try {
-          const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://duckduckgo.com' + rawUrl);
-          const realUrl = u.searchParams.get('uddg');
-          if (realUrl) rawUrl = decodeURIComponent(realUrl);
-        } catch {}
+    if (resLite.ok) {
+      const html = await resLite.text();
+      const aTags = html.match(/<a[^>]*class=['"]result-link['"][\s\S]*?<\/a>/gi) || [];
+      const snippets = (html.match(/<td[^>]*class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/gi) || [])
+        .map(s => s.replace(/<[^>]+>/g, '').trim());
+
+      for (let i = 0; i < aTags.length && results.length < count; i++) {
+        const a = aTags[i];
+        const hrefMatch = a.match(/href=['"]([^'"]+)['"]/i);
+        const title = a.replace(/<[^>]+>/g, '').trim();
+        if (hrefMatch && title) {
+          let uri = hrefMatch[1];
+          if (uri.includes('uddg=')) {
+            try {
+              const u = new URL(uri.startsWith('http') ? uri : 'https://duckduckgo.com' + uri);
+              const real = u.searchParams.get('uddg');
+              if (real) uri = decodeURIComponent(real);
+            } catch {}
+          }
+          results.push({ title, uri, snippet: snippets[i] || '' });
+        }
       }
-      const title = linkMatch[2].replace(/<[^>]+>/g, '').trim();
-      const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '';
-      if (title && rawUrl) {
-        results.push({ title, uri: rawUrl, snippet });
+
+      if (results.length > 0) return results;
+    }
+  } catch {
+    // Continua para o endpoint HTML tradicional se o Lite falhar
+  }
+
+  // 2. Fallback: DuckDuckGo HTML tradicional
+  try {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      signal: AbortSignal.timeout(5000)
+    });
+    const html = await res.text();
+    const blocks = html.split('class="result ');
+
+    for (let i = 1; i < blocks.length && results.length < count; i++) {
+      const b = blocks[i];
+      const linkMatch = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+      const snippetMatch = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
+
+      if (linkMatch) {
+        let rawUrl = linkMatch[1];
+        if (rawUrl.includes('uddg=')) {
+          try {
+            const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://duckduckgo.com' + rawUrl);
+            const realUrl = u.searchParams.get('uddg');
+            if (realUrl) rawUrl = decodeURIComponent(realUrl);
+          } catch {}
+        }
+        const title = linkMatch[2].replace(/<[^>]+>/g, '').trim();
+        const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+        if (title && rawUrl) {
+          results.push({ title, uri: rawUrl, snippet });
+        }
       }
     }
-  }
+  } catch {}
+
   return results;
 }
 

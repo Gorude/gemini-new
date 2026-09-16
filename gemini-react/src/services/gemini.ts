@@ -1561,10 +1561,9 @@ export async function performWebSearch(
   // 2. Fallback: Gemma 4 31B (google_search)
   const model = modelId;
   const systemInstruction =
-    "Você é um mecanismo de pesquisa. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web " +
-    "e retorne um resumo CONCISO (no máximo 6 linhas ou tópicos curtos) apenas com os fatos mais relevantes " +
-    "e atualizados (números, datas, nomes) encontrados nas fontes. Vá direto ao ponto, sem introduções nem " +
-    "conclusões. Não invente; baseie-se somente nos resultados da busca.";
+    "Você é um mecanismo de pesquisa factual de alta precisão. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web " +
+    "e retorne um resumo CONCISO apenas com os fatos reais e verificados. " +
+    "CUIDADO COM CONTEÚDO ESPECULATIVO/SEO: Não reproduza nomes fictícios ou especulativos de modelos de IA não lançados oficialmente (ex: GPT-5.6, Claude Opus 5, Gemini 3.5). Baseie-se somente em modelos e dados reais. Vá direto ao ponto, sem introduções nem conclusões.";
   const prompt = `Pesquise na web e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
 
   let summary = "";
