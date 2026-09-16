@@ -168,15 +168,85 @@ function chatHistoryApi() {
               res.end(JSON.stringify({ error: err.message }))
             }
           })
+        } else if ((req.url === '/fetch' || req.url === '/api/mcp/fetch') && req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: string) => body += chunk)
+          req.on('end', async () => {
+            try {
+              const { url } = JSON.parse(body || '{}')
+              if (!url) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: 'url is required' }))
+                return
+              }
+              const fetchRes = await fetch(url, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                signal: AbortSignal.timeout(6000)
+              })
+              const html = await fetchRes.text()
+              const clean = html
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
+                .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
+                .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
+                .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 3000)
+              res.setHeader('Content-Type', 'application/json')
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(JSON.stringify({ success: true, url, content: clean }))
+            } catch (err: any) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.setHeader('Access-Control-Allow-Origin', '*')
+              res.end(JSON.stringify({ error: err.message }))
+            }
+          })
         } else if ((req.url === '/tools/call' || req.url === '/api/mcp/tools/call') && req.method === 'POST') {
           let body = ''
           req.on('data', (chunk: string) => body += chunk)
           req.on('end', async () => {
             try {
               const payload = JSON.parse(body || '{}')
+              const toolName = payload.params?.name || payload.name
               const toolArgs = payload.params?.arguments || payload.arguments || {}
               const query = toolArgs.query || ''
               const max_results = toolArgs.max_results || toolArgs.count || 5
+
+              // Tool: fetch
+              if (toolName === 'fetch' || toolArgs.url) {
+                const targetUrl = toolArgs.url || toolArgs.uri || ''
+                const fetchRes = await fetch(targetUrl, {
+                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                  signal: AbortSignal.timeout(6000)
+                })
+                const html = await fetchRes.text()
+                const clean = html
+                  .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                  .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                  .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
+                  .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
+                  .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
+                  .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim()
+                  .slice(0, 3000)
+
+                res.setHeader('Content-Type', 'application/json')
+                res.setHeader('Access-Control-Allow-Origin', '*')
+                res.end(JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: payload.id || 1,
+                  result: {
+                    content: [{ type: 'text', text: clean }]
+                  }
+                }))
+                return
+              }
 
               const resDDG = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
                 headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }

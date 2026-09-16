@@ -172,6 +172,37 @@ async function directDuckDuckGoSearch(query, count = 5) {
   return results;
 }
 
+// Acessa o conteúdo real da página para evitar rate limit do DuckDuckGo search
+async function directFetchUrl(url) {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) return `[Falha HTTP ${res.status} ao acessar link ${url}]`;
+    const html = await res.text();
+    const clean = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+      .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
+      .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
+      .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
+      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return clean.slice(0, 3000);
+  } catch (err) {
+    return `[Erro ao ler ${url}: ${err.message}]`;
+  }
+}
+
 startMcpProcess();
 
 const server = http.createServer(async (req, res) => {
@@ -198,6 +229,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // POST /fetch (Acessa o conteúdo textual de uma URL)
+  if (req.url === '/fetch' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { url } = JSON.parse(body || '{}');
+        if (!url) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'Parâmetro url é obrigatório' }));
+          return;
+        }
+        console.log(`[MCP Bridge] Acessando link via fetch: "${url}"`);
+        const content = await directFetchUrl(url);
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: true, url, content }));
+      } catch (err) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // POST /search (Endpoint simplificado)
   if (req.url === '/search' && req.method === 'POST') {
     let body = '';
@@ -213,8 +268,8 @@ const server = http.createServer(async (req, res) => {
 
         console.log(`[MCP Bridge] Pesquisando: "${query}"`);
 
-        // 1. Tenta via processo MCP
-        if (isMcpAlive) {
+        // 1. Tenta via processo MCP externo (apenas se existir e estiver ativo)
+        if (mcpProcess && isMcpAlive) {
           try {
             const mcpRes = await sendJsonRpc('tools/call', {
               name: 'search',
@@ -228,7 +283,7 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        // 2. Fallback direto DuckDuckGo
+        // 2. Motor nativo Node.js
         const directResults = await directDuckDuckGoSearch(query, max_results);
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ success: true, via: 'direct-duckduckgo', results: directResults }));
@@ -251,7 +306,8 @@ const server = http.createServer(async (req, res) => {
         const toolArgs = payload.params?.arguments || payload.arguments || {};
         const q = toolArgs.query || '';
 
-        if (isMcpAlive) {
+        // Se houver processo externo rodando, tenta ele primeiro
+        if (mcpProcess && isMcpAlive) {
           try {
             const mcpRes = await sendJsonRpc('tools/call', { name: toolName, arguments: toolArgs });
             res.setHeader('Content-Type', 'application/json');
@@ -262,7 +318,27 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        // Fallback
+        // Ferramenta 'fetch': lê o conteúdo de uma página específica
+        if (toolName === 'fetch' || toolArgs.url) {
+          const targetUrl = toolArgs.url || toolArgs.uri || '';
+          const content = await directFetchUrl(targetUrl);
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            jsonrpc: '2.0',
+            id: payload.id || 1,
+            result: {
+              content: [
+                {
+                  type: 'text',
+                  text: content
+                }
+              ]
+            }
+          }));
+          return;
+        }
+
+        // Ferramenta 'search': busca links no DuckDuckGo
         const results = await directDuckDuckGoSearch(q, toolArgs.max_results || 5);
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({

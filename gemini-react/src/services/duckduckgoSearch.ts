@@ -169,6 +169,26 @@ export async function searchDuckDuckGoMcp(
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.results) && data.results.length > 0) {
+        // Enriquecimento com ferramenta 'fetch': lê o link mais relevante sem fazer múltiplas buscas
+        const topLink = data.results[0];
+        if (topLink?.uri) {
+          try {
+            const fetchRes = await fetch(`${endpoint}/fetch`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: topLink.uri }),
+              signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3500)]) : AbortSignal.timeout(3500)
+            });
+            if (fetchRes.ok) {
+              const fetchJson = await fetchRes.json();
+              if (fetchJson.content) {
+                topLink.snippet = (topLink.snippet ? `${topLink.snippet}\n` : '') + `[Conteúdo principal]: ${fetchJson.content.slice(0, 1200)}`;
+              }
+            }
+          } catch {
+            // Segue com snippet padrão se fetch falhar
+          }
+        }
         return formatDuckDuckGoSummary(data.results);
       }
       if (data.summary && Array.isArray(data.sources)) {
