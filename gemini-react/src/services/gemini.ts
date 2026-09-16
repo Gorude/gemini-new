@@ -1419,6 +1419,15 @@ export interface ChatToolDef {
 
 export const CHAT_TOOLS: ChatToolDef[] = [
   {
+    id: "get_current_time",
+    label: "Hora e data atual",
+    gemini: {
+      name: "get_current_time",
+      description: "Retorna a data e hora exatas do sistema (dia, mês, ano corrente e horário). Ferramenta OBRIGATÓRIA para conferir o momento presente antes de responder ou pesquisar fatos recentes.",
+      parameters: { type: "OBJECT", properties: {} },
+    },
+  },
+  {
     id: "calculate",
     label: "Calculadora",
     gemini: {
@@ -1441,15 +1450,6 @@ export const CHAT_TOOLS: ChatToolDef[] = [
         type: "OBJECT",
         properties: { location: { type: "STRING", description: "Cidade/local. Vazio usa a localização do dispositivo." } },
       },
-    },
-  },
-  {
-    id: "get_current_time",
-    label: "Hora atual",
-    gemini: {
-      name: "get_current_time",
-      description: "Retorna a data e hora atuais do sistema do usuário.",
-      parameters: { type: "OBJECT", properties: {} },
     },
   },
 ];
@@ -1544,6 +1544,19 @@ export async function performWebSearch(
   sources: { title: string; uri: string }[];
   provider: 'duckduckgo-mcp' | 'duckduckgo' | 'gemma-fallback';
 }> {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const formattedDate = now.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  });
+  const formattedTime = now.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
   // 1. Prioridade: DuckDuckGo (MCP / Web)
   try {
     const ddgResult = await executeDuckDuckGoSearch(query, signal, mcpEndpoint);
@@ -1561,11 +1574,13 @@ export async function performWebSearch(
   // 2. Fallback: Gemma 4 31B (google_search)
   const model = modelId;
   const systemInstruction =
-    "Você é um mecanismo de pesquisa factual de alta precisão. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web " +
-    "e retorne um resumo CONCISO apenas com os fatos reais e verificados. " +
-    "DIRETRIZES DE FERRAMENTAS: Limite a no máximo 3 chamadas da ferramenta search para obter links. O uso da ferramenta fetch para acessar e ler o conteúdo das páginas é ILIMITADO. " +
-    "CUIDADO COM MODELOS NÃO LANÇADOS: Verifique se os modelos citados foram de fato lançados e estão disponíveis ao público (evite modelos anunciados mas não lançados ou adiados, como Gemini 3.5 Pro). Baseie-se apenas em modelos e fatos reais. Vá direto ao ponto, sem introduções nem conclusões.";
-  const prompt = `Pesquise na web e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
+    `Você é um mecanismo de pesquisa factual de alta precisão. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web. ` +
+    `ÂNCORA TEMPORAL OBRIGATÓRIA: Hoje é ${formattedDate}, ${formattedTime} (Ano: ${currentYear}). ` +
+    `REGRA CRÍTICA DE ATUALIDADE: Você DEVE buscar e filtrar estritamente fatos e sites ATUALIZADOS para o ano de ${currentYear}. ` +
+    `Rejeite informações e rankings antigos de anos anteriores. ` +
+    `DIRETRIZES DE FERRAMENTAS: Limite a no máximo 3 chamadas da ferramenta search para obter links. O uso da ferramenta fetch para acessar e ler o conteúdo das páginas é ILIMITADO. ` +
+    `CUIDADO COM MODELOS NÃO LANÇADOS: Verifique se os modelos citados foram de fato lançados e estão disponíveis ao público (evite modelos anunciados mas não lançados ou adiados, como Gemini 3.5 Pro). Baseie-se apenas em modelos e fatos reais de ${currentYear}. Vá direto ao ponto, sem introduções nem conclusões.`;
+  const prompt = `Pesquise na web (ano de referência: ${currentYear}) e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
 
   let summary = "";
   const sourceMap = new Map<string, { title: string; uri: string }>();

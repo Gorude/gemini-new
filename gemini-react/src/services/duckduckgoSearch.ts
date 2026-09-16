@@ -332,9 +332,16 @@ export async function executeDuckDuckGoSearch(
   signal?: AbortSignal,
   mcpEndpoint: string = globalMcpEndpoint
 ): Promise<DuckDuckGoSearchOutput | null> {
+  const currentYear = new Date().getFullYear();
+  let effectiveQuery = query.trim();
+  // Se a busca trata do estado atual ou modelos recentes e não menciona o ano, ancora no ano corrente
+  if (!effectiveQuery.includes(String(currentYear)) && /hoje|atual|recent|últim|nov[oa]s?|ranking|melhor|inteligente/i.test(effectiveQuery)) {
+    effectiveQuery = `${effectiveQuery} ${currentYear}`;
+  }
+
   // 1. Tenta MCP
   try {
-    const mcpRes = await searchDuckDuckGoMcp(query, mcpEndpoint, signal);
+    const mcpRes = await searchDuckDuckGoMcp(effectiveQuery, mcpEndpoint, signal);
     if (mcpRes && (mcpRes.summary || mcpRes.sources.length > 0)) {
       return {
         ...mcpRes,
@@ -347,7 +354,7 @@ export async function executeDuckDuckGoSearch(
 
   // 2. Tenta DuckDuckGo Web direto
   try {
-    const webRes = await searchDuckDuckGoWeb(query, signal);
+    const webRes = await searchDuckDuckGoWeb(effectiveQuery, signal);
     if (webRes && (webRes.summary || webRes.sources.length > 0)) {
       return {
         ...webRes,

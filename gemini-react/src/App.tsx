@@ -1685,7 +1685,25 @@ function App() {
     const chatPersonalityId = chatsRef.current.find(c => c.id === targetChatId)?.personalityId ?? 'default';
     const selectedPersonality = personalities.find(p => p.id === chatPersonalityId) || DEFAULT_PERSONALITY;
 
-    const systemInstruction = "Você é o Nemon, uma inteligência artificial avançada, empática e extremamente RÁPIDA. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n" +
+    const currentNow = new Date();
+    const formattedDate = currentNow.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    });
+    const formattedTime = currentNow.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    const currentYear = currentNow.getFullYear();
+
+    const systemInstruction = "Você é o Nemon, uma inteligência artificial avançada, empática e extremamente RÁPIDA. Sua tarefa secundária é manter sua memória persistente (DNA) precisa e atualizada.\n\n" +
+      `ÂNCORA TEMPORAL OBRIGATÓRIA (DATA E HORA DO SISTEMA):\n` +
+      `- Data e hora atual: ${formattedDate}, ${formattedTime} (Ano: ${currentYear}).\n` +
+      `- Use a ferramenta 'get_current_time' sempre que precisar confirmar o horário exato.\n` +
+      `- REGRA DE ATUALIDADE: Ao pesquisar na web ou responder perguntas sobre o estado atual ("hoje", "atualmente", "mais recente", "último", modelos vigentes, rankings), você DEVE OBRIGATORIAMENTE buscar e considerar apenas sites e fatos ATUALIZADOS para ${currentYear}, rejeitando informações obsoletas de anos anteriores. O ano de hoje é ${currentYear}.\n\n` +
       (selectedPersonality.prompt ? `INSTRUÇÃO DE PERSONALIDADE ATIVA: "${selectedPersonality.prompt}"\n\n` : "") +
       (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f: MemoryFact) => `[ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n") + "\n\n" : "") +
       "Regras de Pesquisa e Memória:\n" +
@@ -2943,6 +2961,24 @@ function App() {
         } catch (err: any) {
           return { result: `Não consegui checar agora: ${err?.message || 'erro de rede'}.` };
         }
+      }
+
+      // ---------- Data e Hora Atual ----------
+      case 'get_current_time': {
+        const now = new Date();
+        const formatted = now.toLocaleString('pt-BR', {
+          weekday: 'long',
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZoneName: 'short'
+        });
+        return {
+          result: `Data e hora exatas do sistema: ${formatted} (Ano: ${now.getFullYear()}). Use esta data e ano (${now.getFullYear()}) como âncora temporal obrigatória para suas buscas e respostas.`
+        };
       }
 
       // ---------- Tempo estendido ----------
