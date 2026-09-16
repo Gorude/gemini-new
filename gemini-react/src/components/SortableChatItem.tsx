@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useLayoutEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Pin, Edit2, Archive, Trash2, MoreVertical, GripVertical, Download, FileJson, Folder as FolderIcon, FolderMinus } from 'lucide-react';
@@ -44,6 +44,49 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
   folders,
   onSetFolder
 }) => {
+  const [openUpward, setOpenUpward] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const calculatePlacement = () => {
+    if (!buttonRef.current) return false;
+    const btnRect = buttonRef.current.getBoundingClientRect();
+    const scrollParent = buttonRef.current.closest('.overflow-y-auto') || document.body;
+    const parentRect = scrollParent.getBoundingClientRect();
+    const menuHeight = menuRef.current?.offsetHeight || 260;
+    const spaceBelow = Math.min(parentRect.bottom - btnRect.bottom, window.innerHeight - btnRect.bottom);
+    const spaceAbove = Math.min(btnRect.top - parentRect.top, btnRect.top);
+
+    return spaceBelow < menuHeight + 12 && spaceAbove > spaceBelow;
+  };
+
+  useLayoutEffect(() => {
+    if (menuOpenId !== chat.id) {
+      setOpenUpward(false);
+      return;
+    }
+
+    const checkPosition = () => {
+      setOpenUpward(calculatePlacement());
+    };
+
+    checkPosition();
+    window.addEventListener('resize', checkPosition);
+    window.addEventListener('scroll', checkPosition, true);
+    return () => {
+      window.removeEventListener('resize', checkPosition);
+      window.removeEventListener('scroll', checkPosition, true);
+    };
+  }, [menuOpenId, chat.id]);
+
+  const handleMenuToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (menuOpenId !== chat.id) {
+      setOpenUpward(calculatePlacement());
+    }
+    onToggleMenu(chat.id);
+  };
+
   const {
     attributes,
     listeners,
@@ -99,7 +142,8 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
         {chat.pinned && <Pin className="w-3.5 h-3.5 opacity-60 ml-1" />}
         
         <button 
-          onClick={(e) => { e.stopPropagation(); onToggleMenu(chat.id); }}
+          ref={buttonRef}
+          onClick={handleMenuToggle}
           onMouseDown={(e) => e.stopPropagation()}
           className={`p-1 hover:bg-white/10 rounded-full transition shrink-0 ${activeChatId === chat.id || menuOpenId === chat.id ? 'opacity-100' : 'opacity-0 group-hover/item:opacity-100'}`}
         >
@@ -109,9 +153,12 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
 
       {menuOpenId === chat.id && (
         <div 
+          ref={menuRef}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-4 top-full mt-1 bg-[#1e1f20] border border-(--border-light) rounded-xl py-2 w-48 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200"
+          className={`absolute right-4 ${
+            openUpward ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'
+          } bg-[#1e1f20] border border-(--border-light) rounded-xl py-2 w-48 shadow-2xl z-[100] max-h-[min(380px,calc(100vh-120px))] overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200`}
         >
           <button 
             onClick={(e) => { e.stopPropagation(); onSetEditingId(chat.id, chat.title); onToggleMenu(''); }} 
