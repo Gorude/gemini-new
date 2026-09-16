@@ -520,43 +520,54 @@ body {
   min-width: 0 !important;
   box-sizing: border-box !important;
   overflow-x: auto;
-  margin: 20px 0;
-  border: 1px solid var(--border-main);
+  margin: 16px 0;
+  border: 1px solid var(--border-light, #27272a);
   border-radius: 10px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  background: var(--bg-sidebar, #121214);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
 }
 
+.table-wrapper table,
 .response-body table {
   display: table;
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: calc(var(--chat-font-size, 15.5px) - 1.5px);
+  font-size: calc(var(--chat-font-size, 15px) - 1.5px);
 }
 
-.response-body table th, .response-body table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-light);
-  border-right: 1px solid var(--border-light);
+.table-wrapper table th,
+.table-wrapper table td,
+.response-body table th,
+.response-body table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-light, #27272a);
+  border-right: 1px solid var(--border-light, #27272a);
   text-align: left;
-  min-width: 180px;
+  min-width: 130px;
 }
-.response-body table th:last-child, .response-body table td:last-child {
+.table-wrapper table th:last-child,
+.table-wrapper table td:last-child,
+.response-body table th:last-child,
+.response-body table td:last-child {
   border-right: none;
 }
+.table-wrapper table tr:last-child td,
 .response-body table tr:last-child td {
   border-bottom: none;
 }
 
+.table-wrapper th,
 .response-body th {
-  background: var(--bg-sidebar);
-  font-weight: var(--message-bold-weight, 600);
-  color: var(--text-bold);
+  background: var(--bg-main, #18181b);
+  font-weight: 600;
+  color: var(--text-bold, #fff);
   white-space: nowrap;
 }
 
+.table-wrapper tr:nth-child(even),
 .response-body tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.015);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 /* Scroll button 100% solid (nunca transparente sobre texto) */

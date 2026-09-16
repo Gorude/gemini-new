@@ -34,6 +34,93 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) 
   }));
   const [isDragging, setIsDragging] = useState(false);
 
+  // Floating trigger button position and dragging state
+  const [btnPos, setBtnPos] = useState<{ x: number; y: number } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem('nemon_debug_btn_pos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          return {
+            x: Math.max(12, Math.min(window.innerWidth - 64, parsed.x)),
+            y: Math.max(12, Math.min(window.innerHeight - 64, parsed.y)),
+          };
+        }
+      }
+    } catch {}
+    return null;
+  });
+
+  const [isBtnDragging, setIsBtnDragging] = useState(false);
+  const btnDragStartRef = useRef({ clientX: 0, clientY: 0, initialX: 0, initialY: 0 });
+  const btnHasMovedRef = useRef(false);
+
+  const handleBtnPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    const currentX = btnPos ? btnPos.x : (window.innerWidth - 68);
+    const currentY = btnPos ? btnPos.y : (window.innerHeight - 68);
+
+    btnDragStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      initialX: currentX,
+      initialY: currentY,
+    };
+    btnHasMovedRef.current = false;
+    setIsBtnDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleBtnPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!isBtnDragging) return;
+    const dx = e.clientX - btnDragStartRef.current.clientX;
+    const dy = e.clientY - btnDragStartRef.current.clientY;
+
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      btnHasMovedRef.current = true;
+    }
+
+    const nextX = Math.max(8, Math.min(window.innerWidth - 56, btnDragStartRef.current.initialX + dx));
+    const nextY = Math.max(8, Math.min(window.innerHeight - 56, btnDragStartRef.current.initialY + dy));
+    setBtnPos({ x: nextX, y: nextY });
+  };
+
+  const handleBtnPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!isBtnDragging) return;
+    setIsBtnDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+
+    if (btnHasMovedRef.current) {
+      const finalX = Math.max(8, Math.min(window.innerWidth - 56, btnDragStartRef.current.initialX + (e.clientX - btnDragStartRef.current.clientX)));
+      const finalY = Math.max(8, Math.min(window.innerHeight - 56, btnDragStartRef.current.initialY + (e.clientY - btnDragStartRef.current.clientY)));
+      const posToSave = { x: finalX, y: finalY };
+      setBtnPos(posToSave);
+      try {
+        localStorage.setItem('nemon_debug_btn_pos', JSON.stringify(posToSave));
+      } catch {}
+    } else {
+      setIsOpen(!isOpen);
+    }
+  };
+
+  // Adjust button on window resize so it never stays outside viewport
+  useEffect(() => {
+    const handleResize = () => {
+      setBtnPos(prev => {
+        if (!prev) return null;
+        return {
+          x: Math.max(8, Math.min(window.innerWidth - 56, prev.x)),
+          y: Math.max(8, Math.min(window.innerHeight - 56, prev.y)),
+        };
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const dragStart = useRef({ x: 0, y: 0 });
   const positionStart = useRef({ x: 0, y: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -145,15 +232,24 @@ const LogWindow: React.FC<LogWindowProps> = ({ dailyUsage, isOpen, setIsOpen }) 
 
   return (
     <>
-      {/* Floating Toggle Button */}
+      {/* Floating Toggle Button (Arraste livre para qualquer lugar da tela) */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-4 right-4 z-[9998] p-3 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 group/btn max-sm:hidden"
-        title="Painel de Debug"
+        onPointerDown={handleBtnPointerDown}
+        onPointerMove={handleBtnPointerMove}
+        onPointerUp={handleBtnPointerUp}
+        style={
+          btnPos
+            ? { left: `${btnPos.x}px`, top: `${btnPos.y}px`, right: 'auto', bottom: 'auto' }
+            : { right: '16px', bottom: '16px' }
+        }
+        className={`fixed z-[9998] p-3 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-white shadow-2xl flex items-center justify-center transition-transform duration-100 group/btn max-sm:hidden touch-none select-none ${
+          isBtnDragging ? 'cursor-grabbing scale-105 shadow-cyan-500/20 shadow-xl ring-2 ring-cyan-500/50' : 'cursor-grab hover:scale-110 active:scale-95'
+        }`}
+        title="Logs & Diagnósticos (Arraste para mover / Clique para abrir)"
       >
-        <Code className="w-5 h-5 text-white group-hover/btn:scale-110 transition-transform" />
+        <Code className="w-5 h-5 text-white pointer-events-none group-hover/btn:scale-110 transition-transform" />
         {logs.length > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black rounded-full h-5 w-5 flex items-center justify-center border border-zinc-950 animate-pulse">
+          <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black rounded-full h-5 w-5 flex items-center justify-center border border-zinc-950 animate-pulse pointer-events-none">
             {logs.length}
           </span>
         )}
