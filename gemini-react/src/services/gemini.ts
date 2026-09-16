@@ -1577,11 +1577,11 @@ export async function performWebSearch(
   const systemInstruction =
     `Você é um mecanismo de pesquisa factual de alta precisão. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web. ` +
     `ÂNCORA TEMPORAL: Hoje é ${formattedDate}, ${formattedTime} (Ano: ${currentYear}). ` +
-    `REGRA DE ATUALIDADE E RIGOR: Busque e priorize informações, dados e tabelas atualizados para o ano de ${currentYear}. ` +
-    `Relate estritamente dados e evidências concretas, rejeitando clichês vagos de 'empate' ou 'disputa acirrada' que não correspondam aos números ou fatos demonstrados. ` +
+    `Busque e priorize informações e dados atualizados para o ano de ${currentYear}. ` +
+    `Relate estritamente os fatos e dados concretos encontrados nas fontes mais recentes. ` +
     `DIRETRIZES DE FERRAMENTAS: Limite a no máximo 3 chamadas da ferramenta search para obter links. O uso da ferramenta fetch para acessar e ler o conteúdo das páginas é ILIMITADO. ` +
     `Vá direto ao ponto com fatos verificados, sem introduções nem conclusões.`;
-  const prompt = `Pesquise na web (ano de referência: ${currentYear}) e resuma com rigor factual os dados e informações mais relevantes e atuais para responder: "${query}". Priorize dados concretos e tabelas, descartando generalizações vagas.`;
+  const prompt = `Pesquise na web (ano de referência: ${currentYear}) e resuma com rigor factual os dados e informações mais recentes para responder: "${query}".`;
 
   let summary = "";
   const sourceMap = new Map<string, { title: string; uri: string }>();
