@@ -3770,7 +3770,7 @@ function App() {
         </div>
       </aside>
 
-      <main className="main-content flex flex-col h-full w-full bg-(--bg-main)">
+      <main className="main-content flex flex-col h-full w-full min-w-0 max-w-full bg-(--bg-main) overflow-hidden">
         <header className="h-[46px] flex justify-between items-center px-3 md:px-5 border-b border-(--border-light) relative z-50 bg-(--bg-main)/80 backdrop-blur-md">
           <div className="flex-1 flex items-center gap-4">
             {!isSidebarOpen && (
@@ -3927,7 +3927,7 @@ function App() {
 
         {/* Removida a fita de LED do topo */}
 
-        <div className="flex-1 overflow-hidden flex flex-col relative">
+        <div className="flex-1 min-w-0 max-w-full overflow-hidden flex flex-col relative">
           {activeTab === 'code' ? (
             <CodeIdeView
               onBackToChat={() => { setActiveTab('chat'); setIsSidebarOpen(true); }}
@@ -4027,7 +4027,7 @@ function App() {
             />
           ) : (
             <>
-              <div className="flex-1 overflow-hidden flex flex-col relative">
+              <div className="flex-1 min-w-0 max-w-full overflow-hidden flex flex-col relative">
                 {isLiveActive && !isLiveDetached ? (
                   <LiveView
                     status={liveStatus}

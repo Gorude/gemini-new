@@ -268,14 +268,14 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   /* eslint-enable react-hooks/refs */
 
   return (
-    <div ref={containerRef} id={`msg-${msg.id}`} className={`group/msg relative flex flex-col w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300 animate-message-entrance`}>
+    <div ref={containerRef} id={`msg-${msg.id}`} className={`group/msg relative flex flex-col w-full min-w-0 max-w-full mb-4 ${msg.role === 'ai' ? '' : 'items-end'} transition-all duration-300 animate-message-entrance`}>
       {/* Context Indicator Line */}
       {isContext && (
         <div className="absolute -left-4 top-0 bottom-0 border-l-2 border-(--accent) opacity-0 group-hover/msg:opacity-100 transition-opacity" title="Parte do contexto ativo"></div>
       )}
 
       {msg.role === 'ai' ? (
-        <div className="ai-msg w-full">
+        <div className="ai-msg w-full min-w-0 max-w-full">
           <div className="flex items-center gap-2 mb-2">
             {isGenerating && (
               <div className="w-8 h-8 flex items-center justify-center relative shrink-0" title="Gerando resposta...">
@@ -430,7 +430,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             <div
               onMouseUp={handleMouseUp}
               onClick={handleResponseClick}
-              className="response-body text-(--text-primary) antialiased min-h-[1.5em]"
+              className="response-body text-(--text-primary) antialiased min-h-[1.5em] w-full min-w-0 max-w-full break-words"
               dangerouslySetInnerHTML={{ __html: parsedHtml }}
             />
           ) : null}

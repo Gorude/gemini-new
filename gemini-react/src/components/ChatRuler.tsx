@@ -19,10 +19,10 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
       
       let finalMargin = 0;
       if (activeHandle === 'left') {
-        finalMargin = Math.max(0, Math.min(45, percentage));
+        finalMargin = Math.max(0, Math.min(35, percentage));
       } else {
         const rightPercentage = 100 - percentage;
-        finalMargin = Math.max(0, Math.min(45, rightPercentage));
+        finalMargin = Math.max(0, Math.min(35, rightPercentage));
       }
       
       onMarginChange(parseFloat(finalMargin.toFixed(2)));
@@ -47,6 +47,8 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
     <div className="w-full flex justify-center bg-(--bg-main)">
       <div 
         ref={rulerRef}
+        onDoubleClick={() => onMarginChange(15)}
+        title="Régua de margem do chat (Clique duas vezes para resetar a 15%)"
         className="relative h-6 w-full flex items-center opacity-30 hover:opacity-100 transition-opacity duration-300 select-none cursor-default group"
       >
         {/* The Ruler Line and Ticks */}
@@ -68,6 +70,8 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
         {/* Left Handle */}
         <div 
           onMouseDown={() => setActiveHandle('left')}
+          onDoubleClick={(e) => { e.stopPropagation(); onMarginChange(15); }}
+          title="Margem esquerda (Clique duplo para resetar)"
           className="absolute bottom-0 z-10 cursor-col-resize flex flex-col items-center transition-transform hover:scale-110 active:scale-95"
           style={{ left: `${margin}%`, transform: 'translateX(-50%)' }}
         >
@@ -78,6 +82,8 @@ const ChatRuler: React.FC<ChatRulerProps> = ({ margin, onMarginChange }) => {
         {/* Right Handle */}
         <div 
           onMouseDown={() => setActiveHandle('right')}
+          onDoubleClick={(e) => { e.stopPropagation(); onMarginChange(15); }}
+          title="Margem direita (Clique duplo para resetar)"
           className="absolute bottom-0 z-10 cursor-col-resize flex flex-col items-center transition-transform hover:scale-110 active:scale-95"
           style={{ right: `${margin}%`, transform: 'translateX(50%)' }}
         >

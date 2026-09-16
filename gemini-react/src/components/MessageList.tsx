@@ -163,10 +163,11 @@ const MessageList: React.FC<MessageListProps> = ({
     <section 
       ref={chatWindowRef} 
       onScroll={handleLocalScroll}
-      className="flex-1 overflow-y-auto py-4 space-y-6 custom-scrollbar chat-container-responsive"
+      className="flex-1 min-w-0 max-w-full overflow-y-auto overflow-x-hidden py-4 space-y-6 custom-scrollbar chat-container-responsive"
       style={{ 
         paddingLeft: `calc(${margin}% + 1rem)`, 
-        paddingRight: `calc(${margin}% + 1rem)` 
+        paddingRight: `calc(${margin}% + 1rem)`,
+        boxSizing: 'border-box'
       }}
     >
       {messages.length === 0 && !isLoading ? (

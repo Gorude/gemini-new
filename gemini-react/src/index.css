@@ -4,6 +4,7 @@
 /* Escala de arredondamento global — reduzida para um visual menos circular.
    Todas as utilidades rounded-* (exceto rounded-full) herdam destes valores. */
 @theme {
+  --breakpoint-xs: 28rem;  /* 448px */
   --radius-xs: 0.0625rem;  /* 1px  (era 2px)  */
   --radius-sm: 0.125rem;   /* 2px  (era 4px)  */
   --radius-md: 0.25rem;    /* 4px  (era 6px)  */
@@ -411,7 +412,16 @@ body {
 .user-msg strong, .user-msg b { color: var(--text-user-bold, #ffffff) !important; font-weight: var(--message-bold-weight, 600) !important; }
 
 /* Estilização do Markdown */
-.response-body { font-size: var(--chat-font-size, 15.5px) !important; line-height: 1.65 !important; color: var(--text-primary); white-space: normal !important; }
+.response-body { 
+  font-size: var(--chat-font-size, 15.5px) !important; 
+  line-height: 1.65 !important; 
+  color: var(--text-primary); 
+  white-space: normal !important; 
+  word-break: break-word !important; 
+  overflow-wrap: break-word !important; 
+  max-width: 100% !important; 
+  min-width: 0 !important; 
+}
 .response-body h1 { font-size: 18px !important; font-weight: var(--message-bold-weight, 600) !important; margin: 24px 0 12px 0 !important; color: var(--text-bold); border-bottom: 1px solid var(--border-light); padding-bottom: 6px; letter-spacing: -0.01em; }
 .response-body h2 { font-size: 16.5px !important; font-weight: var(--message-bold-weight, 600) !important; margin: 20px 0 10px 0 !important; color: var(--text-bold); }
 .response-body h3 { font-size: 15.5px !important; font-weight: var(--message-bold-weight, 600) !important; margin: 16px 0 8px 0 !important; color: var(--text-bold); }
@@ -430,15 +440,45 @@ body {
 .response-body li:last-child { margin-bottom: 0 !important; }
 .response-body li > ul, .response-body li > ol { margin-top: 6px !important; margin-bottom: 0 !important; }
 .response-body code { background: var(--inline-code-bg); padding: 2px 6px !important; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.88em; color: var(--text-bold); border: 1px solid var(--code-border); transition: background 0.3s ease; }
-.response-body pre { background: var(--code-bg); padding: 14px !important; border-radius: 10px; margin: 16px 0 !important; overflow-x: auto; border: 1px solid var(--code-border); box-shadow: 0 4px 20px rgba(0,0,0,0.15); transition: background 0.3s ease, border-color 0.3s ease; }
-.response-body pre code { background: transparent !important; padding: 0 !important; border: none !important; }
+.response-body pre { 
+  background: var(--code-bg); 
+  padding: 14px !important; 
+  border-radius: 10px; 
+  margin: 16px 0 !important; 
+  overflow-x: auto !important; 
+  max-width: 100% !important; 
+  min-width: 0 !important; 
+  box-sizing: border-box !important; 
+  border: 1px solid var(--code-border); 
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15); 
+  transition: background 0.3s ease, border-color 0.3s ease; 
+}
+.response-body pre code { 
+  background: transparent !important; 
+  padding: 0 !important; 
+  border: none !important; 
+  max-width: 100% !important; 
+}
 
 /* Bloco de código com botão de copiar "grudento" (sticky) no canto superior direito.
    O wrapper assume a margem do <pre>; o botão fica fora do <pre> (imune ao overflow-x)
    e acompanha a rolagem enquanto o bloco estiver visível. */
-.response-body .code-block { position: relative; margin: 16px 0; }
+.response-body .code-block { 
+  position: relative; 
+  margin: 16px 0; 
+  max-width: 100% !important; 
+  min-width: 0 !important; 
+  overflow: hidden !important; 
+  border-radius: 10px; 
+}
 /* Reserva um espaço no topo do código para o botão não ficar colado/sobre a 1ª linha. */
-.response-body .code-block pre { margin: 0 !important; padding-top: 15px !important; }
+.response-body .code-block pre { 
+  margin: 0 !important; 
+  padding-top: 15px !important; 
+  max-width: 100% !important; 
+  min-width: 0 !important; 
+  box-sizing: border-box !important; 
+}
 .response-body .code-copy-holder {
   position: sticky;
   top: 8px;
@@ -476,6 +516,9 @@ body {
 .table-wrapper {
   display: block;
   width: 100%;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
   overflow-x: auto;
   margin: 20px 0;
   border: 1px solid var(--border-main);

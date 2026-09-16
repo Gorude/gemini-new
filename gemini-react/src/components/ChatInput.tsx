@@ -246,13 +246,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <footer 
-      className="p-3 bg-(--bg-main) relative z-10 chat-container-responsive"
+      className="p-3 bg-(--bg-main) relative z-10 w-full min-w-0 max-w-full chat-container-responsive"
       style={{ 
         paddingLeft: `calc(${margin}% + 1rem)`, 
-        paddingRight: `calc(${margin}% + 1rem)` 
+        paddingRight: `calc(${margin}% + 1rem)`,
+        boxSizing: 'border-box'
       }}
     >
-      <div className="w-full">
+      <div className="w-full min-w-0 max-w-full">
         {pendingFiles.length > 0 && (
           <div className="flex gap-2 mb-2 px-2 flex-wrap">
             {pendingFiles.map((f, i) => (
@@ -427,7 +428,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <div className="flex items-center gap-2 sm:gap-3">
               {!isLiveActive && (
                 <div
-                  className="hidden xs:flex items-center gap-2 px-2.5 py-2 rounded-xl bg-(--bg-chat-hover) border border-(--border-light) shadow-sm shrink-0"
+                  className="hidden sm:flex items-center gap-2 px-2.5 py-2 rounded-xl bg-(--bg-chat-hover) border border-(--border-light) shadow-sm shrink-0"
                   title={`Contexto do chat: ${contextUsed.toLocaleString('pt-BR')} de ${contextMax.toLocaleString('pt-BR')} tokens (${rawPct.toFixed(1)}%)${pendingTokens > 0 ? ` (inclui ~${pendingTokens.toLocaleString('pt-BR')} estimados do texto atual)` : ''}`}
                 >
                   <div className="w-12 sm:w-14 h-2 rounded-full bg-black/40 border border-white/10 overflow-hidden relative shadow-inner flex items-center p-[0.5px]">
