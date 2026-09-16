@@ -1574,17 +1574,14 @@ export async function performWebSearch(
 
   // 2. Fallback: Gemma 4 31B (google_search)
   const model = modelId;
-  const isBenchmarkQuery = /inteligente|melhor(es)?\s+(modelo|ia|llm)|ranking|benchmark|líder/i.test(query);
   const systemInstruction =
     `Você é um mecanismo de pesquisa factual de alta precisão. Use OBRIGATORIAMENTE a ferramenta google_search para buscar na web. ` +
     `ÂNCORA TEMPORAL: Hoje é ${formattedDate}, ${formattedTime} (Ano: ${currentYear}). ` +
-    `REGRA DE ATUALIDADE E RIGOR: Busque e priorize informações, tabelas e dados atualizados para o ano de ${currentYear}. ` +
-    `Em rankings e benchmarks, relate estritamente as pontuações e líderes numéricos reais comprovados por tabelas, rejeitando clichês jornalísticos de 'empate técnico' que não correspondam aos números. ` +
+    `REGRA DE ATUALIDADE E RIGOR: Busque e priorize informações, dados e tabelas atualizados para o ano de ${currentYear}. ` +
+    `Relate estritamente dados e evidências concretas, rejeitando clichês vagos de 'empate' ou 'disputa acirrada' que não correspondam aos números ou fatos demonstrados. ` +
     `DIRETRIZES DE FERRAMENTAS: Limite a no máximo 3 chamadas da ferramenta search para obter links. O uso da ferramenta fetch para acessar e ler o conteúdo das páginas é ILIMITADO. ` +
     `Vá direto ao ponto com fatos verificados, sem introduções nem conclusões.`;
-  const prompt = isBenchmarkQuery
-    ? `Pesquise na web em plataformas e tabelas de benchmark (ano de referência: ${currentYear}) e extraia com rigor analítico os dados quantitativos reais, o Top 5 com scores numéricos e quem de fato lidera o ranking hoje para: "${query}". Relate estritamente as pontuações da tabela mais recente sem inventar empates com marcas que não estão no topo.`
-    : `Pesquise na web (ano de referência: ${currentYear}) e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
+  const prompt = `Pesquise na web (ano de referência: ${currentYear}) e resuma com rigor factual os dados e informações mais relevantes e atuais para responder: "${query}". Priorize dados concretos e tabelas, descartando generalizações vagas.`;
 
   let summary = "";
   const sourceMap = new Map<string, { title: string; uri: string }>();

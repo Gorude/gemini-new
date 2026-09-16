@@ -98,49 +98,8 @@ export function parseDuckDuckGoHtml(html: string): DuckDuckGoResult[] {
 }
 
 /**
- * Detecta se uma consulta busca especificamente benchmarks técnicos ou comparações de inteligência de modelos de IA.
- */
-export function isAiBenchmarkQuery(query: string): boolean {
-  return /benchmark|leaderboard|score\s*aa|artificial\s*analysis|lmsys|arena|mais\s*inteligent|melhor(es)?\s*(modelo|ia|llm)|ranking\s*(de\s*)?(ia|llm|modelos)/i.test(query || '');
-}
-
-/**
- * Avalia se um link deve ser priorizado para o 'fetch' em consultas especializadas de benchmark de IA.
- * Em pesquisas normais (notícias, esportes, política, receitas, etc.), retorna 0 para preservar 
- * 100% da ordem orgânica e autoridade natural do motor de busca.
- */
-export function getFetchPriorityScore(url: string, title: string, query?: string): number {
-  if (!query || !isAiBenchmarkQuery(query)) {
-    // Para pesquisas gerais fora de IA: neutro, preserva a ordem do motor de busca
-    return 0;
-  }
-
-  let score = 0;
-  const lowerUrl = (url || '').toLowerCase();
-  const lowerTitle = (title || '').toLowerCase();
-
-  // Apenas no contexto específico de benchmarks de IA:
-  if (/benchmark|leaderboard|artificialanalysis|lmsys|chatbot-arena|huggingface\.co\/spaces|open-llm|swebench|epochai|paperswithcode|swen\.ia\.br/i.test(lowerUrl)) {
-    score += 25;
-  }
-  if (/benchmark|ranking|leaderboard|score aa|intelligence index|arena/i.test(lowerTitle)) {
-    score += 15;
-  }
-  if (/anthropic\.com|openai\.com|deepmind\.google|meta\.com\/ai|x\.ai/i.test(lowerUrl)) {
-    score += 10;
-  }
-  // Blogs de consumo leigo comentando rankings técnicos
-  if (/techtudo|tecmundo|canaltech|olhardigital|portalprompts|cpdf\.ai|dio\.me|startse/i.test(lowerUrl)) {
-    score -= 10;
-  }
-
-  return score;
-}
-
-/**
  * Formata os resultados do DuckDuckGo em um resumo factual textual + lista de fontes.
- * Preserva a relevância do motor de busca, elevando apenas os resultados cujo conteúdo
- * completo da página foi lido e extraído.
+ * Eleva os resultados cujo conteúdo completo da página foi lido e extraído.
  */
 export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
   summary: string;
@@ -226,12 +185,8 @@ export async function searchDuckDuckGoMcp(
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.results) && data.results.length > 0) {
-        // Enriquecimento com ferramenta 'fetch' (ilimitada): lê conteúdos dos links em paralelo.
-        // Em consultas de benchmark de IA, prioriza fontes técnicas; em consultas normais, mantém o top 3 orgânico.
-        const rankedForFetch = isAiBenchmarkQuery(query)
-          ? [...data.results].sort((a, b) => getFetchPriorityScore(b.uri, b.title, query) - getFetchPriorityScore(a.uri, a.title, query))
-          : data.results;
-        const linksToFetch = rankedForFetch.slice(0, 3);
+        // Enriquecimento com ferramenta 'fetch' (ilimitada): lê conteúdos dos primeiros links orgânicos em paralelo
+        const linksToFetch = data.results.slice(0, 3);
         await Promise.allSettled(linksToFetch.map(async (linkItem: any) => {
           if (!linkItem?.uri) return;
           try {
@@ -395,11 +350,8 @@ export async function executeDuckDuckGoSearch(
 ): Promise<DuckDuckGoSearchOutput | null> {
   const currentYear = new Date().getFullYear();
   let effectiveQuery = query.trim();
-  // Se a busca trata de inteligência, melhores modelos, rankings ou benchmarks:
-  const isBenchmarkQuery = /inteligente|melhor(es)?\s+(modelo|ia|llm)|ranking|benchmark|líder/i.test(effectiveQuery);
-  if (isBenchmarkQuery && !/benchmark|leaderboard/i.test(effectiveQuery)) {
-    effectiveQuery = `${effectiveQuery} benchmark leaderboard ${currentYear}`;
-  } else if (!effectiveQuery.includes(String(currentYear)) && /hoje|atual|recent|últim|nov[oa]s?/i.test(effectiveQuery)) {
+  // Ancoragem temporal universal: se a consulta trata do presente ("hoje", "atual", etc.) e não tem ano, ancora no ano atual
+  if (!effectiveQuery.includes(String(currentYear)) && /hoje|atual|recent|últim|nov[oa]s?/i.test(effectiveQuery)) {
     effectiveQuery = `${effectiveQuery} ${currentYear}`;
   }
 
