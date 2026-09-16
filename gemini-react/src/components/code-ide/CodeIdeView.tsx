@@ -932,6 +932,7 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
               ) : (
                 <div className="flex-1 overflow-hidden">
                   <SandpackCodeEditor
+                    showTabs={false}
                     showLineNumbers
                     showInlineErrors
                     wrapContent
