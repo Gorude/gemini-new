@@ -220,9 +220,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
     0
   );
   const contextUsed = contextTokens + pendingTokens;
-  const contextPct = contextMax > 0 ? Math.min(100, (contextUsed / contextMax) * 100) : 0;
-  // Cor do indicador conforme o preenchimento (verde → âmbar → vermelho).
-  const contextColor = contextPct >= 90 ? '#ef4444' : contextPct >= 70 ? '#f59e0b' : 'var(--accent)';
+  const rawPct = contextMax > 0 ? (contextUsed / contextMax) * 100 : 0;
+  // Garante presença visual mínima visível (mínimo de 4px / ~5%) para janelas gigantes de 1M/2M
+  const contextPct = contextUsed > 0 ? Math.min(100, Math.max(5, rawPct)) : 0;
+  // Cor do indicador conforme o preenchimento (verde esmeralda → âmbar → vermelho).
+  const contextColor = rawPct >= 90 ? '#ef4444' : rawPct >= 70 ? '#f59e0b' : '#10b981';
 
   // Ícones das capacidades do modelo (visão, áudio, arquivos, ferramentas…) no seletor.
   const renderCaps = (modelId: string) => {
@@ -425,11 +427,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <div className="flex items-center gap-2 sm:gap-3">
               {!isLiveActive && (
                 <div
-                  className="hidden sm:flex items-center gap-2 px-2.5 py-2 rounded-xl bg-(--bg-chat-hover) border border-(--border-light) shadow-sm shrink-0"
-                  title={`Contexto do chat: ${contextUsed.toLocaleString('pt-BR')} de ${contextMax.toLocaleString('pt-BR')} tokens${pendingTokens > 0 ? ` (inclui ~${pendingTokens.toLocaleString('pt-BR')} estimados do texto atual)` : ''}`}
+                  className="hidden xs:flex items-center gap-2 px-2.5 py-2 rounded-xl bg-(--bg-chat-hover) border border-(--border-light) shadow-sm shrink-0"
+                  title={`Contexto do chat: ${contextUsed.toLocaleString('pt-BR')} de ${contextMax.toLocaleString('pt-BR')} tokens (${rawPct.toFixed(1)}%)${pendingTokens > 0 ? ` (inclui ~${pendingTokens.toLocaleString('pt-BR')} estimados do texto atual)` : ''}`}
                 >
-                  <div className="w-10 h-1.5 rounded-full bg-(--border-light) overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-300" style={{ width: `${contextPct}%`, background: contextColor }}></div>
+                  <div className="w-12 sm:w-14 h-2 rounded-full bg-black/40 border border-white/10 overflow-hidden relative shadow-inner flex items-center p-[0.5px]">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${contextPct}%`,
+                        minWidth: contextUsed > 0 ? '5px' : '0',
+                        backgroundColor: contextColor,
+                        boxShadow: contextUsed > 0 ? `0 0 6px ${contextColor}99` : 'none',
+                      }}
+                    />
                   </div>
                   <span className="text-[10px] font-medium text-(--text-secondary) tabular-nums whitespace-nowrap">
                     {formatTokenCount(contextUsed)}/{formatTokenCount(contextMax)}
