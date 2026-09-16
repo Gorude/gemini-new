@@ -98,6 +98,39 @@ export function parseDuckDuckGoHtml(html: string): DuckDuckGoResult[] {
 }
 
 /**
+ * Avalia a qualidade e autoridade técnica de um link para pesquisa de IA e benchmarks.
+ * Prioriza plataformas primárias de avaliação sobre blogs e portais jornalísticos generalistas de consumo.
+ */
+export function getUrlTechnicalQuality(url: string, title: string): number {
+  let score = 0;
+  const lowerUrl = (url || '').toLowerCase();
+  const lowerTitle = (title || '').toLowerCase();
+
+  // Plataformas primárias de benchmark, métricas e avaliação independente
+  if (/benchmark|leaderboard|artificialanalysis|lmsys|chatbot-arena|huggingface\.co\/spaces|open-llm|swebench|epochai|paperswithcode|swen\.ia\.br/i.test(lowerUrl)) {
+    score += 25;
+  }
+  if (/benchmark|ranking|leaderboard|score aa|intelligence index|arena/i.test(lowerTitle)) {
+    score += 15;
+  }
+
+  // Laboratórios oficiais de IA
+  if (/anthropic\.com|openai\.com|deepmind\.google|meta\.com\/ai|x\.ai/i.test(lowerUrl)) {
+    score += 10;
+  }
+
+  // Portais generalistas de notícias de consumo e entretenimento (comentários secundários, defasados em semanas ou meses)
+  if (/techtudo|tecmundo|canaltech|olhardigital|globo\.com|uol\.com|exame\.com|folha|estadao/i.test(lowerUrl)) {
+    score -= 15;
+  }
+  if (/portalprompts|cpdf\.ai|dio\.me|startse/i.test(lowerUrl)) {
+    score -= 8;
+  }
+
+  return score;
+}
+
+/**
  * Formata os resultados do DuckDuckGo em um resumo factual textual + lista de fontes.
  */
 export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
@@ -105,9 +138,19 @@ export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
   sources: { title: string; uri: string }[];
 } {
   const sources: { title: string; uri: string }[] = [];
+
+  // Ordena os resultados para que dados com tabelas/conteúdo técnico extraído fiquem no topo
+  const sorted = [...results].sort((a, b) => {
+    const hasContentA = (a.snippet && a.snippet.includes('[Conteúdo da página]')) ? 20 : 0;
+    const hasContentB = (b.snippet && b.snippet.includes('[Conteúdo da página]')) ? 20 : 0;
+    const qA = getUrlTechnicalQuality(a.uri, a.title) + hasContentA;
+    const qB = getUrlTechnicalQuality(b.uri, b.title) + hasContentB;
+    return qB - qA;
+  });
+
   const lines: string[] = [];
 
-  for (const r of results) {
+  for (const r of sorted) {
     if (!sources.some(s => s.uri === r.uri)) {
       sources.push({ title: r.title, uri: r.uri });
     }
@@ -119,9 +162,6 @@ export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
   return { summary, sources };
 }
 
-/**
- * Tenta buscar através de um servidor MCP local (MCP Server Bridge).
- */
 /**
  * Tenta buscar através de um servidor MCP local (MCP Server Bridge).
  * Verifica primeiro o endpoint de saúde com timeout curto para evitar poluir o console do navegador
@@ -180,7 +220,11 @@ export async function searchDuckDuckGoMcp(
       const data = await res.json();
       if (Array.isArray(data.results) && data.results.length > 0) {
         // Enriquecimento com ferramenta 'fetch' (ilimitada): lê conteúdos dos links em paralelo
-        const linksToFetch = data.results.slice(0, 3);
+        // Prioriza fontes com maior autoridade técnica (benchmarks, tabelas, rankings oficiais)
+        const rankedForFetch = [...data.results].sort((a, b) => {
+          return getUrlTechnicalQuality(b.uri, b.title) - getUrlTechnicalQuality(a.uri, a.title);
+        });
+        const linksToFetch = rankedForFetch.slice(0, 3);
         await Promise.allSettled(linksToFetch.map(async (linkItem: any) => {
           if (!linkItem?.uri) return;
           try {
@@ -344,8 +388,11 @@ export async function executeDuckDuckGoSearch(
 ): Promise<DuckDuckGoSearchOutput | null> {
   const currentYear = new Date().getFullYear();
   let effectiveQuery = query.trim();
-  // Se a busca trata do estado atual ou modelos recentes e não menciona o ano, ancora no ano corrente
-  if (!effectiveQuery.includes(String(currentYear)) && /hoje|atual|recent|últim|nov[oa]s?|ranking|melhor|inteligente/i.test(effectiveQuery)) {
+  // Se a busca trata de inteligência, melhores modelos, rankings ou benchmarks:
+  const isBenchmarkQuery = /inteligente|melhor(es)?\s+(modelo|ia|llm)|ranking|benchmark|líder/i.test(effectiveQuery);
+  if (isBenchmarkQuery && !/benchmark|leaderboard/i.test(effectiveQuery)) {
+    effectiveQuery = `${effectiveQuery} benchmark leaderboard ${currentYear}`;
+  } else if (!effectiveQuery.includes(String(currentYear)) && /hoje|atual|recent|últim|nov[oa]s?/i.test(effectiveQuery)) {
     effectiveQuery = `${effectiveQuery} ${currentYear}`;
   }
 
