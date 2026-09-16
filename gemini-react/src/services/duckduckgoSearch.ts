@@ -112,12 +112,28 @@ export function formatDuckDuckGoSummary(results: DuckDuckGoResult[]): {
 /**
  * Tenta buscar através de um servidor MCP local (MCP Server Bridge).
  */
+/**
+ * Tenta buscar através de um servidor MCP local (MCP Server Bridge).
+ * Verifica primeiro o endpoint de saúde com timeout curto para evitar poluir o console do navegador
+ * com ERR_CONNECTION_REFUSED caso o bridge local não esteja em execução.
+ */
 export async function searchDuckDuckGoMcp(
   query: string,
   mcpEndpoint: string = globalMcpEndpoint,
   signal?: AbortSignal
 ): Promise<{ summary: string; sources: { title: string; uri: string }[] } | null> {
   const endpoint = (mcpEndpoint || 'http://localhost:3333').replace(/\/+$/, '');
+
+  // 0. Probe rápido de saúde (1.2s): se o servidor não estiver online, não gera múltiplos erros de conexão
+  try {
+    const healthSig = AbortSignal.timeout(1200);
+    const combinedHealth = signal ? AbortSignal.any([signal, healthSig]) : healthSig;
+    const healthRes = await fetch(`${endpoint}/health`, { method: 'GET', signal: combinedHealth });
+    if (!healthRes.ok) return null;
+  } catch {
+    // Bridge MCP não está em execução no momento
+    return null;
+  }
 
   // 1. Tenta POST /search simplificado do bridge
   try {
@@ -138,7 +154,7 @@ export async function searchDuckDuckGoMcp(
       }
     }
   } catch {
-    // Falha silenciosa no /search, tenta o protocolo JSON-RPC standard do MCP
+    // Falha no /search, tenta o protocolo JSON-RPC standard do MCP
   }
 
   // 2. Tenta protocolo standard do MCP: POST /tools/call
@@ -199,7 +215,8 @@ export async function searchDuckDuckGoMcp(
 }
 
 /**
- * Tenta buscar diretamente no DuckDuckGo Web via proxy Vite local ou proxies CORS públicos.
+ * Tenta buscar diretamente no DuckDuckGo Web via proxy local (/api/duckduckgo)
+ * ou via API Instantânea oficial do DuckDuckGo (suporta CORS nativamente).
  */
 export async function searchDuckDuckGoWeb(
   query: string,
@@ -207,28 +224,57 @@ export async function searchDuckDuckGoWeb(
 ): Promise<{ summary: string; sources: { title: string; uri: string }[] } | null> {
   const encoded = encodeURIComponent(query);
 
-  const targets = [
-    `/api/duckduckgo?q=${encoded}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encoded}`)}`,
-    `https://corsproxy.io/?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encoded}`)}`
-  ];
+  // 1. Tenta proxy local do Vite (/api/duckduckgo)
+  try {
+    const timeoutSig = AbortSignal.timeout(3500);
+    const combinedSignal = signal ? AbortSignal.any([signal, timeoutSig]) : timeoutSig;
+    const res = await fetch(`/api/duckduckgo?q=${encoded}`, { signal: combinedSignal });
+    if (res.ok) {
+      const html = await res.text();
+      const results = parseDuckDuckGoHtml(html);
+      if (results.length > 0) {
+        return formatDuckDuckGoSummary(results);
+      }
+    }
+  } catch {
+    // Continua para a API nativa CORS do DuckDuckGo
+  }
 
-  for (const url of targets) {
-    try {
-      const timeoutSig = AbortSignal.timeout(4500);
-      const combinedSignal = signal ? AbortSignal.any([signal, timeoutSig]) : timeoutSig;
+  // 2. Tenta a API Instantânea do DuckDuckGo (suporta CORS nativamente sem proxies)
+  try {
+    const timeoutSig = AbortSignal.timeout(3000);
+    const combinedSignal = signal ? AbortSignal.any([signal, timeoutSig]) : timeoutSig;
+    const res = await fetch(`https://api.duckduckgo.com/?q=${encoded}&format=json`, { signal: combinedSignal });
+    if (res.ok) {
+      const data = await res.json();
+      const results: DuckDuckGoResult[] = [];
 
-      const res = await fetch(url, { signal: combinedSignal });
-      if (res.ok) {
-        const html = await res.text();
-        const results = parseDuckDuckGoHtml(html);
-        if (results.length > 0) {
-          return formatDuckDuckGoSummary(results);
+      if (data.AbstractText && (data.AbstractURL || data.Heading)) {
+        results.push({
+          title: data.Heading || query,
+          uri: data.AbstractURL || `https://duckduckgo.com/?q=${encoded}`,
+          snippet: data.AbstractText
+        });
+      }
+
+      if (Array.isArray(data.RelatedTopics)) {
+        for (const t of data.RelatedTopics) {
+          if (t.Text && t.FirstURL && results.length < 5) {
+            results.push({
+              title: t.Text.slice(0, 70),
+              uri: t.FirstURL,
+              snippet: t.Text
+            });
+          }
         }
       }
-    } catch {
-      // Tenta próximo mirror
+
+      if (results.length > 0) {
+        return formatDuckDuckGoSummary(results);
+      }
     }
+  } catch {
+    // Falha silenciosa
   }
 
   return null;

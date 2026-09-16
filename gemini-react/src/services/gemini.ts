@@ -1567,31 +1567,76 @@ export async function performWebSearch(
     "conclusões. Não invente; baseie-se somente nos resultados da busca.";
   const prompt = `Pesquise na web e resuma de forma concisa as informações mais relevantes e atuais para responder: "${query}"`;
 
-  // Teto de tokens baixo intencional: o resumo é curto, gerando muito mais rápido.
-  const gen = streamGeminiContent(
-    prompt,
-    model,
-    [],
-    systemInstruction,
-    [],
-    true,
-    signal,
-    false,
-    false,
-    manualApiKey,
-    1024,
-  );
   let summary = "";
   const sourceMap = new Map<string, { title: string; uri: string }>();
-  for await (const chunk of gen) {
-    if (chunk.text) summary += chunk.text;
-    if (chunk.sources) {
-      chunk.sources.forEach((s) => {
-        if (s.uri && !sourceMap.has(s.uri))
-          sourceMap.set(s.uri, { title: s.title || s.uri, uri: s.uri });
-      });
+
+  try {
+    // Teto de tokens ampliado para 4096: o Gemma consome tokens de raciocínio antes de emitir a resposta.
+    const gen = streamGeminiContent(
+      prompt,
+      model,
+      [],
+      systemInstruction,
+      [],
+      true,
+      signal,
+      true,
+      false,
+      manualApiKey,
+      4096,
+    );
+    for await (const chunk of gen) {
+      if (chunk.text) summary += chunk.text;
+      if (chunk.sources) {
+        chunk.sources.forEach((s) => {
+          if (s.uri && !sourceMap.has(s.uri))
+            sourceMap.set(s.uri, { title: s.title || s.uri, uri: s.uri });
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Falha no fallback de busca (Gemma 4 31B):", err);
+  }
+
+  // Se o Gemma retornou resumo ou fontes, retorna com sucesso
+  if (summary.trim() || sourceMap.size > 0) {
+    return { 
+      summary: summary.trim(), 
+      sources: [...sourceMap.values()],
+      provider: 'gemma-fallback'
+    };
+  }
+
+  // 3. Fallback de segurança: Gemini 2.5 Flash caso o Gemma 4 não consiga buscar
+  if (model !== "gemini-2.5-flash") {
+    try {
+      const flashGen = streamGeminiContent(
+        prompt,
+        "gemini-2.5-flash",
+        [],
+        systemInstruction,
+        [],
+        true,
+        signal,
+        false,
+        false,
+        manualApiKey,
+        2048,
+      );
+      for await (const chunk of flashGen) {
+        if (chunk.text) summary += chunk.text;
+        if (chunk.sources) {
+          chunk.sources.forEach((s) => {
+            if (s.uri && !sourceMap.has(s.uri))
+              sourceMap.set(s.uri, { title: s.title || s.uri, uri: s.uri });
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Falha no fallback de segurança Gemini Flash:", e);
     }
   }
+
   return { 
     summary: summary.trim(), 
     sources: [...sourceMap.values()],

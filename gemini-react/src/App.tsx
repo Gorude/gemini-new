@@ -1223,6 +1223,8 @@ function App() {
   // Timer de debounce para persistência no Firestore. Evita gravar o documento inteiro
   // do chat a cada chunk do streaming (o que estourava "maximum allowed queued writes").
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isWritingChatsRef = useRef(false);
+  const pendingFlushRef = useRef(false);
 
   // Load Initial Data from Firestore on Auth State Change
   useEffect(() => {
@@ -1411,47 +1413,76 @@ function App() {
       return;
     }
 
-    // Captura o estado mais recente para gravar quando o debounce disparar.
+    // Se a IA estiver gerando resposta (streaming ativo), NÃO persiste no Firestore
+    // a cada chunk/frame. O estado em memória garante a UI fluida e sem travar.
+    // Marcamos que há persistência pendente para quando a resposta terminar.
+    if (isLoading) {
+      pendingFlushRef.current = true;
+      return;
+    }
+
     const snapshot = chats;
 
-    const flush = () => {
-      // 1. Detect deleted chats
-      const deletedChats = previousChatsRef.current.filter(prevChat => !snapshot.some(c => c.id === prevChat.id));
-      deletedChats.forEach(async (chat) => {
-        const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
-        await deleteDoc(chatDocRef).catch(e => console.error("Erro ao deletar chat no Firestore:", e));
-      });
-
-      // 2. Detect updated or new chats
-      snapshot.forEach(async (chat) => {
-        const prevChat = previousChatsRef.current.find(c => c.id === chat.id);
-        if (!prevChat || JSON.stringify(prevChat) !== JSON.stringify(chat)) {
-          const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
-          await setDoc(chatDocRef, chat).catch(e => console.error("Erro ao salvar chat no Firestore:", e));
-        }
-      });
-
-      // 3. Save sidebar order if changed
-      const currentOrder = snapshot.map(c => c.id);
-      const prevOrder = previousChatsRef.current.map(c => c.id);
-      if (JSON.stringify(currentOrder) !== JSON.stringify(prevOrder)) {
-        const userDocRef = doc(db, 'users', uid);
-        updateDoc(userDocRef, { sidebarOrder: currentOrder }).catch(e => console.error("Erro ao salvar ordem no Firestore:", e));
+    const flush = async () => {
+      if (isWritingChatsRef.current) {
+        if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = setTimeout(flush, 500);
+        return;
       }
+      isWritingChatsRef.current = true;
+      pendingFlushRef.current = false;
 
-      previousChatsRef.current = snapshot;
+      try {
+        // 1. Detect deleted chats
+        const deletedChats = previousChatsRef.current.filter(prevChat => !snapshot.some(c => c.id === prevChat.id));
+        for (const chat of deletedChats) {
+          const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
+          await deleteDoc(chatDocRef).catch(e => console.error("Erro ao deletar chat no Firestore:", e));
+        }
+
+        // 2. Detect updated or new chats - grava sequencialmente apenas os que mudaram
+        for (const chat of snapshot) {
+          const prevChat = previousChatsRef.current.find(c => c.id === chat.id);
+          if (!prevChat || prevChat !== chat) {
+            const hasChanged = !prevChat 
+              || prevChat.messages.length !== chat.messages.length
+              || prevChat.title !== chat.title
+              || prevChat.folderId !== chat.folderId
+              || prevChat.pinned !== chat.pinned
+              || prevChat.contextTokens !== chat.contextTokens
+              || JSON.stringify(prevChat) !== JSON.stringify(chat);
+
+            if (hasChanged) {
+              const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
+              await setDoc(chatDocRef, chat).catch(e => console.error("Erro ao salvar chat no Firestore:", e));
+            }
+          }
+        }
+
+        // 3. Save sidebar order if changed
+        const currentOrder = snapshot.map(c => c.id);
+        const prevOrder = previousChatsRef.current.map(c => c.id);
+        if (JSON.stringify(currentOrder) !== JSON.stringify(prevOrder)) {
+          const userDocRef = doc(db, 'users', uid);
+          await updateDoc(userDocRef, { sidebarOrder: currentOrder }).catch(e => console.error("Erro ao salvar ordem no Firestore:", e));
+        }
+
+        previousChatsRef.current = snapshot;
+      } catch (e) {
+        console.error("Erro ao salvar chats no Firestore:", e);
+      } finally {
+        isWritingChatsRef.current = false;
+      }
     };
 
-    // Debounce: durante o streaming o `chats` muda a cada chunk. Reagendamos a gravação
-    // a cada mudança, então o Firestore só recebe UMA escrita ~800ms após a resposta
-    // assentar — em vez de centenas de escritas do documento inteiro por resposta.
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-    persistTimerRef.current = setTimeout(flush, 800);
+    const delay = pendingFlushRef.current ? 300 : 1000;
+    persistTimerRef.current = setTimeout(flush, delay);
 
     return () => {
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
-  }, [chats, isAuthLoading, isInitialLoading]);
+  }, [chats, isLoading, isAuthLoading, isInitialLoading]);
 
   // Sync Preferences/Settings to Firestore
   useEffect(() => {
