@@ -195,6 +195,9 @@ async function directDuckDuckGoSearch(query, count = 50) {
 
     for (let i = 1; i < blocks.length && results.length < count; i++) {
       const b = blocks[i];
+      // Ignora blocos de anúncios patrocinados
+      if (/result--ad|highlight_ad|badge--ad/i.test(b)) continue;
+
       const linkMatch = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
       const snippetMatch = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
 
@@ -207,7 +210,13 @@ async function directDuckDuckGoSearch(query, count = 50) {
             if (realUrl) rawUrl = decodeURIComponent(realUrl);
           } catch {}
         }
+        // Ignora links de rastreamento de anúncio ou ajuda do DDG
+        if (/duckduckgo\.com\/(y\.js|duckduckgo-help-pages)/i.test(rawUrl) || /bing\.com\/aclick/i.test(rawUrl) || /ad_provider=/i.test(rawUrl)) {
+          continue;
+        }
         const title = linkMatch[2].replace(/<[^>]+>/g, '').trim();
+        if (/^(more info|anúncio|patrocinado|ad)$/i.test(title)) continue;
+
         const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, '').trim() : '';
         if (title && rawUrl) {
           results.push({ title, uri: rawUrl, snippet });
@@ -244,7 +253,7 @@ async function directFetchUrl(url) {
       .replace(/&quot;/g, '"')
       .replace(/\s+/g, ' ')
       .trim();
-    return clean.slice(0, 3000);
+    return clean.slice(0, 4500);
   } catch (err) {
     return `[Erro ao ler ${url}: ${err.message}]`;
   }

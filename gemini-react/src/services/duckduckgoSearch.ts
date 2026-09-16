@@ -59,6 +59,9 @@ export function parseDuckDuckGoHtml(html: string): DuckDuckGoResult[] {
   const blocks = html.split('class="result ');
   for (let i = 1; i < blocks.length; i++) {
     const b = blocks[i];
+    // Ignora blocos de anúncios patrocinados
+    if (/result--ad|highlight_ad|badge--ad/i.test(b)) continue;
+
     const linkMatch = b.match(/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
     const snippetMatch = b.match(/<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i);
 
@@ -75,7 +78,14 @@ export function parseDuckDuckGoHtml(html: string): DuckDuckGoResult[] {
         }
       }
 
+      // Ignora links de rastreamento de anúncio ou ajuda do DDG
+      if (/duckduckgo\.com\/(y\.js|duckduckgo-help-pages)/i.test(rawUrl) || /bing\.com\/aclick/i.test(rawUrl) || /ad_provider=/i.test(rawUrl)) {
+        continue;
+      }
+
       const title = unescapeHtml(linkMatch[2]);
+      if (/^(more info|anúncio|patrocinado|ad)$/i.test(title.trim())) continue;
+
       const snippet = snippetMatch ? unescapeHtml(snippetMatch[1]) : '';
 
       if (title && rawUrl) {
@@ -183,7 +193,7 @@ export async function searchDuckDuckGoMcp(
             if (fetchRes.ok) {
               const fetchJson = await fetchRes.json();
               if (fetchJson.content) {
-                linkItem.snippet = (linkItem.snippet ? `${linkItem.snippet}\n` : '') + `[Conteúdo principal]: ${fetchJson.content.slice(0, 1200)}`;
+                linkItem.snippet = (linkItem.snippet ? `${linkItem.snippet}\n` : '') + `[Conteúdo da página]: ${fetchJson.content.slice(0, 3500)}`;
               }
             }
           } catch {}
