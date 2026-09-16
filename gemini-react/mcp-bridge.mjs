@@ -44,11 +44,12 @@ function startMcpProcess() {
     let cmd = mcpConfig.command;
     let args = mcpConfig.args || [];
 
-    // Se o comando for flatpak-spawn mas estivermos no Windows ou sem flatpak:
-    if (cmd === 'flatpak-spawn' && process.platform === 'win32') {
-      console.log('ℹ️ flatpak-spawn detectado no Windows. Adaptando para uvx/direct search.');
-      cmd = 'uvx';
-      args = ['duckduckgo-mcp-server'];
+    // Se estiver no Windows ou comando for flatpak-spawn fora do Linux:
+    // Não tenta chamar Python/uvx (evita erro de permissão 'Acesso negado' do sistema).
+    if (process.platform === 'win32' || (cmd === 'flatpak-spawn' && process.platform !== 'linux') || cmd === 'builtin') {
+      console.log('⚡ Utilizando motor nativo Node.js para DuckDuckGo (100% JavaScript, sem dependência de Python).');
+      isMcpAlive = true;
+      return;
     }
 
     console.log(`🚀 Iniciando processo MCP: ${cmd} ${args.join(' ')}`);
@@ -58,15 +59,15 @@ function startMcpProcess() {
     });
 
     mcpProcess.on('error', (err) => {
-      console.warn(`⚠️ Não foi possível iniciar processo MCP (${cmd}): ${err.message}. O bridge usará fallback direto via Node.js.`);
-      isMcpAlive = false;
+      console.warn(`⚠️ Não foi possível iniciar processo MCP (${cmd}): ${err.message}. O bridge usará o motor nativo Node.js.`);
+      isMcpAlive = true; // continua respondendo via Node.js
     });
 
     mcpProcess.on('exit', (code) => {
       if (code !== 0) {
         console.log(`Processo MCP finalizado (código ${code}). O bridge continuará atendendo buscas via Node.js.`);
       }
-      isMcpAlive = false;
+      isMcpAlive = true; // continua respondendo via Node.js
     });
 
     let buffer = '';
