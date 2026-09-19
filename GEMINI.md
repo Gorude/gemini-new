@@ -103,3 +103,18 @@ When directives conflict, resolve them in this exact descending order:
 - Deliver the working solution immediately. Strip introductory conversational preambles, greetings, and post-implementation summaries.
 - State the exact target file path clearly above each code block.
 - Provide immediately deployable, functionally complete code.
+
+# 13. UI Design Standards & Aesthetic Governance
+- Visual DNA & Styling Authority:
+  - Deliver minimalist, obsidian/charcoal dark-first interfaces with high information density, micro-typography, crisp hairline borders (`var(--border-light)`), and subtle glassmorphism.
+  - All styling must consume canonical CSS theme variables (`--bg-main`, `--bg-sidebar`, `--border-light`, `--border-main`, `--text-primary`, `--text-secondary`, `--text-bold`, `--accent`).
+  - Follow the reduced border-radius design system (`--radius-sm` to `--radius-2xl`: 2px to 8px). Avoid bubbly, oversized pill buttons.
+- Strict Anti-Patterns (Banned AI Clichés):
+  - NEVER use generic AI sparkles (`✨`, `Sparkles`, `Wand2`, star clusters) on actions, buttons, chips, or inputs. Tools and actions are technical and engineering-driven, not magic tricks. Use functional, context-specific icons (`Wrench`, `Terminal`, `Sliders`, `Code2`, `Cpu`, `Send`).
+  - NEVER introduce rogue out-of-palette neon or amber colors (`bg-amber-500/15`, `border-amber-500/35`, `text-amber-300`, `text-yellow-400`, neon purple/cyan glows) that clash with the dark monochromatic theme.
+  - NEVER add unsolicited emojis (`✨`, `🚀`, `🔥`, `⚡`, `🤖`) to labels, buttons, or technical logs.
+  - NEVER use intense, oversized diffuse drop shadows or colored neon glow filters (`shadow-[0_0_20px_...]`). Shadows must be deep, neutral, and ambient.
+- Form Controls & Component Blueprints:
+  - Toggles and switches must be native micro-switches: compact outer track (`w-6 h-3.5` or `w-7 h-4`), sliding white knob (`w-2.5 h-2.5 bg-white rounded-full shadow-xs`), unified container (`bg-(--bg-main) border border-(--border-light) hover:border-(--border-main) rounded-lg`), with subtle semantic green/zinc active state, never shouting text inside colored bubbles.
+  - Brand Iconography: The Nemon logo (`<NemonIcon>`) is the exclusive mark of Nemon intelligence (270° white main arc + 90° detached `#FF5500` orange slice). When loading or generating, use `<NemonIcon animated size={...} />`.
+

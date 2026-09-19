@@ -9,7 +9,7 @@ import {
   XCircle,
   Copy,
   Check,
-  Sparkles,
+  Wrench,
 } from 'lucide-react';
 
 export interface PreviewLogItem {
@@ -340,10 +340,10 @@ export const NativePreviewRunner: React.FC<NativePreviewRunnerProps> = ({
                   type="button"
                   onClick={onSendErrorsToModel}
                   disabled={_isGenerating}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-[11px] font-sans font-medium transition cursor-pointer active:scale-95 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-[11px] font-sans font-medium transition cursor-pointer active:scale-95 disabled:opacity-50"
                   title="Mandar erros de execução do preview diretamente para o modelo corrigir"
                 >
-                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <Wrench className="w-3 h-3 text-red-300" />
                   <span>Mandar pro modelo</span>
                 </button>
               )}

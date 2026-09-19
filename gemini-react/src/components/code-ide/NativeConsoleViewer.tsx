@@ -6,7 +6,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Info,
-  Sparkles,
+  Wrench,
 } from 'lucide-react';
 import type { PreviewLogItem } from './NativePreviewRunner';
 
@@ -100,7 +100,7 @@ export const NativeConsoleViewer: React.FC<NativeConsoleViewerProps> = ({
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-sans font-medium transition cursor-pointer active:scale-95 shadow-2xs"
               title="Mandar estes erros de runtime para o modelo analisar e corrigir os arquivos"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <Wrench className="w-3.5 h-3.5 text-red-300" />
               <span>Mandar erros para o modelo</span>
             </button>
           )}

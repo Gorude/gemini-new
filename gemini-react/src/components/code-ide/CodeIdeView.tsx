@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   ArrowLeft,
-  Sparkles,
+  Wrench,
   Send,
   Square,
   RotateCcw,
@@ -928,15 +928,23 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
               <button
                 type="button"
                 onClick={handleToggleAutoFix}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all border cursor-pointer ${
-                  isAutoFixEnabled
-                    ? 'bg-amber-500/15 border-amber-500/35 text-amber-300 hover:bg-amber-500/25'
-                    : 'bg-zinc-800/60 border-zinc-700/50 text-zinc-400 hover:text-zinc-200'
-                }`}
-                title={`Auto-Fix: ${isAutoFixEnabled ? 'Ativado' : 'Desativado'} (quando ativado, o harness envia os erros de console automaticamente para o modelo)`}
+                className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-(--bg-main) border border-(--border-light) hover:border-(--border-main) text-(--text-secondary) hover:text-(--text-primary) transition-all shadow-2xs cursor-pointer select-none"
+                title={`Auto-fix de runtime: ${isAutoFixEnabled ? 'Ativado' : 'Desativado'} (corrige automaticamente falhas de console do preview)`}
               >
-                <Sparkles className={`w-3 h-3 ${isAutoFixEnabled ? 'text-amber-400' : 'text-zinc-500'}`} />
-                <span>Auto-fix: {isAutoFixEnabled ? 'ON' : 'OFF'}</span>
+                <span className="text-[11px] font-medium tracking-tight">Auto-fix</span>
+                <div
+                  className={`w-6 h-3.5 rounded-full transition-colors relative flex items-center px-0.5 ${
+                    isAutoFixEnabled
+                      ? 'bg-emerald-500/80'
+                      : 'bg-zinc-700/60'
+                  }`}
+                >
+                  <div
+                    className={`w-2.5 h-2.5 bg-white rounded-full shadow-xs transition-transform duration-200 ${
+                      isAutoFixEnabled ? 'translate-x-2.5' : 'translate-x-0'
+                    }`}
+                  />
+                </div>
               </button>
 
               <button
@@ -984,8 +992,8 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
           >
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-5 max-w-sm mx-auto">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-red-500/20 border border-amber-500/30 flex items-center justify-center text-2xl shadow-lg">
-                  <Sparkles className="w-7 h-7 text-(--accent-text)" />
+                <div className="w-12 h-12 rounded-xl bg-(--bg-main) border border-(--border-main) flex items-center justify-center shadow-sm">
+                  <NemonIcon size={26} />
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-base font-semibold text-(--text-bold)">
@@ -1006,9 +1014,9 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
                     <button
                       key={promptText}
                       onClick={() => handleSend(promptText)}
-                      className="text-left px-3.5 py-2.5 rounded-xl bg-(--bg-main) hover:bg-(--bg-chat-hover) border border-(--border-light) text-xs text-(--text-secondary) hover:text-(--text-primary) transition-all shadow-2xs hover:scale-[1.01]"
+                      className="text-left px-3.5 py-2 rounded-lg bg-(--bg-main) hover:bg-(--bg-chat-hover) border border-(--border-light) text-xs text-(--text-secondary) hover:text-(--text-primary) transition-all shadow-2xs"
                     >
-                      ✨ {promptText}
+                      <span className="text-(--text-placeholder) font-mono mr-1.5">›</span>{promptText}
                     </button>
                   ))}
                 </div>
@@ -1169,11 +1177,11 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
                         </div>
                       )}
 
-                    {/* Status de auto-correção automática do Harness (sem necessidade de clique do usuário) */}
+                    {/* Status de auto-correção automática do Harness */}
                     {isAutoFixing && (
-                      <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300 mt-2 animate-in fade-in duration-200">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-                        <span>O Harness detectou erros de execução no console do preview e está auto-corrigindo o código automaticamente...</span>
+                      <div className="flex items-center gap-2 p-2.5 rounded-xl bg-(--bg-main) border border-(--border-main) text-xs text-(--text-secondary) mt-2 animate-in fade-in duration-150">
+                        <Wrench className="w-3.5 h-3.5 text-(--text-primary) animate-pulse" />
+                        <span>Auto-corrigindo erros de execução detectados no console do preview...</span>
                       </div>
                     )}
                   </div>
@@ -1207,16 +1215,16 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
               <div className="mb-2.5 p-2 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-between text-xs text-red-300 animate-in fade-in duration-150 shadow-2xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <XCircle className="w-4 h-4 text-red-400 shrink-0" />
-                  <span className="truncate">{consoleStats.errors} erro(s) detectado(s) no console</span>
+                  <span className="truncate font-mono text-[11px]">{consoleStats.errors} erro(s) no console da aplicação</span>
                 </div>
                 <button
                   type="button"
                   onClick={handleManualSendErrors}
                   disabled={isLoading}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 font-medium transition cursor-pointer disabled:opacity-50 shrink-0 ml-2 active:scale-95"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 font-medium transition cursor-pointer disabled:opacity-50 shrink-0 ml-2 active:scale-95"
                   title="Mandar erros de execução para o modelo analisar e corrigir os arquivos"
                 >
-                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <Wrench className="w-3 h-3 text-red-300" />
                   <span>Mandar pro modelo</span>
                 </button>
               </div>
