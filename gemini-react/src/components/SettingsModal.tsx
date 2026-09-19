@@ -807,7 +807,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         spellCheck={false}
                         autoCapitalize="off"
                         autoCorrect="off"
-                        placeholder="http://localhost:3333"
+                        placeholder="https://seu-worker.workers.dev ou http://localhost:3333"
                         className="w-full bg-(--bg-sidebar) border border-(--border-light) rounded-xl py-3 px-3 text-sm text-(--text-primary) outline-none transition-all pr-24"
                         onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
                         onBlur={(e) => e.currentTarget.style.borderColor = ''}
@@ -826,7 +826,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     </div>
                     <p className="text-[10px] text-(--text-placeholder) mt-2">
-                      Endpoint do bridge MCP do <strong>DuckDuckGo</strong>. O Nemon realiza buscas na web priorizando o DuckDuckGo e usando o <strong>Gemma 4 31B</strong> (Google Search) apenas como fallback se a busca falhar. Para iniciar o bridge MCP local configurado com <code>duckduckgo-mcp-server</code> (ou flatpak-spawn), rode <code>npm run mcp</code> no terminal.
+                      Endpoint do bridge MCP do <strong>DuckDuckGo</strong>. Para acessar do celular ou em qualquer lugar sem rodar terminal, use a URL do seu <strong>Cloudflare Worker</strong> (consulte o guia em <code>cloudflare-worker/README.md</code>). Para desenvolvimento local, use <code>http://localhost:3333</code> com <code>npm run mcp</code>.
                     </p>
                   </div>
 

@@ -153,6 +153,12 @@ export async function searchDuckDuckGoMcp(
 
   if (!endpoint) return null;
 
+  // Se o endpoint for HTTP localhost mas a página estiver sob HTTPS (ex: celular ou produção Firebase),
+  // navegadores bloqueiam por Mixed Content (insecure request from secure page).
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && /^http:\/\/(localhost|127\.0\.0\.1)/i.test(endpoint)) {
+    return null;
+  }
+
   // Evita bombardear o console com ERR_CONNECTION_REFUSED a cada busca se o bridge estiver offline
   if (Date.now() - lastMcpOfflineCheck < MCP_OFFLINE_COOLDOWN_MS) {
     return null;
