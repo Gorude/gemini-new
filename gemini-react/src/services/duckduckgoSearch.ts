@@ -201,31 +201,33 @@ export async function searchDuckDuckGoMcp(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query }),
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(4000)]) : AbortSignal.timeout(4000)
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5500)]) : AbortSignal.timeout(5500)
     });
 
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.results) && data.results.length > 0) {
-        // Enriquecimento com ferramenta 'fetch' (ilimitada): lê conteúdos dos primeiros links orgânicos em paralelo
-        const linksToFetch = data.results.slice(0, 3);
-        await Promise.allSettled(linksToFetch.map(async (linkItem: any) => {
-          if (!linkItem?.uri) return;
-          try {
-            const fetchRes = await fetch(`${endpoint}/fetch`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: linkItem.uri }),
-              signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3500)]) : AbortSignal.timeout(3500)
-            });
-            if (fetchRes.ok) {
-              const fetchJson = await fetchRes.json();
-              if (fetchJson.content) {
-                linkItem.snippet = (linkItem.snippet ? `${linkItem.snippet}\n` : '') + `[Conteúdo da página]: ${fetchJson.content.slice(0, 3500)}`;
+        // Enriquecimento com ferramenta 'fetch': apenas busca páginas que o Worker/servidor ainda não enriqueceu
+        const linksToFetch = data.results.slice(0, 3).filter((item: any) => !item?.snippet?.includes('[Conteúdo da página]'));
+        if (linksToFetch.length > 0) {
+          await Promise.allSettled(linksToFetch.map(async (linkItem: any) => {
+            if (!linkItem?.uri) return;
+            try {
+              const fetchRes = await fetch(`${endpoint}/fetch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: linkItem.uri }),
+                signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(3000)]) : AbortSignal.timeout(3000)
+              });
+              if (fetchRes.ok) {
+                const fetchJson = await fetchRes.json();
+                if (fetchJson.content) {
+                  linkItem.snippet = (linkItem.snippet ? `${linkItem.snippet}\n` : '') + `[Conteúdo da página]: ${fetchJson.content.slice(0, 3500)}`;
+                }
               }
-            }
-          } catch {}
-        }));
+            } catch {}
+          }));
+        }
         return formatDuckDuckGoSummary(data.results);
       }
       if (data.summary && Array.isArray(data.sources)) {

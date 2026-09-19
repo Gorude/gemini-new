@@ -44,8 +44,39 @@ function isSafeHttpUrl(rawUrl) {
   try {
     const parsed = new URL(rawUrl);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-    const h = parsed.hostname.toLowerCase();
-    if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0' || h === '169.254.169.254') return false;
+    const h = parsed.hostname.toLowerCase().trim();
+    const cleanHost = h.replace(/^\[|\]$/g, '');
+    if (
+      cleanHost === 'localhost' ||
+      cleanHost === '127.0.0.1' ||
+      cleanHost === '::1' ||
+      cleanHost === '::' ||
+      cleanHost === '0.0.0.0' ||
+      cleanHost === '169.254.169.254'
+    ) {
+      return false;
+    }
+    // IPv4 privadas RFC 1918 e Link-Local
+    if (
+      cleanHost.startsWith('10.') ||
+      cleanHost.startsWith('192.168.') ||
+      cleanHost.startsWith('169.254.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(cleanHost)
+    ) {
+      return false;
+    }
+    // IPv6 link-local e privadas
+    if (
+      cleanHost.startsWith('fe80:') ||
+      cleanHost.startsWith('fc') ||
+      cleanHost.startsWith('fd')
+    ) {
+      return false;
+    }
+    // Metadados de nuvem e hosts internos
+    if (cleanHost.endsWith('.internal') || cleanHost.endsWith('.local')) {
+      return false;
+    }
     return true;
   } catch {
     return false;
@@ -53,6 +84,7 @@ function isSafeHttpUrl(rawUrl) {
 }
 
 export async function directDuckDuckGoSearch(query, count = 20) {
+  const safeCount = Math.min(Math.max(1, count || 20), 30);
   const results = [];
   const encodedQuery = encodeURIComponent(query);
 
@@ -74,7 +106,7 @@ export async function directDuckDuckGoSearch(query, count = 20) {
       const snippets = (html.match(/<td[^>]*class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/gi) || [])
         .map(s => unescapeHtml(s));
 
-      for (let i = 0; i < aTags.length && results.length < count; i++) {
+      for (let i = 0; i < aTags.length && results.length < safeCount; i++) {
         const a = aTags[i];
         const hrefMatch = a.match(/href=['"]([^'"]+)['"]/i);
         const title = unescapeHtml(a);
@@ -114,7 +146,7 @@ export async function directDuckDuckGoSearch(query, count = 20) {
       const html = await res.text();
       const blocks = html.split('class="result ');
 
-      for (let i = 1; i < blocks.length && results.length < count; i++) {
+      for (let i = 1; i < blocks.length && results.length < safeCount; i++) {
         const b = blocks[i];
         if (/result--ad|highlight_ad|badge--ad/i.test(b)) continue;
 
@@ -162,18 +194,32 @@ export async function directFetchUrl(url) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       },
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(2500)
     });
     if (!res.ok) return `[Falha HTTP ${res.status} ao acessar link ${url}]`;
 
-    const html = await res.text();
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType && !/text|html|xml|json/i.test(contentType)) {
+      return `[Conteúdo não textual ignorado: ${contentType}]`;
+    }
+
+    const rawText = await res.text();
+    // Protege contra limites de CPU da Cloudflare (10ms):
+    // Descarta <head> se <body> existir e limita a 100KB antes das regexes
+    let html = rawText;
+    const bodyMatch = rawText.match(/<body[\s\S]*?<\/body>/i);
+    if (bodyMatch) {
+      html = bodyMatch[0];
+    }
+    html = html.slice(0, 100000);
+
     const clean = html
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-      .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
-      .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
-      .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
-      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
+      .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+      .replace(/<style\b[\s\S]*?<\/style>/gi, '')
+      .replace(/<svg\b[\s\S]*?<\/svg>/gi, '')
+      .replace(/<nav\b[\s\S]*?<\/nav>/gi, '')
+      .replace(/<footer\b[\s\S]*?<\/footer>/gi, '')
+      .replace(/<header\b[\s\S]*?<\/header>/gi, '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/g, ' ')
       .replace(/&amp;/g, '&')
