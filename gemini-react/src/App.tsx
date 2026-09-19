@@ -72,6 +72,7 @@ import {
   listLiveModels,
   setGlobalLocalEndpoint,
   setGlobalMcpEndpoint,
+  DEFAULT_MCP_ENDPOINT,
   performWebSearch,
   runGeminiToolLoop,
   CHAT_TOOLS,
@@ -504,7 +505,16 @@ function App() {
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
   const [orcaRouterApiKey, setOrcaRouterApiKey] = useState('');
   const [localEndpoint, setLocalEndpoint] = useState(() => localStorage.getItem('nemon_local_endpoint') || DEFAULT_LOCAL_ENDPOINT);
-  const [mcpEndpoint, setMcpEndpoint] = useState(() => localStorage.getItem('nemon_mcp_endpoint') || 'http://localhost:3333');
+  const [mcpEndpoint, setMcpEndpoint] = useState(() => {
+    const stored = localStorage.getItem('nemon_mcp_endpoint');
+    if (stored) {
+      if (typeof window !== 'undefined' && window.location.protocol === 'https:' && /^http:\/\/(localhost|127\.0\.0\.1)/i.test(stored)) {
+        return DEFAULT_MCP_ENDPOINT;
+      }
+      return stored;
+    }
+    return DEFAULT_MCP_ENDPOINT;
+  });
   // Modelos de chat customizados (OpenRouter) cadastrados pelo usuário.
   // Persistidos localmente e no Firestore (settings.customModels).
   const [customModels, setCustomModels] = useState<CustomModel[]>(() => {

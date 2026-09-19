@@ -17,9 +17,25 @@ export interface DuckDuckGoSearchOutput {
   provider: 'duckduckgo-mcp' | 'duckduckgo';
 }
 
-let globalMcpEndpoint = typeof localStorage !== 'undefined' 
-  ? (localStorage.getItem('nemon_mcp_endpoint') || 'http://localhost:3333')
-  : 'http://localhost:3333';
+export const DEFAULT_MCP_ENDPOINT = 'https://nemon-duckduckgo.jos-gabriel.workers.dev';
+
+function resolveInitialMcpEndpoint(): string {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return DEFAULT_MCP_ENDPOINT;
+  }
+  const stored = localStorage.getItem('nemon_mcp_endpoint');
+  if (stored) {
+    // Se o usuário está em HTTPS (ex: celular ou Firebase) e o valor gravado era http://localhost,
+    // migra para o Worker público para evitar bloqueio de Mixed Content
+    if (window.location.protocol === 'https:' && /^http:\/\/(localhost|127\.0\.0\.1)/i.test(stored)) {
+      return DEFAULT_MCP_ENDPOINT;
+    }
+    return stored;
+  }
+  return DEFAULT_MCP_ENDPOINT;
+}
+
+let globalMcpEndpoint = resolveInitialMcpEndpoint();
 
 export function setGlobalMcpEndpoint(url: string) {
   globalMcpEndpoint = (url || '').trim().replace(/\/+$/, '');

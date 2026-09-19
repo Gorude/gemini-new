@@ -1,7 +1,7 @@
 import { marked } from "marked";
 import markedKatex from "marked-katex-extension";
 import { logger } from "./logger";
-import { executeDuckDuckGoSearch, setGlobalMcpEndpoint, getGlobalMcpEndpoint } from "./duckduckgoSearch";
+import { executeDuckDuckGoSearch, setGlobalMcpEndpoint, getGlobalMcpEndpoint, DEFAULT_MCP_ENDPOINT } from "./duckduckgoSearch";
 // Usamos o core do highlight.js e registramos só as linguagens comuns, em vez do
 // import padrão (que empacota TODAS as linguagens, ~900 KB). Linguagens não
 // registradas caem em texto simples (o renderer já faz esse fallback).
@@ -1733,7 +1733,7 @@ export async function performWebSearch(
   };
 }
 
-export { setGlobalMcpEndpoint, getGlobalMcpEndpoint };
+export { setGlobalMcpEndpoint, getGlobalMcpEndpoint, DEFAULT_MCP_ENDPOINT };
 
 export async function generateImagenContent(
   prompt: string,

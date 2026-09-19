@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS, FONT_OPTIONS, CUSTOM_MODEL_PROVIDERS, formatTokenCount, type CustomModel, type CustomModelProvider } from '../constants';
 import { fetchOpenRouterModelMeta, fetchOrcaRouterModelMeta } from '../services/gemini';
-import { resetMcpOfflineState } from '../services/duckduckgoSearch';
+import { resetMcpOfflineState, DEFAULT_MCP_ENDPOINT } from '../services/duckduckgoSearch';
 import NemonIcon from './NemonIcon';
 import PersonalitiesPanel from './PersonalitiesPanel';
 import SkillsPanel from './SkillsPanel';
@@ -115,7 +115,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetCustomModels,
   localEndpoint,
   onUpdateLocalEndpoint,
-  mcpEndpoint = 'http://localhost:3333',
+  mcpEndpoint = DEFAULT_MCP_ENDPOINT,
   onUpdateMcpEndpoint,
   liveModel,
   onSetLiveModel,
