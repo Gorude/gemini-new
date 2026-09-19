@@ -28,7 +28,17 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#131314;">
+        <svg width="56" height="56" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="animation:nemon-spin 3.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;overflow:visible;">
+          <path d="M 89.95 52 A 40 40 0 1 1 48 10.05 L 48 28.09 A 22 22 0 1 0 71.91 52 Z" fill="#FFFFFF"/>
+          <path d="M 52 10.05 A 40 40 0 0 1 89.95 48 L 71.91 48 A 22 22 0 0 0 52 28.09 Z" fill="#FF5500"/>
+        </svg>
+        <style>
+          @keyframes nemon-spin { 0%,13.5%{transform:rotate(0deg)} 22.5%,38.5%{transform:rotate(90deg)} 47.5%,63.5%{transform:rotate(180deg)} 72.5%,88.5%{transform:rotate(270deg)} 97.5%,100%{transform:rotate(360deg)} }
+        </style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

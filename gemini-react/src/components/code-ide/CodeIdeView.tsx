@@ -19,6 +19,7 @@ import {
   Terminal,
   Eye,
   Paperclip,
+  XCircle,
 } from 'lucide-react';
 import NemonIcon from '../NemonIcon';
 import { runHarnessCycle, cleanHarnessDisplayText } from '../../services/codeHarness';
@@ -209,9 +210,39 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
   const autoFixAttemptsRef = useRef(0);
   const [isAutoFixing, setIsAutoFixing] = useState(false);
 
+  // Configuração do Harness: ativação/desativação da auto-correção automática de runtime
+  const [isAutoFixEnabled, setIsAutoFixEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('nemon_harness_autofix_enabled');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleAutoFix = () => {
+    setIsAutoFixEnabled(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('nemon_harness_autofix_enabled', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const handleUpdateRuntimeErrors = (errors: string[]) => {
     runtimeErrorsRef.current = errors;
     setRuntimeErrors(errors);
+  };
+
+  // Envio manual dos erros dos logs/console diretamente para o modelo
+  const handleManualSendErrors = () => {
+    const errors = runtimeErrorsRef.current;
+    if (errors.length === 0) return;
+    const errorSummary = errors.slice(0, 8).join('\n');
+    handleSend(
+      `Corrija os seguintes erros de runtime detectados no console da aplicação:\n\`\`\`\n${errorSummary}\n\`\`\`\nPor favor, examine o código, localize a causa raiz (ex: elementos nulos, variáveis duplicadas ou erros de sintaxe) e realize as correções necessárias com edit_file ou write_file para eliminar estes erros.`
+    );
   };
 
   const toggleDiff = (actionId: string) => {
@@ -587,10 +618,11 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
       abortControllerRef.current = null;
 
       // Auto-validação de runtime pós-geração: se a aplicação gerou erros de console no preview,
-      // o harness corrige automaticamente sem exigir clique manual do usuário.
+      // e a configuração de auto-fix estiver ativada no harness, corrige automaticamente.
       setTimeout(() => {
         const errors = runtimeErrorsRef.current;
         if (
+          isAutoFixEnabled &&
           errors.length > 0 &&
           autoFixAttemptsRef.current < 2 &&
           !abortControllerRef.current
@@ -892,13 +924,29 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
               )}
             </div>
 
-            <button
-              onClick={handleClearChat}
-              className="p-1.5 rounded-lg text-(--text-secondary) hover:text-red-400 hover:bg-white/5 transition"
-              title="Limpar histórico de mensagens"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleAutoFix}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all border cursor-pointer ${
+                  isAutoFixEnabled
+                    ? 'bg-amber-500/15 border-amber-500/35 text-amber-300 hover:bg-amber-500/25'
+                    : 'bg-zinc-800/60 border-zinc-700/50 text-zinc-400 hover:text-zinc-200'
+                }`}
+                title={`Auto-Fix: ${isAutoFixEnabled ? 'Ativado' : 'Desativado'} (quando ativado, o harness envia os erros de console automaticamente para o modelo)`}
+              >
+                <Sparkles className={`w-3 h-3 ${isAutoFixEnabled ? 'text-amber-400' : 'text-zinc-500'}`} />
+                <span>Auto-fix: {isAutoFixEnabled ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <button
+                onClick={handleClearChat}
+                className="p-1.5 rounded-lg text-(--text-secondary) hover:text-red-400 hover:bg-white/5 transition"
+                title="Limpar histórico de mensagens"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Área de Mensagens */}
@@ -1154,6 +1202,25 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
 
           {/* Campo de Entrada Docked na Base */}
           <div className="p-3 bg-(--bg-sidebar) border-t border-(--border-light)">
+            {/* Aviso e botão manual quando há erros de console/runtime */}
+            {consoleStats.errors > 0 && (
+              <div className="mb-2.5 p-2 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-between text-xs text-red-300 animate-in fade-in duration-150 shadow-2xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                  <span className="truncate">{consoleStats.errors} erro(s) detectado(s) no console</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualSendErrors}
+                  disabled={isLoading}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 font-medium transition cursor-pointer disabled:opacity-50 shrink-0 ml-2 active:scale-95"
+                  title="Mandar erros de execução para o modelo analisar e corrigir os arquivos"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>Mandar pro modelo</span>
+                </button>
+              </div>
+            )}
             {/* Input oculto para anexar arquivos do explorador */}
             <input
               type="file"
@@ -1433,6 +1500,7 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
                   setConsoleStats({ total: 0, errors: 0, warns: 0 });
                   handleUpdateRuntimeErrors([]);
                 }}
+                onSendErrorsToModel={handleManualSendErrors}
                 isGenerating={isLoading}
               />
             </div>
@@ -1465,6 +1533,7 @@ export const CodeIdeView: React.FC<CodeIdeViewProps> = ({
                   setConsoleStats({ total: 0, errors: 0, warns: 0 });
                   handleUpdateRuntimeErrors([]);
                 }}
+                onSendErrorsToModel={handleManualSendErrors}
               />
             </div>
           </div>

@@ -9,6 +9,7 @@ import {
   XCircle,
   Copy,
   Check,
+  Sparkles,
 } from 'lucide-react';
 
 export interface PreviewLogItem {
@@ -25,6 +26,7 @@ interface NativePreviewRunnerProps {
   onErrorLogsChange?: (errorMessages: string[]) => void;
   onClearLogs?: () => void;
   onAutoFixErrors?: () => void;
+  onSendErrorsToModel?: () => void;
   isGenerating?: boolean;
 }
 
@@ -198,6 +200,7 @@ export const NativePreviewRunner: React.FC<NativePreviewRunnerProps> = ({
   onErrorLogsChange,
   onClearLogs,
   onAutoFixErrors: _onAutoFixErrors,
+  onSendErrorsToModel,
   isGenerating: _isGenerating = false,
 }) => {
   const [viewportMode, setViewportMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
@@ -325,11 +328,25 @@ export const NativePreviewRunner: React.FC<NativePreviewRunnerProps> = ({
             <RotateCw className="w-3.5 h-3.5" />
           </button>
 
-          {/* Badges de Erros / Avisos */}
+          {/* Badges de Erros / Avisos com Ação Manual */}
           {stats.errors > 0 && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-500/15 border border-red-500/30 text-red-400 text-[11px] font-mono">
-              <XCircle className="w-3 h-3 text-red-400" />
-              <span>{stats.errors} erro(s)</span>
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-500/15 border border-red-500/30 text-red-400 text-[11px] font-mono">
+                <XCircle className="w-3 h-3 text-red-400" />
+                <span>{stats.errors} erro(s)</span>
+              </div>
+              {onSendErrorsToModel && (
+                <button
+                  type="button"
+                  onClick={onSendErrorsToModel}
+                  disabled={_isGenerating}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-300 text-[11px] font-sans font-medium transition cursor-pointer active:scale-95 disabled:opacity-50"
+                  title="Mandar erros de execução do preview diretamente para o modelo corrigir"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>Mandar pro modelo</span>
+                </button>
+              )}
             </div>
           )}
 

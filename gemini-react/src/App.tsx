@@ -3624,8 +3624,10 @@ function App() {
 
   if (isAuthLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#09090b]">
-        <div className="w-10 h-10 rounded-full border-4 border-zinc-700/30 border-t-zinc-500 animate-spin"></div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#09090b] text-white select-none">
+        <div className="relative flex items-center justify-center p-4">
+          <NemonIcon animated size={56} />
+        </div>
       </div>
     );
   }

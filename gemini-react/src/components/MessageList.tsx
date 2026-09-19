@@ -2,6 +2,7 @@ import React, { useRef, useLayoutEffect } from 'react';
 import { Loader2, Zap, ExternalLink, Key } from 'lucide-react';
 import { type Message } from '../services/gemini';
 import MessageItem from './MessageItem';
+import NemonIcon from './NemonIcon';
 
 // Estado do TTS ("falar em voz alta") de uma mensagem do chat.
 export interface ChatTtsEntry {
@@ -151,9 +152,9 @@ const MessageList: React.FC<MessageListProps> = ({
         className="flex-1 flex items-center justify-center chat-container-responsive"
         style={{ paddingLeft: `calc(${margin}% + 1rem)`, paddingRight: `calc(${margin}% + 1rem)` }}
       >
-        <div className="flex flex-col items-center gap-4 opacity-20">
-          <div className="w-12 h-12 rounded-full border-4 border-t-white border-white/10 animate-spin"></div>
-          <span className="text-xs font-bold uppercase tracking-widest text-white">Carregando histórico...</span>
+        <div className="flex flex-col items-center gap-4">
+          <NemonIcon animated size={44} />
+          <span className="text-xs font-semibold uppercase tracking-widest text-(--text-secondary) opacity-60">Carregando histórico...</span>
         </div>
       </section>
     );

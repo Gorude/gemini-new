@@ -1,5 +1,5 @@
 // Service Worker for Nemon PWA
-const CACHE_NAME = 'nemon-pwa-cache-v2';
+const CACHE_NAME = 'nemon-pwa-cache-v3';
 
 // Install event - activate immediately
 self.addEventListener('install', (event) => {

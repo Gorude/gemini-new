@@ -6,17 +6,20 @@ import {
   AlertCircle,
   AlertTriangle,
   Info,
+  Sparkles,
 } from 'lucide-react';
 import type { PreviewLogItem } from './NativePreviewRunner';
 
 interface NativeConsoleViewerProps {
   logs: PreviewLogItem[];
   onClearLogs: () => void;
+  onSendErrorsToModel?: () => void;
 }
 
 export const NativeConsoleViewer: React.FC<NativeConsoleViewerProps> = ({
   logs,
   onClearLogs,
+  onSendErrorsToModel,
 }) => {
   const [filterLevel, setFilterLevel] = useState<'all' | 'error' | 'warn' | 'log'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,6 +91,19 @@ export const NativeConsoleViewer: React.FC<NativeConsoleViewerProps> = ({
               <span>Avisos ({warnCount})</span>
             </button>
           </div>
+
+          {/* Botão de Enviar Erros do Console para o Modelo */}
+          {errorCount > 0 && onSendErrorsToModel && (
+            <button
+              type="button"
+              onClick={onSendErrorsToModel}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-sans font-medium transition cursor-pointer active:scale-95 shadow-2xs"
+              title="Mandar estes erros de runtime para o modelo analisar e corrigir os arquivos"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Mandar erros para o modelo</span>
+            </button>
+          )}
         </div>
 
         {/* Lado Direito: Campo de Busca e Botão de Limpar */}
