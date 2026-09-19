@@ -1,0 +1,514 @@
+{
+  "id": "w3",
+  "number": 3,
+  "title": "Onda 3: Serviços de Conectividade, APIs & Streaming",
+  "shortTitle": "APIs & Streaming",
+  "desc": "Gateway Gemini, OpenAI Proxy, Gemini Live WebSocket, Áudio & Busca",
+  "icon": "Radio",
+  "color": "#ec4899",
+  "cards": [
+    {
+      "id": "w3-c1",
+      "title": "Gateway Principal Gemini & Roteamento Multi-Provedor",
+      "category": "APIs/LLM",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/services/gemini.ts",
+          "lines": 450,
+          "desc": "generateGeminiContent, streamGeminiContent, resolveProvider"
+        }
+      ],
+      "keySymbols": [
+        "generateGeminiContent",
+        "streamGeminiContent",
+        "resolveProvider",
+        "setGlobalDefaultApiKey",
+        "setGlobalPaidApiKey"
+      ],
+      "objectives": [
+        "Auditar roteamento inteligente de chave gratuita vs chave paga",
+        "Validar streaming SSE (Server-Sent Events) sem perda de chunks",
+        "Garantir tratamento de erros HTTP 429 (Rate Limit), 401 e 503 com retry exponencial",
+        "Checar contabilização precisa de tokens de entrada e saída"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c1-chk1",
+          "text": "Garantir que chaves de API não vazem em logs ou mensagens de erro",
+          "checked": true
+        },
+        {
+          "id": "w3-c1-chk2",
+          "text": "Validar timeout explícito em todas as chamadas de fetch",
+          "checked": true
+        },
+        {
+          "id": "w3-c1-chk3",
+          "text": "Checar fechamento de streams em caso de abort pelo usuário",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c2",
+      "title": "Integração com Provedores OpenAI, OpenRouter & Local",
+      "category": "APIs/OpenAI",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/services/gemini.ts",
+          "lines": 350,
+          "desc": "Streaming /v1/chat/completions para OpenRouter, OrcaRouter e llama.cpp"
+        }
+      ],
+      "keySymbols": [
+        "streamOpenAiCompatibleContent",
+        "fetchOpenRouterModelMeta",
+        "fetchOrcaRouterModelMeta"
+      ],
+      "objectives": [
+        "Verificar compatibilidade do parser SSE com formatos OpenAI delta.content",
+        "Garantir suporte a CORS e preflight no servidor local llama.cpp",
+        "Checar fetching de metadados de modelos e context_length dinâmico"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c2-chk1",
+          "text": "Validar parser de chunks data: [DONE]",
+          "checked": true
+        },
+        {
+          "id": "w3-c2-chk2",
+          "text": "Tratar falhas de conexão no localhost (llama-server offline)",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c3",
+      "title": "Pipeline de Geração de Imagens Imagen 4",
+      "category": "APIs/Imagen",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/services/gemini.ts",
+          "lines": 180,
+          "desc": "generateImagenContent, polling de status e processamento base64"
+        }
+      ],
+      "keySymbols": [
+        "generateImagenContent",
+        "predictImagen",
+        "ImagenFile"
+      ],
+      "objectives": [
+        "Verificar tratamento de aspect ratio, resolução e prompts negativos",
+        "Garantir liberação de memória de strings base64 pesadas de imagem",
+        "Tratar erros de cota e safety filters da API Imagen"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c3-chk1",
+          "text": "Validar tratamento de erro quando o modelo recusa gerar a imagem",
+          "checked": true
+        },
+        {
+          "id": "w3-c3-chk2",
+          "text": "Checar limpeza de URLs temporárias geradas",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c4",
+      "title": "Parser de Markdown, Fórmulas KaTeX & Highlight.js Core",
+      "category": "Markdown/Render",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/services/gemini.ts",
+          "lines": 220,
+          "desc": "marked.use, markedKatex, highlight.js custom register, code renderer"
+        }
+      ],
+      "keySymbols": [
+        "marked.use",
+        "markedKatex",
+        "renderer.code",
+        "COPY_ICON_SVG",
+        "PREVIEW_ICON_SVG",
+        "escapeHtml"
+      ],
+      "objectives": [
+        "Eliminar vulnerabilidades de Cross-Site Scripting (XSS) no parser de Markdown",
+        "Garantir que KaTeX não quebre com símbolos monetários (ex: R$ 50)",
+        "Verificar tree-shaking do Highlight.js (apenas linguagens registradas)",
+        "Validar renderização dos botões sticky de cópia e preview"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c4-chk1",
+          "text": "Auditar escapeHtml em linguagens não reconhecidas",
+          "checked": true
+        },
+        {
+          "id": "w3-c4-chk2",
+          "text": "Verificar strict: false no markedKatex para evitar spam no console",
+          "checked": true
+        },
+        {
+          "id": "w3-c4-chk3",
+          "text": "Checar sanitização de tags HTML perigosas no output",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c5",
+      "title": "Testes Unitários do Gateway Gemini",
+      "category": "Testes",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/services/gemini.test.ts",
+          "lines": 100,
+          "desc": "Testes de formatação de mensagens, fallback e providers"
+        }
+      ],
+      "keySymbols": [
+        "describe(gemini service)",
+        "test(resolveProvider)",
+        "test(markdown rendering)"
+      ],
+      "objectives": [
+        "Aumentar cobertura de testes unitários para o pipeline de streaming",
+        "Simular cenários de falha de rede e rate limit",
+        "Validar testes de renderização de fórmulas matemáticas KaTeX"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c5-chk1",
+          "text": "Executar testes vitest em gemini.test.ts",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c6",
+      "title": "Protocolo Gemini Live WebSocket & Sessão Bidirecional",
+      "category": "Live/Voz",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/services/geminiLive.ts",
+          "lines": 550,
+          "desc": "GeminiLiveSession, WebSocket handshake, PCM 16/24kHz streaming"
+        }
+      ],
+      "keySymbols": [
+        "GeminiLiveSession",
+        "setupWebSocket",
+        "sendAudioChunk",
+        "handleIncomingMessage",
+        "handleBargeIn"
+      ],
+      "objectives": [
+        "Auditar ciclo de vida da conexão WebSocket (abertura, reconexão, teardown)",
+        "Garantir tratamento de Barge-in (interrupção do áudio da IA quando usuário fala)",
+        "Validar conversão correta de sample rates (16kHz entrada, 24kHz saída)",
+        "Prevenir acúmulo de buffers de áudio em conexões com lag"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c6-chk1",
+          "text": "Garantir fechamento determinístico do socket no disconnect()",
+          "checked": true
+        },
+        {
+          "id": "w3-c6-chk2",
+          "text": "Verificar limpeza de AudioContext e Worklets ao encerrar",
+          "checked": true
+        },
+        {
+          "id": "w3-c6-chk3",
+          "text": "Auditar sincronia do estado de interrupção (barge-in)",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c7",
+      "title": "Loop de Tool Calling ao Vivo no Gemini Live",
+      "category": "Live/Tools",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/services/geminiLive.ts",
+          "lines": 419,
+          "desc": "Declaração e despacho de ferramentas ao vivo (busca, clima, cálculo, memória)"
+        }
+      ],
+      "keySymbols": [
+        "toolDeclarations",
+        "handleToolCall",
+        "executeLiveTool",
+        "sendToolResponse"
+      ],
+      "objectives": [
+        "Validar schemas JSON de todas as ferramentas disponíveis no modo Live",
+        "Garantir execução não-bloqueante e segura das funções (ex: safeCalculate)",
+        "Checar retorno imediato de toolResponse para o modelo WebSocket",
+        "Verificar isolamento de erros durante a execução de ferramentas"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c7-chk1",
+          "text": "Checar segurança da função de cálculo matematico",
+          "checked": true
+        },
+        {
+          "id": "w3-c7-chk2",
+          "text": "Validar tratamento de erro quando API de clima ou busca falha",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c8",
+      "title": "Ditado por Voz & Transcrição em Tempo Real",
+      "category": "Voz/Ditado",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/services/geminiDictation.ts",
+          "lines": 251,
+          "desc": "GeminiDictationSession, captura de microfone e streaming"
+        }
+      ],
+      "keySymbols": [
+        "GeminiDictationSession",
+        "start()",
+        "stop()",
+        "onTranscript",
+        "onStateChange"
+      ],
+      "objectives": [
+        "Verificar transições de estado do ditado (idle, listening, processing, error)",
+        "Garantir limpeza de MediaStreamTracks ao pausar/parar",
+        "Checar feedback visual e latência da transcrição"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c8-chk1",
+          "text": "Garantir que faixas de áudio do microfone sejam liberadas no stop()",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c9",
+      "title": "Suavizador de Streaming de Texto (StreamSmoother)",
+      "category": "Streaming",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "gemini-react/src/services/streamSmoother.ts",
+          "lines": 131,
+          "desc": "Buffer de cadência de tokens e controle de jitter"
+        },
+        {
+          "path": "gemini-react/src/services/streamSmoother.test.ts",
+          "lines": 39,
+          "desc": "Testes unitários do smoother"
+        }
+      ],
+      "keySymbols": [
+        "StreamSmoother",
+        "push()",
+        "flush()",
+        "tick()",
+        "targetWpm"
+      ],
+      "objectives": [
+        "Garantir exibição fluida e natural de texto sem travamentos ou saltos bruscos",
+        "Verificar esvaziamento imediato do buffer ao finalizar a resposta (flush)",
+        "Eliminar timers órfãos (requestAnimationFrame / setTimeout)"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c9-chk1",
+          "text": "Verificar cancelamento de timers no destroy()",
+          "checked": true
+        },
+        {
+          "id": "w3-c9-chk2",
+          "text": "Executar testes de streamSmoother.test.ts",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c10",
+      "title": "Utilitários Web Audio API & Processamento PCM",
+      "category": "Áudio/PCM",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/services/audioUtils.ts",
+          "lines": 84,
+          "desc": "audioBufferToWav, concatFloat32, conversões Float32/Int16"
+        }
+      ],
+      "keySymbols": [
+        "audioBufferToWav",
+        "concatFloat32",
+        "floatTo16BitPCM",
+        "base64ToArrayBuffer"
+      ],
+      "objectives": [
+        "Validar integridade do cabeçalho RIFF/WAV gerado",
+        "Evitar distorção e clipping em conversões de ponto flutuante para inteiros",
+        "Otimizar operações em TypedArrays para zero-copy sempre que possível"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c10-chk1",
+          "text": "Verificar bounds checking em arrays de áudio",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c11",
+      "title": "Mecanismo Agnóstico de Busca Web (DuckDuckGo & MCP)",
+      "category": "Busca/Web",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/services/duckduckgoSearch.ts",
+          "lines": 385,
+          "desc": "Pipeline unificado de pesquisa, scraping de snippets e MCP"
+        },
+        {
+          "path": "gemini-react/src/services/duckduckgoSearch.test.ts",
+          "lines": 66,
+          "desc": "Testes de extração e parsing de resultados"
+        }
+      ],
+      "keySymbols": [
+        "executeDuckDuckGoSearch",
+        "performWebSearch",
+        "extractSearchSnippets",
+        "getGlobalMcpEndpoint"
+      ],
+      "objectives": [
+        "Garantir resiliência a bloqueios de scraping (fallbacks para múltiplos endpoints)",
+        "Sanitizar termos de busca e URLs retornadas",
+        "Checar integração transparente com o endpoint MCP local quando ativo",
+        "Validar extração limpa de snippets sem injeção de HTML sujo"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c11-chk1",
+          "text": "Verificar timeouts e retries em requisições de busca",
+          "checked": true
+        },
+        {
+          "id": "w3-c11-chk2",
+          "text": "Executar testes unitários de duckduckgoSearch.test.ts",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c12",
+      "title": "Serviço de Inicialização Firebase & Firestore",
+      "category": "Firebase",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/services/firebase.ts",
+          "lines": 29,
+          "desc": "Inicialização do app Firebase, Auth e Firestore DB"
+        }
+      ],
+      "keySymbols": [
+        "initializeApp",
+        "getAuth",
+        "getFirestore",
+        "auth",
+        "db"
+      ],
+      "objectives": [
+        "Garantir leitura segura de variáveis de ambiente do Firebase",
+        "Tratar inicialização sem credenciais (modo offline/anônimo gracioso)",
+        "Evitar re-inicializações redundantes da instância Firebase"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c12-chk1",
+          "text": "Verificar se credenciais vazias não causam crash em runtime",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w3-c13",
+      "title": "Logger Centralizado & Níveis de Diagnóstico",
+      "category": "Diagnóstico",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "gemini-react/src/services/logger.ts",
+          "lines": 58,
+          "desc": "Logger em memória com buffer circular e listeners"
+        }
+      ],
+      "keySymbols": [
+        "logger.info",
+        "logger.warn",
+        "logger.error",
+        "logger.subscribe",
+        "circularBuffer"
+      ],
+      "objectives": [
+        "Garantir limite máximo do buffer em memória para evitar memory leak",
+        "Verificar desanexação de listeners de log no unmount de componentes",
+        "Formatar timestamps UTC e metadados de erro de forma estruturada"
+      ],
+      "checklist": [
+        {
+          "id": "w3-c13-chk1",
+          "text": "Verificar teto de capacidade do array de logs (ex: max 500 entradas)",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    }
+  ],
+  "reviewSummary": {
+    "reviewedAt": "2026-09-19T03:20:41.961Z",
+    "status": "approved",
+    "cardsTotal": 13,
+    "cardsApproved": 13,
+    "fixesApplied": [
+      "src/services/gemini.ts: eliminated useless escape characters in markdown pre-sanitizer regex (line 310)",
+      "src/services/geminiLive.ts: audited cleanupConnection ensuring complete release of MediaStream tracks, video streams, audioContext and websocket listeners",
+      "src/services/logger.ts: audited circular buffer (max 500 entries) with queueMicrotask dispatching to prevent React concurrent render warnings",
+      "src/services/audioUtils.ts & streamSmoother.ts: verified memory allocations, buffer flushing and timer cleanup on destroy"
+    ]
+  }
+}

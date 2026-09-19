@@ -67,46 +67,40 @@ const ThoughtBlock: React.FC<{
   const [isOpen, setIsOpen] = useState(isGenerating);
   const [elapsed, setElapsed] = useState<number>(0);
   const [finalDuration, setFinalDuration] = useState<number | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
+  const startTimeRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const wasGeneratingRef = useRef<boolean>(isGenerating);
 
-  // Inicializa o timer quando a geração começa
+  // Inicializa o timer quando a geração começa ou encerra
   useEffect(() => {
     if (isGenerating && !wasGeneratingRef.current) {
       startTimeRef.current = Date.now();
-      setIsOpen(true);
-      setFinalDuration(null);
+      queueMicrotask(() => {
+        setIsOpen(true);
+        setFinalDuration(null);
+      });
+    } else if (!isGenerating && wasGeneratingRef.current) {
+      const duration = (Date.now() - (startTimeRef.current ?? Date.now())) / 1000;
+      queueMicrotask(() => {
+        setFinalDuration(duration > 0.1 ? duration : 0.1);
+        setIsOpen(false);
+      });
     }
     wasGeneratingRef.current = isGenerating;
   }, [isGenerating]);
 
   // Atualiza o tempo em tempo real enquanto estiver gerando
   useEffect(() => {
-    if (!isGenerating) {
-      if (finalDuration === null && elapsed > 0) {
-        setFinalDuration(elapsed);
-      }
-      return;
-    }
+    if (!isGenerating) return;
 
     const interval = setInterval(() => {
       const now = Date.now();
-      const sec = (now - startTimeRef.current) / 1000;
+      const sec = (now - (startTimeRef.current ?? now)) / 1000;
       setElapsed(sec);
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isGenerating, elapsed, finalDuration]);
-
-  // Fecha automaticamente quando a geração de pensamento termina
-  useEffect(() => {
-    if (!isGenerating && wasGeneratingRef.current) {
-      const duration = (Date.now() - startTimeRef.current) / 1000;
-      setFinalDuration(duration > 0.1 ? duration : elapsed);
-      setIsOpen(false);
-    }
-  }, [isGenerating, elapsed]);
+  }, [isGenerating]);
 
   // Auto-scroll para baixo conforme novos pensamentos chegam
   useEffect(() => {

@@ -230,6 +230,7 @@ async function directDuckDuckGoSearch(query, count = 50) {
 
 // Acessa o conteúdo real da página para evitar rate limit do DuckDuckGo search
 async function directFetchUrl(url) {
+  if (!isSafeHttpUrl(url)) return `[URL inválida ou bloqueada: ${url}]`;
   try {
     const res = await fetch(url, {
       headers: {
@@ -257,6 +258,37 @@ async function directFetchUrl(url) {
   } catch (err) {
     return `[Erro ao ler ${url}: ${err.message}]`;
   }
+}
+
+
+function isSafeHttpUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const h = parsed.hostname.toLowerCase();
+    if (h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "0.0.0.0" || h === "169.254.169.254") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readBoundedBody(req, limitBytes = 2 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    let bytes = 0;
+    req.on("data", chunk => {
+      bytes += chunk.length;
+      if (bytes > limitBytes) {
+        req.destroy();
+        reject(new Error("PAYLOAD_TOO_LARGE"));
+        return;
+      }
+      body += chunk;
+    });
+    req.on("end", () => resolve(body));
+    req.on("error", err => reject(err));
+  });
 }
 
 startMcpProcess();
@@ -287,115 +319,95 @@ const server = http.createServer(async (req, res) => {
 
   // POST /fetch (Acessa o conteúdo textual de uma URL)
   if (req.url === '/fetch' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { url } = JSON.parse(body || '{}');
-        if (!url) {
-          res.statusCode = 400;
-          res.end(JSON.stringify({ error: 'Parâmetro url é obrigatório' }));
-          return;
-        }
-        console.log(`[MCP Bridge] Acessando link via fetch: "${url}"`);
-        const content = await directFetchUrl(url);
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ success: true, url, content }));
-      } catch (err) {
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: err.message }));
+    try {
+      const body = await readBoundedBody(req, 1 * 1024 * 1024);
+      const { url } = JSON.parse(body || '{}');
+      if (!url || !isSafeHttpUrl(url)) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Parâmetro url seguro é obrigatório (http/https público)' }));
+        return;
       }
-    });
+      const content = await directFetchUrl(url);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, url, content }));
+    } catch (err) {
+      res.statusCode = err.message === 'PAYLOAD_TOO_LARGE' ? 413 : 500;
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
   // POST /search (Endpoint simplificado)
   if (req.url === '/search' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const { query, max_results = 50 } = JSON.parse(body || '{}');
-        if (!query) {
-          res.statusCode = 400;
-          res.end(JSON.stringify({ error: 'Parâmetro query é obrigatório' }));
-          return;
-        }
-
-        console.log(`[MCP Bridge] Pesquisando: "${query}"`);
-
-        // 1. Tenta via processo MCP externo (apenas se existir e estiver ativo)
-        if (mcpProcess && isMcpAlive) {
-          try {
-            const mcpRes = await sendJsonRpc('tools/call', {
-              name: 'search',
-              arguments: { query, max_results, count: max_results }
-            });
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ success: true, via: 'mcp-stdio', result: mcpRes.result }));
-            return;
-          } catch (e) {
-            console.warn('Falha na chamada stdio do MCP:', e.message);
-          }
-        }
-
-        // 2. Motor nativo Node.js
-        const directResults = await directDuckDuckGoSearch(query, max_results);
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ success: true, via: 'direct-duckduckgo', results: directResults }));
-      } catch (err) {
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: err.message }));
+    try {
+      const body = await readBoundedBody(req, 1 * 1024 * 1024);
+      const { query, max_results = 50 } = JSON.parse(body || '{}');
+      if (!query) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'Parâmetro query é obrigatório' }));
+        return;
       }
-    });
+
+      // 1. Tenta via processo MCP externo (apenas se existir e estiver ativo)
+      if (mcpProcess && isMcpAlive) {
+        try {
+          const mcpRes = await sendJsonRpc('tools/call', {
+            name: 'search',
+            arguments: { query, max_results, count: max_results }
+          });
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true, via: 'mcp-stdio', result: mcpRes.result }));
+          return;
+        } catch (e) {
+          console.warn('Falha na chamada stdio do MCP:', e.message);
+        }
+      }
+
+      // 2. Motor nativo Node.js
+      const directResults = await directDuckDuckGoSearch(query, max_results);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, via: 'direct-duckduckgo', results: directResults }));
+    } catch (err) {
+      res.statusCode = err.message === 'PAYLOAD_TOO_LARGE' ? 413 : 500;
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
   // POST /tools/call (Protocolo padrão MCP)
   if (req.url === '/tools/call' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
-      try {
-        const payload = JSON.parse(body || '{}');
-        const toolName = payload.params?.name || payload.name;
-        const toolArgs = payload.params?.arguments || payload.arguments || {};
-        const q = toolArgs.query || '';
+    try {
+      const body = await readBoundedBody(req, 2 * 1024 * 1024);
+      const payload = JSON.parse(body || '{}');
+      const toolName = payload.params?.name || payload.name;
+      const toolArgs = payload.params?.arguments || payload.arguments || {};
+      const q = toolArgs.query || '';
 
-        // Se houver processo externo rodando, tenta ele primeiro
-        if (mcpProcess && isMcpAlive) {
-          try {
-            const mcpRes = await sendJsonRpc('tools/call', { name: toolName, arguments: toolArgs });
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(mcpRes));
-            return;
-          } catch (e) {
-            console.warn('Falha no MCP stdio:', e.message);
-          }
-        }
-
-        // Ferramenta 'fetch': lê o conteúdo de uma página específica
-        if (toolName === 'fetch' || toolArgs.url) {
-          const targetUrl = toolArgs.url || toolArgs.uri || '';
-          const content = await directFetchUrl(targetUrl);
+      // Se houver processo externo rodando, tenta ele primeiro
+      if (mcpProcess && isMcpAlive) {
+        try {
+          const mcpRes = await sendJsonRpc('tools/call', { name: toolName, arguments: toolArgs });
           res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(mcpRes));
+          return;
+        } catch (e) {
+          console.warn('Falha no MCP stdio:', e.message);
+        }
+      }
+
+      // Ferramenta 'fetch': lê o conteúdo de uma página específica
+      if (toolName === 'fetch' || toolArgs.url) {
+        const targetUrl = toolArgs.url || toolArgs.uri || '';
+        if (!targetUrl || !isSafeHttpUrl(targetUrl)) {
+          res.statusCode = 400;
           res.end(JSON.stringify({
             jsonrpc: '2.0',
             id: payload.id || 1,
-            result: {
-              content: [
-                {
-                  type: 'text',
-                  text: content
-                }
-              ]
-            }
+            error: { code: -32602, message: 'Invalid or restricted target URL' }
           }));
           return;
         }
-
-        // Ferramenta 'search': busca links no DuckDuckGo (sem limitação artificial de 5 links)
-        const results = await directDuckDuckGoSearch(q, toolArgs.max_results || toolArgs.count || 50);
+        const content = await directFetchUrl(targetUrl);
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({
           jsonrpc: '2.0',
@@ -404,16 +416,33 @@ const server = http.createServer(async (req, res) => {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(results)
+                text: content
               }
             ]
           }
         }));
-      } catch (err) {
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: err.message }));
+        return;
       }
-    });
+
+      // Ferramenta 'search': busca links no DuckDuckGo (sem limitação artificial de 5 links)
+      const results = await directDuckDuckGoSearch(q, toolArgs.max_results || toolArgs.count || 50);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({
+        jsonrpc: '2.0',
+        id: payload.id || 1,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(results)
+            }
+          ]
+        }
+      }));
+    } catch (err) {
+      res.statusCode = err.message === 'PAYLOAD_TOO_LARGE' ? 413 : 500;
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
@@ -426,4 +455,32 @@ server.listen(PORT, () => {
   console.log(`   - Endpoint de saúde: http://localhost:${PORT}/health`);
   console.log(`   - Endpoint de busca: http://localhost:${PORT}/search`);
   console.log(`   - Protocolo MCP:     http://localhost:${PORT}/tools/call\n`);
+});
+
+function cleanShutdown() {
+  console.log("\n🛑 [MCP Bridge] Encerrando servidor e subprocessos...");
+  if (mcpProcess) {
+    try {
+      mcpProcess.kill("SIGTERM");
+    } catch {}
+    mcpProcess = null;
+  }
+  for (const [id, req] of pendingRequests.entries()) {
+    try {
+      req.reject(new Error("Servidor encerrado"));
+    } catch {}
+  }
+  pendingRequests.clear();
+  server.close(() => {
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 1500).unref();
+}
+
+process.on("SIGINT", cleanShutdown);
+process.on("SIGTERM", cleanShutdown);
+process.on("exit", () => {
+  if (mcpProcess) {
+    try { mcpProcess.kill("SIGTERM"); } catch {}
+  }
 });

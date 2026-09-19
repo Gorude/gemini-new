@@ -1,0 +1,233 @@
+{
+  "id": "w9",
+  "number": 9,
+  "title": "Onda 9: Orquestrador Central (App.tsx) & Ciclo de Vida",
+  "shortTitle": "App.tsx Central",
+  "desc": "Estado Global, Envio de Mensagens, Sincronização & Roteamento",
+  "icon": "Activity",
+  "color": "#ff5500",
+  "cards": [
+    {
+      "id": "w9-c1",
+      "title": "Gerenciamento de Estados, Refs & Efeitos Centrais",
+      "category": "Orquestrador",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/App.tsx",
+          "lines": 850,
+          "desc": "Inicialização de estados de sessão, chaves, personalidades, temas e hooks"
+        }
+      ],
+      "keySymbols": [
+        "sessions",
+        "activeSessionId",
+        "currentModel",
+        "useMemory",
+        "apiKeyPaid",
+        "isLiveActive",
+        "codeIdeOpen"
+      ],
+      "objectives": [
+        "Auditar divisão de estados para prevenir re-renders globais desnecessários",
+        "Garantir recuperação resiliente de preferências corrompidas no LocalStorage",
+        "Verificar inicialização determinística e sincronização de chaves de API globais"
+      ],
+      "checklist": [
+        {
+          "id": "w9-c1-chk1",
+          "text": "Verificar debounce em estados de alta frequência",
+          "checked": true
+        },
+        {
+          "id": "w9-c1-chk2",
+          "text": "Auditar dependências de todos os useEffects do App.tsx",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w9-c2",
+      "title": "Loop de Mensagens & Envio Multimodal (handleSendMessage)",
+      "category": "Orquestrador",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/App.tsx",
+          "lines": 950,
+          "desc": "Pipeline central de envio, injeção de DNA, chamadas de busca e streaming de resposta"
+        }
+      ],
+      "keySymbols": [
+        "handleSendMessage",
+        "streamGeminiContent",
+        "handleAbort",
+        "stripSearchMarkers",
+        "parseMemoryFromResponse"
+      ],
+      "objectives": [
+        "Garantir tratamento de cancelamento/abort manual pelo usuário",
+        "Verificar injeção limpa de contexto da Memória DNA no prompt de sistema",
+        "Auditar limpeza de marcadores espúrios de busca (stripSearchMarkers)",
+        "Tratar erros de conexão e atualizar a mensagem na tela com status de falha amigável"
+      ],
+      "checklist": [
+        {
+          "id": "w9-c2-chk1",
+          "text": "Checar liberação do AbortController em todas as saídas da função",
+          "checked": true
+        },
+        {
+          "id": "w9-c2-chk2",
+          "text": "Validar atualização atômica da mensagem em streaming",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w9-c3",
+      "title": "Loop de Execução de Ferramentas de Chat (runGeminiToolLoop)",
+      "category": "Orquestrador/Tools",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/App.tsx",
+          "lines": 600,
+          "desc": "Execução recursiva de tool calls para busca web, cálculos e MCP no chat padrão"
+        }
+      ],
+      "keySymbols": [
+        "runGeminiToolLoop",
+        "CHAT_TOOLS",
+        "handleToolCallExecution",
+        "maxToolTurns"
+      ],
+      "objectives": [
+        "Impedir loops infinitos de chamadas de ferramentas com limite de turnos (max 5)",
+        "Exibir indicadores visuais de progresso enquanto a ferramenta está executando",
+        "Sanitizar parâmetros passados pelo modelo para as funções de execução"
+      ],
+      "checklist": [
+        {
+          "id": "w9-c3-chk1",
+          "text": "Verificar limite estrito de recursão no tool loop",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w9-c4",
+      "title": "Sincronização Firestore vs LocalStorage & Concorrência",
+      "category": "Orquestrador/Sync",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/App.tsx",
+          "lines": 750,
+          "desc": "Listeners em tempo real do Firestore, debounce de escrita e fallback offline"
+        }
+      ],
+      "keySymbols": [
+        "onSnapshot",
+        "setDoc",
+        "saveToLocalStorage",
+        "loadFromLocalStorage",
+        "syncPending"
+      ],
+      "objectives": [
+        "Prevenir race conditions durante gravação de mensagens simultâneas",
+        "Garantir debounce de no mínimo 500ms nas escritas de Firestore para economizar cotas",
+        "Tratar quedas de internet transitórias mantendo o estado local íntegro",
+        "Desanexar listeners onSnapshot no logout ou troca de usuário"
+      ],
+      "checklist": [
+        {
+          "id": "w9-c4-chk1",
+          "text": "Auditar cancelamento de listeners do Firestore no unmount/logout",
+          "checked": true
+        },
+        {
+          "id": "w9-c4-chk2",
+          "text": "Verificar integridade do fallback de LocalStorage offline",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w9-c5",
+      "title": "Orquestração dos Modos Live, Ditado & Code IDE",
+      "category": "Orquestrador/Modos",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/components/LiveSetupModal.tsx",
+          "lines": 88,
+          "desc": "Modal de configuração prévia do Gemini Live"
+        },
+        {
+          "path": "gemini-react/src/components/LiveView.tsx",
+          "lines": 685,
+          "desc": "Interface em tela cheia do modo Live de voz, vídeo e tela"
+        },
+        {
+          "path": "gemini-react/src/components/LiveAudioPlayer.tsx",
+          "lines": 251,
+          "desc": "Player de áudio PCM de saída do Live com medidor de volume"
+        },
+        {
+          "path": "gemini-react/src/components/VolumeSlider.tsx",
+          "lines": 38,
+          "desc": "Controle deslizante de volume"
+        },
+        {
+          "path": "gemini-react/src/components/DictationPanel.tsx",
+          "lines": 224,
+          "desc": "Painel flutuante de ditado contínuo"
+        }
+      ],
+      "keySymbols": [
+        "LiveView",
+        "LiveSetupModal",
+        "LiveAudioPlayer",
+        "DictationPanel",
+        "toggleLiveMode",
+        "toggleCodeIde"
+      ],
+      "objectives": [
+        "Garantir transição suave entre a tela de chat normal, o modo Live e o Code IDE",
+        "Desativar microfone e câmera imediatamente ao fechar o modo Live",
+        "Checar sincronização de volume e mudo no LiveAudioPlayer",
+        "Validar inserção do texto ditado diretamente no campo de chat ativo"
+      ],
+      "checklist": [
+        {
+          "id": "w9-c5-chk1",
+          "text": "Garantir interrupção de todos os fluxos de mídia ao sair do modo Live",
+          "checked": true
+        },
+        {
+          "id": "w9-c5-chk2",
+          "text": "Verificar renderização de ondas sonoras no LiveAudioPlayer",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    }
+  ],
+  "reviewSummary": {
+    "reviewedAt": "2026-09-19T03:30:00.798Z",
+    "status": "approved",
+    "cardsTotal": 5,
+    "cardsApproved": 5,
+    "fixesApplied": [
+      "src/App.tsx: corrected useCallback dependency arrays adding applyLiveVolume, resolveStartModel and mcpEndpoint",
+      "src/App.tsx: verified AbortController cleanup and atomic message streaming state transitions",
+      "src/App.tsx: verified Firestore onSnapshot listeners and debounce on writes preventing race conditions",
+      "src/components/LiveView.tsx & DictationPanel.tsx: verified complete media release on mode exit"
+    ]
+  }
+}

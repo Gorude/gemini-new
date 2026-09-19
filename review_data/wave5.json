@@ -1,0 +1,204 @@
+{
+  "id": "w5",
+  "number": 5,
+  "title": "Onda 5: Sistema de Memória DNA, Grafo & Personalidades",
+  "shortTitle": "DNA & Personas",
+  "desc": "Grafo de Força 2D, Fatos Atômicos, Resolução de Conflitos & Skills",
+  "icon": "Cpu",
+  "color": "#f59e0b",
+  "cards": [
+    {
+      "id": "w5-c1",
+      "title": "Painel de Gestão de Memória DNA",
+      "category": "DNA/Memória",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/components/DnaPanel.tsx",
+          "lines": 246,
+          "desc": "CRUD de fatos atômicos, categorização, filtros de busca e exportação"
+        }
+      ],
+      "keySymbols": [
+        "DnaPanel",
+        "MemoryFact",
+        "selectedCategory",
+        "handleSaveFact",
+        "handleDeleteFact"
+      ],
+      "objectives": [
+        "Verificar fluxo de edição, remoção e criação manual de memórias",
+        "Garantir filtragem instantânea por categorias (Pessoal, Preferências, Projetos, etc.)",
+        "Checar feedback visual ao atualizar ou excluir um fato"
+      ],
+      "checklist": [
+        {
+          "id": "w5-c1-chk1",
+          "text": "Validar sanitização de texto ao criar novos fatos manuais",
+          "checked": true
+        },
+        {
+          "id": "w5-c1-chk2",
+          "text": "Checar exportação da memória DNA em formato JSON estruturado",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w5-c2",
+      "title": "Renderizador de Grafo 2D de Memória (DnaGraph)",
+      "category": "DNA/Grafo",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/components/DnaGraph.tsx",
+          "lines": 290,
+          "desc": "Visualização interativa em grafo de força com react-force-graph-2d"
+        }
+      ],
+      "keySymbols": [
+        "DnaGraph",
+        "ForceGraph2D",
+        "nodeCanvasObject",
+        "linkCanvasObject",
+        "d3-force"
+      ],
+      "objectives": [
+        "Garantir 60 FPS na simulação física do grafo sem vazamento de memória",
+        "Personalizar renderização visual dos nós no canvas (cores por categoria, halos e rótulos)",
+        "Checar interações de zoom, pan, clique em nós e drag de nós",
+        "Limpar instâncias e animações do ForceGraph no unmount"
+      ],
+      "checklist": [
+        {
+          "id": "w5-c2-chk1",
+          "text": "Verificar liberação de recursos do canvas no cleanup do componente",
+          "checked": true
+        },
+        {
+          "id": "w5-c2-chk2",
+          "text": "Checar escalabilidade com centenas de nós de memória",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w5-c3",
+      "title": "Pipeline de Extração & Resolução de Conflitos DNA",
+      "category": "DNA/Extrator",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/App.tsx",
+          "lines": 280,
+          "desc": "Regras de injeção de DNA nos prompts, parsing de tags <MEMORY>, deduplicação"
+        }
+      ],
+      "keySymbols": [
+        "buildLiveInstruction",
+        "<MEMORY>",
+        "<UPDATE_MEMORY>",
+        "<DELETE_MEMORY>",
+        "parseDnaTags"
+      ],
+      "objectives": [
+        "Garantir que memórias antigas não sejam corrompidas por novos fatos complementares",
+        "Validar atualização exclusiva (<UPDATE_MEMORY>) apenas quando há contradição explícita",
+        "Impedir que tags XML de memória vazem no áudio ou no texto final exibido ao usuário",
+        "Auditar sincronização imediata com Firestore e LocalStorage"
+      ],
+      "checklist": [
+        {
+          "id": "w5-c3-chk1",
+          "text": "Verificar regex de extração de tags XML de memória",
+          "checked": true
+        },
+        {
+          "id": "w5-c3-chk2",
+          "text": "Garantir remoção das tags antes de enviar para o TTS ou histórico",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w5-c4",
+      "title": "Painel de Personalidades & Prompts de Sistema",
+      "category": "Personas",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "gemini-react/src/components/PersonalitiesPanel.tsx",
+          "lines": 197,
+          "desc": "CRUD de personas, instruções de sistema customizadas e vínculo com voz Live"
+        }
+      ],
+      "keySymbols": [
+        "PersonalitiesPanel",
+        "Personality",
+        "DEFAULT_PERSONALITY",
+        "activePersonalityId",
+        "voice"
+      ],
+      "objectives": [
+        "Verificar fluxo de criação, edição e exclusão de personas customizadas",
+        "Garantir aplicação imediata do prompt de sistema e voz Live ao trocar de persona",
+        "Checar proteção para que a persona Padrão não seja deletada"
+      ],
+      "checklist": [
+        {
+          "id": "w5-c4-chk1",
+          "text": "Validar persistência das personalidades no Firestore/LocalStorage",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w5-c5",
+      "title": "Painel de Skills & Tool Calling Reutilizável",
+      "category": "Skills/Tools",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/components/SkillsPanel.tsx",
+          "lines": 135,
+          "desc": "Gerenciamento de templates de prompt com {{input}} e ferramentas embutidas"
+        }
+      ],
+      "keySymbols": [
+        "SkillsPanel",
+        "Skill",
+        "kind: prompt | tool",
+        "promptTemplate",
+        "toolId"
+      ],
+      "objectives": [
+        "Verificar substituição segura da variável {{input}} nos templates de prompt",
+        "Checar integração com o menu de barra (/) no campo de entrada do chat",
+        "Validar registro e habilitação de ferramentas embutidas por conversa"
+      ],
+      "checklist": [
+        {
+          "id": "w5-c5-chk1",
+          "text": "Garantir validação contra injeção em templates de prompt",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    }
+  ],
+  "reviewSummary": {
+    "reviewedAt": "2026-09-19T03:24:36.274Z",
+    "status": "approved",
+    "cardsTotal": 5,
+    "cardsApproved": 5,
+    "fixesApplied": [
+      "src/components/DnaPanel.tsx: purged Sparkles AI icon, replaced with functional Layers icon complying with GEMINI.md aesthetic authority",
+      "src/components/DnaGraph.tsx: audited canvas 2D animation lifecycle, ResizeObserver cleanup, and physics parameters persistence",
+      "src/components/PersonalitiesPanel.tsx & SkillsPanel.tsx: verified prompt injection defenses and state synchronization"
+    ]
+  }
+}

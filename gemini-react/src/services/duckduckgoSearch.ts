@@ -38,14 +38,14 @@ export function getGlobalMcpEndpoint(): string {
 
 function unescapeHtml(text: string): string {
   return text
-    .replace(/&quot;/g, '"')
+    .replace(/<[^>]+>/g, "") // 1. Strip raw HTML tags from page layout first
+    .replace(/&quot;/g, "\"")
     .replace(/&#x27;/g, "'")
     .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&") // 2. Decode ampersands last to prevent double-decoding
     .trim();
 }
 

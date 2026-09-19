@@ -2084,8 +2084,22 @@ function App() {
       // Interrompe a suavização e revela o que já havia chegado (abort/erro).
       smoother?.cancel();
       if (error instanceof Error && error.name === 'AbortError') return;
-      const errorMsg: Message = { id: Date.now().toString(), role: 'ai', text: `**[Erro]:** ${error instanceof Error ? error.message : String(error)}` };
-      setChats(prev => prev.map(c => c.id === targetChatId ? { ...c, messages: [...c.messages, errorMsg] } : c));
+      const errorText = `**[Erro]:** ${error instanceof Error ? error.message : String(error)}`;
+      const activeMsgId = currentAiMsgIdRef.current;
+      setChats(prev => prev.map(c => {
+        if (c.id !== targetChatId) return c;
+        if (activeMsgId) {
+          const exists = c.messages.some(m => m.id === activeMsgId);
+          if (exists) {
+            return {
+              ...c,
+              messages: c.messages.map(m => m.id === activeMsgId ? { ...m, text: errorText, isSearching: false, isGenerating: false } : m)
+            };
+          }
+        }
+        const errorMsg: Message = { id: Date.now().toString(), role: 'ai', text: errorText };
+        return { ...c, messages: [...c.messages, errorMsg] };
+      }));
     } finally {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -2096,7 +2110,7 @@ function App() {
       currentAiMsgIdRef.current = null;
       setChats(prev => prev);
     }
-  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, parseMemoryTags, searchModelId, enabledChatToolIds]);
+  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, parseMemoryTags, searchModelId, enabledChatToolIds, mcpEndpoint]);
 
   const handleStopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -2125,6 +2139,10 @@ function App() {
         }));
       }
 
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
       setIsLoading(false);
       currentAiMsgIdRef.current = null;
       setChats(prev => prev);
@@ -3130,7 +3148,7 @@ function App() {
       default:
         return { result: `Ferramenta desconhecida: ${name}.` };
     }
-  }, [handleToggleCamera, handleToggleScreen, handleOpenSettings, handleLiveStop, saveMemoryFactsToFirestore, scheduleWake, applyLiveVoice, useMemoryLive, factCheckModelId]);
+  }, [handleToggleCamera, handleToggleScreen, handleOpenSettings, handleLiveStop, saveMemoryFactsToFirestore, scheduleWake, applyLiveVoice, applyLiveVolume, resolveStartModel, useMemoryLive, factCheckModelId]);
 
   // Mantém os refs do executor/feedback de ferramentas sempre atuais, para o tool
   // calling do chat (executeAIRequest) usá-los sem depender da ordem de declaração.

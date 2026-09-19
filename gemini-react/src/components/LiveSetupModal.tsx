@@ -1,5 +1,5 @@
 import React from 'react';
-import { Headphones, Sparkles, User, Loader2 } from 'lucide-react';
+import { Headphones, User, Loader2, Mic } from 'lucide-react';
 
 interface LiveSetupModalProps {
   onClose: () => void;
@@ -60,7 +60,7 @@ const LiveSetupModal: React.FC<LiveSetupModalProps> = ({ onClose, onConfirm, isC
                 </>
               ) : (
                 <span className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" />
+                  <Mic className="w-4 h-4" />
                   Começar agora
                 </span>
               )}

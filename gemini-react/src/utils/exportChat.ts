@@ -22,7 +22,7 @@ export function chatToMarkdown(chat: ChatSession): string {
   lines.push('');
 
   for (const m of chat.messages) {
-    const who = m.role === 'user' ? '## 🧑 Você' : '## 🤖 Nemon';
+    const who = m.role === 'user' ? '## Você' : '## Nemon';
     lines.push(who);
     lines.push('');
 

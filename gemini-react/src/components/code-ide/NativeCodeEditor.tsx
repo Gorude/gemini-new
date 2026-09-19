@@ -29,7 +29,10 @@ export const NativeCodeEditor: React.FC<NativeCodeEditorProps> = ({
   const userScrolledUpRef = useRef(false);
   const userScrollTopRef = useRef<number>(0);
   const isAutoScrollingRef = useRef(false);
-  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const activeFilePathRef = useRef(activeFilePath);
+  useEffect(() => { activeFilePathRef.current = activeFilePath; }, [activeFilePath]);
+  const [userScrolledFile, setUserScrolledFile] = useState<string | null>(null);
+  const userScrolledUp = userScrolledFile === activeFilePath;
 
   // Seleciona a extensão de linguagem adequada baseada na extensão do arquivo
   const extensions = useMemo(() => {
@@ -62,14 +65,14 @@ export const NativeCodeEditor: React.FC<NativeCodeEditorProps> = ({
       if (e.deltaY < 0) {
         // Roda para CIMA: destrava imediatamente o auto-scroll e salva posição
         userScrolledUpRef.current = true;
-        setUserScrolledUp(true);
+        setUserScrolledFile(activeFilePathRef.current);
         userScrollTopRef.current = Math.max(0, scroller.scrollTop + e.deltaY);
       } else if (e.deltaY > 0) {
         // Roda para BAIXO: se chegou perto do rodapé, retoma o acompanhamento
         const dist = scroller.scrollHeight - (scroller.scrollTop + e.deltaY) - scroller.clientHeight;
         if (dist <= 30) {
           userScrolledUpRef.current = false;
-          setUserScrolledUp(false);
+          queueMicrotask(() => setUserScrolledFile(null));
         } else {
           userScrollTopRef.current = scroller.scrollTop + e.deltaY;
         }
@@ -95,10 +98,10 @@ export const NativeCodeEditor: React.FC<NativeCodeEditorProps> = ({
 
       if (distanceFromBottom > 45) {
         userScrolledUpRef.current = true;
-        setUserScrolledUp(true);
+        setUserScrolledFile(activeFilePathRef.current);
       } else if (distanceFromBottom <= 20) {
         userScrolledUpRef.current = false;
-        setUserScrolledUp(false);
+        setUserScrolledFile(null);
       }
     };
 
@@ -106,13 +109,10 @@ export const NativeCodeEditor: React.FC<NativeCodeEditorProps> = ({
     return () => container.removeEventListener('scroll', handleScroll, true);
   }, []);
 
-  // Quando a geração termina ou muda de arquivo, reseta o estado de scroll do usuário
   useEffect(() => {
-    if (!isLoading) {
-      userScrolledUpRef.current = false;
-      setUserScrolledUp(false);
-    }
-  }, [isLoading, activeFilePath]);
+    userScrolledUpRef.current = false;
+    userScrollTopRef.current = 0;
+  }, [activeFilePath]);
 
   // Gerencia a rolagem durante o streaming de código:
   // Se o usuário rolou para cima/inspecionando: MANTÉM a posição exata, impedindo que o CodeMirror resete para o topo (0).
@@ -196,7 +196,7 @@ export const NativeCodeEditor: React.FC<NativeCodeEditorProps> = ({
             type="button"
             onClick={() => {
               userScrolledUpRef.current = false;
-              setUserScrolledUp(false);
+              setUserScrolledFile(null);
               const scroller = containerRef.current?.querySelector('.cm-scroller') as HTMLElement | null;
               if (scroller) {
                 isAutoScrollingRef.current = true;

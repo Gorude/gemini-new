@@ -307,7 +307,7 @@ export function safeMarkdown(content: string): string {
   const sanitizedContent = (tightenedContent || '')
     .replace(/!\[(.*?)\]\(file:\/\/[^)]*\)/gi, '`[$1]`')
     .replace(/\[(.*?)\]\(file:\/\/[^)]*\)/gi, '`$1`')
-    .replace(/\bfile:\/\/\/[^\s\)\"\'\>]+/gi, (match) => {
+    .replace(/\bfile:\/\/\/[^\s"'>)]+/gi, (match) => {
       const parts = match.split('/');
       return parts[parts.length - 1] || match;
     });
@@ -947,6 +947,42 @@ async function* streamOpenAICompatibleContent(
           console.warn(`Erro ao processar chunk (${cfg.label}):`, e);
         }
       }
+    }
+
+    // Descarrega o decodificador e qualquer linha final pendente no buffer
+    const remainder = decoder.decode();
+    if (remainder) {
+      buffer += remainder;
+    }
+    const trimmedBuf = buffer.trim();
+    if (trimmedBuf.startsWith("data:")) {
+      const data = trimmedBuf.slice(5).trim();
+      if (data && data !== "[DONE]") {
+        try {
+          const json = JSON.parse(data) as OpenAIStreamChunk;
+          const delta: OpenAIDelta = json.choices?.[0]?.delta || {};
+          if (typeof delta.content === "string" && delta.content) {
+            const split = splitThinking(delta.content);
+            if (split.text || split.thoughts) {
+              accumulatedText += split.text;
+              accumulatedThoughts += split.thoughts;
+              yield { text: split.text, thoughts: thinking ? split.thoughts : "" };
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // Se sobrou carry que não formou tag no fim do stream, descarrega sem perda de caracteres
+    if (carry) {
+      if (thinkMode) {
+        accumulatedThoughts += carry;
+        yield { text: "", thoughts: thinking ? carry : "" };
+      } else {
+        accumulatedText += carry;
+        yield { text: carry, thoughts: "" };
+      }
+      carry = "";
     }
   } finally {
     reader.releaseLock();

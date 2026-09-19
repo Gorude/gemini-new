@@ -1,0 +1,276 @@
+{
+  "id": "w6",
+  "number": 6,
+  "title": "Onda 6: Camada de Interface do Chat & Mensagens",
+  "shortTitle": "Chat UI & Mensagens",
+  "desc": "MessageList, MessageItem, ChatInput, Régua de Contexto & FileHub",
+  "icon": "MessageSquare",
+  "color": "#06b6d4",
+  "cards": [
+    {
+      "id": "w6-c1",
+      "title": "Lista de Mensagens & Orquestração de Scroll",
+      "category": "Chat/List",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/components/MessageList.tsx",
+          "lines": 329,
+          "desc": "Orquestração de rolagem inteligente, sticky bottom, vinculação com timeline e TTS"
+        }
+      ],
+      "keySymbols": [
+        "MessageList",
+        "messagesEndRef",
+        "handleScroll",
+        "shouldAutoScroll",
+        "chatTtsEntries"
+      ],
+      "objectives": [
+        "Eliminar rolagem brusca durante streaming contínuo de tokens",
+        "Garantir que o scroll não puxe para baixo quando o usuário estiver lendo mensagens antigas",
+        "Auditar performance de renderização em chats longos com dezenas de mensagens",
+        "Checar coordenação do reprodutor TTS entre mensagens"
+      ],
+      "checklist": [
+        {
+          "id": "w6-c1-chk1",
+          "text": "Verificar lógica de auto-scroll apenas se estiver próximo ao final",
+          "checked": true
+        },
+        {
+          "id": "w6-c1-chk2",
+          "text": "Auditar uso de React.memo em itens da lista",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w6-c2",
+      "title": "Renderização do Item de Mensagem (MessageItem)",
+      "category": "Chat/Item",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/components/MessageItem.tsx",
+          "lines": 815,
+          "desc": "Balões de mensagem, HTML seguro, ações rápidas, TTS player e sticky copy"
+        }
+      ],
+      "keySymbols": [
+        "MessageItem",
+        "dangerouslySetInnerHTML",
+        "handleCopyCode",
+        "handlePreviewCode",
+        "handleTtsPlay"
+      ],
+      "objectives": [
+        "Garantir sanitização rigorosa do HTML antes de inserir no DOM",
+        "Verificar delegação de eventos para botões de cópia e preview dentro dos blocos de código",
+        "Checar estados de carregamento do player TTS de voz",
+        "Validar visualização de anexos (imagens, áudios, PDFs extraídos) na mensagem"
+      ],
+      "checklist": [
+        {
+          "id": "w6-c2-chk1",
+          "text": "Auditar sanitização de XSS no conteúdo renderizado",
+          "checked": true
+        },
+        {
+          "id": "w6-c2-chk2",
+          "text": "Verificar liberação de URLs de áudio TTS após reprodução",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w6-c3",
+      "title": "Timeline de Navegação Rápida (MessageTimeline)",
+      "category": "Chat/Timeline",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "gemini-react/src/components/MessageTimeline.tsx",
+          "lines": 124,
+          "desc": "Mini-mapa lateral de turnos do usuário e assistente para salto rápido"
+        }
+      ],
+      "keySymbols": [
+        "MessageTimeline",
+        "activeTurnIndex",
+        "handleTurnClick",
+        "turnMarkers"
+      ],
+      "objectives": [
+        "Garantir cálculo leve e memoizado dos marcadores de turno",
+        "Verificar rolagem suave até a mensagem selecionada",
+        "Checar visibilidade em telas menores/mobile"
+      ],
+      "checklist": [
+        {
+          "id": "w6-c3-chk1",
+          "text": "Validar cálculo de posição de scroll suave",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w6-c4",
+      "title": "Entrada Multimodal de Chat (ChatInput)",
+      "category": "Chat/Input",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/src/components/ChatInput.tsx",
+          "lines": 532,
+          "desc": "Textarea auto-ajustável, drop de arquivos, gravador de áudio e menu /"
+        }
+      ],
+      "keySymbols": [
+        "ChatInput",
+        "textareaRef",
+        "handleKeyDown",
+        "handleFileDrop",
+        "isRecordingAudio",
+        "slashMenu"
+      ],
+      "objectives": [
+        "Verificar auto-redimensionamento do textarea sem saltos visuais",
+        "Garantir atalhos de envio (Enter para enviar, Shift+Enter para quebra de linha)",
+        "Checar drag-and-drop de arquivos e colagem de imagens da área de transferência (Ctrl+V)",
+        "Validar navegação por teclado no menu de comandos /"
+      ],
+      "checklist": [
+        {
+          "id": "w6-c4-chk1",
+          "text": "Auditar limites de tamanho no upload de arquivos",
+          "checked": true
+        },
+        {
+          "id": "w6-c4-chk2",
+          "text": "Verificar cancelamento seguro da gravação de áudio",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w6-c5",
+      "title": "Régua & Indicador de Janela de Contexto (ChatRuler)",
+      "category": "Chat/Context",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/src/components/ChatRuler.tsx",
+          "lines": 98,
+          "desc": "Barra de consumo de tokens vs limite máximo, badges de capacidade e warnings"
+        }
+      ],
+      "keySymbols": [
+        "ChatRuler",
+        "usedTokens",
+        "maxContext",
+        "percentage",
+        "contextBadges"
+      ],
+      "objectives": [
+        "Verificar precisão do cálculo de porcentagem da janela de contexto",
+        "Garantir avisos visuais claros quando o contexto estiver acima de 80% e 95%",
+        "Checar exibição de ícones de capacidades suportadas pelo modelo ativo"
+      ],
+      "checklist": [
+        {
+          "id": "w6-c5-chk1",
+          "text": "Validar cálculo com tokens reais da API + estimativa do input digitado",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w6-c6",
+      "title": "Hub de Arquivos & Mídias da Conversa (ChatFileHub)",
+      "category": "Chat/Files",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "gemini-react/src/components/ChatFileHub.tsx",
+          "lines": 180,
+          "desc": "Visualizador de anexos do chat, download de arquivos e preview"
+        }
+      ],
+      "keySymbols": [
+        "ChatFileHub",
+        "fileList",
+        "handleDownload",
+        "handlePreviewPdf"
+      ],
+      "objectives": [
+        "Verificar suporte a múltiplos formatos (PDF, imagens, áudio, código)",
+        "Garantir sanitização de nomes de arquivos para evitar quebra no download",
+        "Checar liberação de ObjectURLs geradas"
+      ],
+      "checklist": [
+        {
+          "id": "w6-c6-chk1",
+          "text": "Checar revogação de URLs com URL.revokeObjectURL",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w6-c7",
+      "title": "Popups de Seleção de Texto & Busca Interna no Chat",
+      "category": "Chat/Find",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "gemini-react/src/components/SelectionPopup.tsx",
+          "lines": 112,
+          "desc": "Menu flutuante ao selecionar texto no chat (explicar, traduzir, resumir)"
+        },
+        {
+          "path": "gemini-react/src/components/InChatFind.tsx",
+          "lines": 80,
+          "desc": "Barra de busca local dentro da conversa ativa (Ctrl+F)"
+        }
+      ],
+      "keySymbols": [
+        "SelectionPopup",
+        "InChatFind",
+        "selectedText",
+        "searchTerm",
+        "highlightMatches"
+      ],
+      "objectives": [
+        "Garantir posicionamento correto do popup flutuante próximo à seleção do mouse",
+        "Verificar navegação entre ocorrências encontradas (próximo / anterior) no InChatFind",
+        "Checar limpeza de highlights ao fechar a barra de busca"
+      ],
+      "checklist": [
+        {
+          "id": "w6-c7-chk1",
+          "text": "Validar posicionamento com boundary checking da janela",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    }
+  ],
+  "reviewSummary": {
+    "reviewedAt": "2026-09-19T03:25:22.206Z",
+    "status": "approved",
+    "cardsTotal": 7,
+    "cardsApproved": 7,
+    "fixesApplied": [
+      "src/components/MessageItem.tsx: audited safeMarkdown pipeline with DOM sanitization and code block copy/preview delegation",
+      "src/components/MessageList.tsx: verified smooth vs instant auto-scroll hysteresis preventing scroll-jacking during user inspection",
+      "src/components/ChatInput.tsx: verified textarea auto-resize, multimodal attachment bounds, and slash menu keyboard handling",
+      "src/components/ChatRuler.tsx & ChatFileHub.tsx: audited token percentage thresholds and verified URL.revokeObjectURL cleanup"
+    ]
+  }
+}

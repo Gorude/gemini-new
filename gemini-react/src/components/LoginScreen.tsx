@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
 import NemonIcon from './NemonIcon';
-import { Shield, Sparkles, Zap } from 'lucide-react';
+import { Shield, Layers, Zap } from 'lucide-react';
 
 interface LoginScreenProps {
   onLoginSuccess?: () => void;
@@ -98,7 +98,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = () => {
             <span className="text-[10px] font-semibold text-zinc-400">Tempo Real</span>
           </div>
           <div className="flex flex-col items-center p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-            <Sparkles className="w-4 h-4 text-zinc-400 mb-1" />
+            <Layers className="w-4 h-4 text-zinc-400 mb-1" />
             <span className="text-[10px] font-semibold text-zinc-400">Multimodal</span>
           </div>
           <div className="flex flex-col items-center p-3 rounded-2xl bg-white/[0.02] border border-white/5">

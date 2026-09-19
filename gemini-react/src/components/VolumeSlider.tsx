@@ -1,11 +1,13 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 
 // Slider de volume (0–10) com botão de mudo. Usado no modo LIVE (tela cheia e
 // minimizada) e no painel de ditado. Reaproveita o accentColor do tema.
 const VolumeSlider: React.FC<{ value: number; onChange: (v: number) => void; variant?: 'full' | 'mini' }> = ({ value, onChange, variant = 'mini' }) => {
   const lastNonZero = useRef(value > 0 ? value : 7);
-  if (value > 0) lastNonZero.current = value;
+  useEffect(() => {
+    if (value > 0) lastNonZero.current = value;
+  }, [value]);
   const isFull = variant === 'full';
   const toggleMute = () => onChange(value > 0 ? 0 : lastNonZero.current);
   return (

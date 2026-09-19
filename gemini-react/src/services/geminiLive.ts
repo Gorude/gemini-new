@@ -958,12 +958,18 @@ export class GeminiLiveSession {
     if (this.ws) {
       this.ws.onclose = null;
       this.ws.onerror = null;
-      this.ws.close();
+      try { this.ws.close(); } catch {}
       this.ws = null;
     }
+    if (this.workletNode) {
+      this.workletNode.port.onmessage = null;
+      try { this.workletNode.disconnect(); } catch {}
+      this.workletNode = null;
+    }
     this.micStream?.getTracks().forEach(t => t.stop());
+    this.micStream = null;
     this.stopVideo();
-    this.audioContext?.close();
+    try { this.audioContext?.close(); } catch {}
     this.audioContext = null;
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Edit2, Save, ArrowLeft, Wand2, Wrench } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, ArrowLeft, Sliders, Wrench } from 'lucide-react';
 import { type Skill } from '../types';
 
 interface SkillsPanelProps {
@@ -110,7 +110,7 @@ const SkillsPanel: React.FC<SkillsPanelProps> = ({ skills, onSave, onDelete, cha
 
       {promptSkills.length === 0 ? (
         <div className="text-center py-10 text-(--text-placeholder)">
-          <Wand2 className="w-8 h-8 mx-auto mb-2 opacity-40" />
+          <Sliders className="w-8 h-8 mx-auto mb-2 opacity-40" />
           <p className="text-xs">Nenhum template ainda. Crie o primeiro para agilizar tarefas repetitivas.</p>
         </div>
       ) : (

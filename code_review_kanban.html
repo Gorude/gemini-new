@@ -1,0 +1,2331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nemon · Plano Completo de Code-Review Especializado</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-canvas: #09090b;
+      --bg-surface: #111114;
+      --bg-card: #18181b;
+      --bg-card-hover: #222227;
+      --border-subtle: #27272a;
+      --border-strong: #3f3f46;
+      --text-main: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --text-faint: #71717a;
+      --accent: #ff5500;
+      --accent-glow: rgba(255, 85, 0, 0.15);
+      --status-pending: #71717a;
+      --status-reviewing: #eab308;
+      --status-approved: #22c55e;
+      --status-issues: #f97316;
+      --prio-critical: #ef4444;
+      --prio-high: #f97316;
+      --prio-medium: #eab308;
+      --prio-low: #3b82f6;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.75rem 1.5rem;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+
+    .header-content {
+      max-width: 1920px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+    }
+
+    .nemon-logo {
+      width: 34px;
+      height: 34px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .brand-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .brand-badge {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.15rem 0.5rem;
+      background: rgba(255, 85, 0, 0.12);
+      border: 1px solid rgba(255, 85, 0, 0.35);
+      color: #ff7733;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .header-metrics {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-pill {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .stat-label {
+      font-size: 0.6875rem;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .stat-value {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-main);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-card);
+      color: var(--text-main);
+      transition: all 0.15s ease;
+      font-family: inherit;
+      user-select: none;
+    }
+
+    .btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-strong);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000000;
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background: #ff6a1a;
+      border-color: #ff6a1a;
+    }
+
+    .progress-strip {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.45rem 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .progress-wrapper {
+      max-width: 1920px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .progress-bar-container {
+      flex: 1;
+      height: 6px;
+      background: #27272a;
+      border-radius: 999px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .progress-segment {
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+
+    .seg-approved { background: var(--status-approved); }
+    .seg-issues { background: var(--status-issues); }
+    .seg-reviewing { background: var(--status-reviewing); }
+
+    .progress-text {
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      min-width: 240px;
+      text-align: right;
+    }
+
+    .toolbar {
+      padding: 0.65rem 1.5rem;
+      background: var(--bg-canvas);
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+    }
+
+    .toolbar-container {
+      max-width: 1920px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      max-width: 380px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 0.45rem 0.75rem 0.45rem 2rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-main);
+      font-size: 0.8125rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.65rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-faint);
+      pointer-events: none;
+      font-size: 0.8125rem;
+    }
+
+    .filter-pills {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-pill {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.65rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .filter-pill:hover {
+      background: var(--bg-card);
+      color: var(--text-main);
+    }
+
+    .filter-pill.active {
+      background: var(--bg-card-hover);
+      border-color: var(--border-strong);
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .view-toggle {
+      display: flex;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+    }
+
+    .toggle-btn {
+      padding: 0.3rem 0.75rem;
+      font-size: 0.75rem;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: calc(var(--radius-sm) - 2px);
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .toggle-btn.active {
+      background: var(--bg-card);
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    main {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Kanban View */
+    .kanban-board {
+      flex: 1;
+      min-height: 0;
+      height: 100%;
+      display: flex;
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    .kanban-column {
+      flex: 0 0 360px;
+      max-width: 360px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .column-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      background: rgba(24, 24, 27, 0.4);
+      flex-shrink: 0;
+    }
+
+    .column-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .column-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .wave-number {
+      font-size: 0.6875rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0.1rem 0.35rem;
+      border-radius: var(--radius-sm);
+      background: var(--border-subtle);
+      color: var(--text-muted);
+    }
+
+    .column-count {
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-faint);
+    }
+
+    .column-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .column-wave-progress {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.15rem;
+    }
+
+    .wave-bar {
+      flex: 1;
+      height: 4px;
+      background: #27272a;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .wave-bar-fill {
+      height: 100%;
+      background: var(--status-approved);
+      transition: width 0.2s ease;
+    }
+
+    .wave-percent {
+      font-size: 0.6875rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-faint);
+    }
+
+    .column-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    /* Card Item */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 0.875rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+      position: relative;
+    }
+
+    .card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-strong);
+      transform: translateY(-1px);
+    }
+
+    .card.approved { border-left: 3px solid var(--status-approved); }
+    .card.issues { border-left: 3px solid var(--status-issues); }
+    .card.reviewing { border-left: 3px solid var(--status-reviewing); }
+    .card.pending { border-left: 3px solid var(--status-pending); }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .card-id {
+      font-size: 0.6875rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-faint);
+    }
+
+    .card-badges {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .badge {
+      font-size: 0.625rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.1rem 0.35rem;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .badge-prio-critical { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-prio-high { background: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3); }
+    .badge-prio-medium { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
+    .badge-prio-low { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+
+    .card-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-main);
+      line-height: 1.35;
+    }
+
+    .card-files {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .file-chip {
+      font-size: 0.6875rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      background: rgba(0, 0, 0, 0.25);
+      padding: 0.15rem 0.35rem;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.25rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-lines {
+      color: var(--text-faint);
+      font-size: 0.625rem;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding-top: 0.4rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .status-select {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      font-size: 0.6875rem;
+      padding: 0.2rem 0.4rem;
+      border-radius: var(--radius-sm);
+      outline: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .status-select.approved { color: var(--status-approved); border-color: var(--status-approved); }
+    .status-select.issues { color: var(--status-issues); border-color: var(--status-issues); }
+    .status-select.reviewing { color: var(--status-reviewing); border-color: var(--status-reviewing); }
+    .status-select.pending { color: var(--status-pending); }
+
+    .card-checklist-stats {
+      font-size: 0.6875rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-faint);
+    }
+
+    /* ==========================================================================
+       RICH INTERACTIVE GRAPH VIEW ENGINE (NO VOID / FULL-SCREEN)
+       ========================================================================== */
+    .graph-view-container {
+      display: none;
+      width: 100%;
+      height: 100%;
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+      background: #09090b;
+      position: relative;
+    }
+
+    .graph-view-container.active {
+      display: flex;
+    }
+
+    .graph-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 1.5rem;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+      z-index: 10;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .graph-controls-group {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .graph-viewport {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      background: #09090b;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .graph-viewport:active {
+      cursor: grabbing;
+    }
+
+    #graph-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Graph SVG Elements Styling */
+    .cluster-rect {
+      fill: rgba(18, 18, 22, 0.85);
+      stroke-width: 1;
+      rx: 8;
+      transition: stroke 0.2s;
+    }
+
+    .cluster-title {
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      fill: #ffffff;
+    }
+
+    .cluster-subtitle {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      fill: #a1a1aa;
+    }
+
+    /* Graph Nodes */
+    .graph-node {
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.2s;
+    }
+
+    .graph-node:hover {
+      filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.9));
+    }
+
+    .node-bg {
+      fill: #141417;
+      stroke: var(--border-subtle);
+      stroke-width: 1;
+      rx: 5;
+      transition: all 0.2s;
+    }
+
+    .graph-node:hover .node-bg {
+      stroke: var(--border-strong);
+      fill: #1d1d23;
+    }
+
+    .graph-node.selected .node-bg {
+      stroke: var(--accent) !important;
+      stroke-width: 2 !important;
+      fill: #241a15 !important;
+    }
+
+    .node-status-dot {
+      r: 4;
+      transition: all 0.2s;
+    }
+
+    .node-status-dot.approved { fill: var(--status-approved); filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.8)); }
+    .node-status-dot.issues { fill: var(--status-issues); filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.8)); }
+    .node-status-dot.reviewing { fill: var(--status-reviewing); filter: drop-shadow(0 0 6px rgba(234, 179, 8, 0.8)); }
+    .node-status-dot.pending { fill: var(--status-pending); }
+
+    .node-id-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      font-weight: 700;
+      fill: #71717a;
+    }
+
+    .node-title-text {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      fill: #f4f4f5;
+    }
+
+    .node-info-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8.5px;
+      fill: #a1a1aa;
+    }
+
+    /* Graph Edges / Paths */
+    .edge-path {
+      fill: none;
+      stroke: #333338;
+      stroke-width: 1.5;
+      opacity: 0.35;
+      transition: stroke 0.2s, opacity 0.2s, stroke-width 0.2s;
+      stroke-linecap: round;
+    }
+
+    .edge-path.highlight-out {
+      stroke: var(--accent) !important;
+      stroke-width: 2.5 !important;
+      opacity: 1 !important;
+      stroke-dasharray: 6 3;
+      animation: dashPulse 1.2s linear infinite;
+    }
+
+    .edge-path.highlight-in {
+      stroke: #38bdf8 !important;
+      stroke-width: 2.5 !important;
+      opacity: 1 !important;
+      stroke-dasharray: 6 3;
+      animation: dashPulse 1.2s linear infinite reverse;
+    }
+
+    .edge-path.critical-path {
+      stroke: #f43f5e !important;
+      stroke-width: 2.5 !important;
+      opacity: 0.95 !important;
+    }
+
+    @keyframes dashPulse {
+      from { stroke-dashoffset: 18; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    .graph-node.dimmed, .edge-path.dimmed, .cluster-box.dimmed {
+      opacity: 0.08 !important;
+    }
+
+    /* Floating Graph Inspector HUD */
+    .graph-hud {
+      position: absolute;
+      right: 1.5rem;
+      bottom: 1.5rem;
+      width: 360px;
+      max-height: 480px;
+      background: rgba(18, 18, 22, 0.94);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-md);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+      padding: 1.25rem;
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+      z-index: 25;
+      overflow-y: auto;
+    }
+
+    .graph-hud.active {
+      display: flex;
+    }
+
+    .hud-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .hud-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .hud-chip {
+      font-size: 0.6875rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .hud-chip:hover {
+      background: var(--bg-card-hover);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* Modal / Deep-Dive Drawer */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      max-width: 820px;
+      width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+    }
+
+    .modal-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .modal-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .modal-nav-buttons {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.25rem;
+      cursor: pointer;
+      padding: 0.25rem;
+    }
+
+    .modal-close:hover {
+      color: #ffffff;
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-faint);
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .quick-status-group {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .status-btn {
+      padding: 0.35rem 0.75rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-card);
+      color: var(--text-muted);
+      transition: all 0.15s ease;
+    }
+
+    .status-btn.active.pending { background: rgba(113, 113, 122, 0.2); border-color: var(--status-pending); color: #fff; }
+    .status-btn.active.reviewing { background: rgba(234, 179, 8, 0.2); border-color: var(--status-reviewing); color: #facc15; }
+    .status-btn.active.issues { background: rgba(249, 115, 22, 0.2); border-color: var(--status-issues); color: #fb923c; }
+    .status-btn.active.approved { background: rgba(34, 197, 94, 0.2); border-color: var(--status-approved); color: #4ade80; }
+
+    .checklist-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .checklist-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      padding: 0.65rem 0.875rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .checklist-item:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .checklist-checkbox {
+      margin-top: 0.15rem;
+      accent-color: var(--accent);
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+    }
+
+    .checklist-text {
+      font-size: 0.8125rem;
+      line-height: 1.4;
+      color: var(--text-main);
+    }
+
+    .checklist-item.checked .checklist-text {
+      color: var(--text-faint);
+      text-decoration: line-through;
+    }
+
+    .notes-textarea {
+      width: 100%;
+      min-height: 100px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem;
+      color: var(--text-main);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      outline: none;
+      resize: vertical;
+    }
+
+    .notes-textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .symbols-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .symbol-chip {
+      font-size: 0.6875rem;
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(255, 85, 0, 0.08);
+      border: 1px solid rgba(255, 85, 0, 0.2);
+      color: #ffaa80;
+      padding: 0.2rem 0.5rem;
+      border-radius: var(--radius-sm);
+    }
+
+    .modal-footer {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      background: rgba(24, 24, 27, 0.3);
+    }
+
+    .toast-popup {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #18181b;
+      border: 1px solid var(--border-strong);
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius-md);
+      font-size: 0.8125rem;
+      color: #fff;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-canvas);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #52525b;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <div class="brand-group">
+        <svg class="nemon-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 50 10 A 40 40 0 1 0 90 50" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round"/>
+          <path d="M 90 40 A 40 40 0 0 0 60 10" stroke="#FF5500" stroke-width="12" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h1 class="brand-title">
+            Nemon
+            <span class="brand-badge">Auditoria de Código & QA · 100% Cobertura</span>
+          </h1>
+        </div>
+      </div>
+
+      <div class="header-metrics">
+        <div class="stat-pill">
+          <span class="stat-label">Progresso Geral</span>
+          <span class="stat-value" id="global-progress-percent">100%</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Aprovados</span>
+          <span class="stat-value" id="stat-approved-count" style="color: var(--status-approved);">73</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Em Análise</span>
+          <span class="stat-value" id="stat-reviewing-count" style="color: var(--status-reviewing);">0</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Com Ajustes</span>
+          <span class="stat-value" id="stat-issues-count" style="color: var(--status-issues);">0</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Total Módulos</span>
+          <span class="stat-value" id="stat-total-count">73</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-label">Arquivos Mapeados</span>
+          <span class="stat-value" id="stat-files-count" style="color: #60a5fa;">118</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn" onclick="exportState()">Exportar JSON</button>
+        <button class="btn" onclick="document.getElementById('import-file-input').click()">Importar JSON</button>
+        <input type="file" id="import-file-input" style="display: none;" accept=".json" onchange="importState(event)" />
+        <button class="btn" onclick="resetState()" title="Restaurar estado inicial">Reset</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="progress-strip">
+    <div class="progress-wrapper">
+      <div class="progress-bar-container">
+        <div class="progress-segment seg-approved" id="seg-approved" style="width: 100%;"></div>
+        <div class="progress-segment seg-issues" id="seg-issues" style="width: 0%;"></div>
+        <div class="progress-segment seg-reviewing" id="seg-reviewing" style="width: 0%;"></div>
+      </div>
+      <div class="progress-text" id="progress-summary-text">73 de 73 módulos aprovados (100%)</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="toolbar-container">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="search-input" placeholder="Buscar arquivos, classes, funções ou tags..." oninput="handleSearch(this.value)" />
+      </div>
+
+      <div class="filter-pills">
+        <span class="filter-pill active" data-filter="all" onclick="setFilter('all', this)">Todos</span>
+        <span class="filter-pill" data-filter="pending" onclick="setFilter('pending', this)">Pendentes</span>
+        <span class="filter-pill" data-filter="reviewing" onclick="setFilter('reviewing', this)">Em Análise</span>
+        <span class="filter-pill" data-filter="issues" onclick="setFilter('issues', this)">Com Ajustes</span>
+        <span class="filter-pill" data-filter="approved" onclick="setFilter('approved', this)">Aprovados</span>
+        <span class="filter-pill" data-filter="critical" onclick="setFilter('critical', this)">🚨 Críticos</span>
+      </div>
+
+      <div class="view-toggle">
+        <button class="toggle-btn active" id="btn-view-kanban" onclick="switchView('kanban')">Kanban por Ondas</button>
+        <button class="toggle-btn" id="btn-view-graph" onclick="switchView('graph')">Grafo de Dependências</button>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <!-- View 1: Kanban Board -->
+    <div class="kanban-board" id="kanban-view">
+      <!-- Generated via JS -->
+    </div>
+
+    <!-- View 2: Rich Dependency Graph View -->
+    <div class="graph-view-container" id="graph-view">
+      <div class="graph-topbar">
+        <div class="graph-controls-group">
+          <span style="font-size: 0.8125rem; font-weight: 600; color: #fff; margin-right: 0.5rem;">Grafo de Dependências</span>
+          <button class="btn" onclick="graphZoom(1.2)" title="Aumentar Zoom">Zoom +</button>
+          <button class="btn" onclick="graphZoom(0.8)" title="Diminuir Zoom">Zoom -</button>
+          <button class="btn" onclick="graphFitView()" title="Ajustar à Tela">⛶ Enquadrar</button>
+          <button class="btn" id="btn-toggle-critical" onclick="toggleCriticalPath()" title="Destacar Caminho Crítico">⚡ Caminho Crítico</button>
+        </div>
+
+        <div class="graph-controls-group">
+          <select class="status-select" id="graph-wave-filter" onchange="filterGraphWave(this.value)" style="padding: 0.35rem 0.6rem; font-size: 0.75rem;">
+            <option value="all">Todas as 9 Ondas (Visão Global)</option>
+            <option value="w1">Onda 1: Infra & Config</option>
+            <option value="w2">Onda 2: Tipos & Consts</option>
+            <option value="w3">Onda 3: APIs & Streaming</option>
+            <option value="w4">Onda 4: Code IDE & Harness</option>
+            <option value="w5">Onda 5: DNA & Personas</option>
+            <option value="w6">Onda 6: Chat UI & Mensagens</option>
+            <option value="w7">Onda 7: Sidebar & Modais</option>
+            <option value="w8">Onda 8: Utilitários & Design</option>
+            <option value="w9">Onda 9: App.tsx Central</option>
+          </select>
+          <span style="font-size: 0.6875rem; font-family: 'JetBrains Mono', monospace; color: var(--text-faint);">Arraste o canvas livremente · Scroll para zoom</span>
+        </div>
+      </div>
+
+      <div class="graph-viewport" id="graph-viewport">
+        <svg id="graph-svg">
+          <defs>
+            <pattern id="grid-dots" width="28" height="28" patternUnits="userSpaceOnUse">
+              <circle cx="2" cy="2" r="1.2" fill="#26262d" />
+            </pattern>
+            <marker id="arrow-default" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#3f3f46" />
+            </marker>
+            <marker id="arrow-out" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#ff5500" />
+            </marker>
+            <marker id="arrow-in" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38bdf8" />
+            </marker>
+            <marker id="arrow-crit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#f43f5e" />
+            </marker>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid-dots)" />
+          <g id="graph-transform-root">
+            <g id="graph-clusters-layer"></g>
+            <g id="graph-edges-layer"></g>
+            <g id="graph-nodes-layer"></g>
+          </g>
+        </svg>
+
+        <!-- Floating Graph HUD Drawer -->
+        <div class="graph-hud" id="graph-hud">
+          <div class="hud-header">
+            <div>
+              <div style="display: flex; gap: 0.35rem; align-items: center; margin-bottom: 0.2rem;">
+                <span style="font-size: 0.6875rem; font-family: 'JetBrains Mono', monospace; color: #ff7733;" id="hud-card-id">ID</span>
+                <span class="badge" id="hud-card-prio">PRIO</span>
+              </div>
+              <h3 style="font-size: 0.875rem; font-weight: 700; color: #fff;" id="hud-card-title">Título</h3>
+            </div>
+            <button class="modal-close" onclick="closeGraphHud()">✕</button>
+          </div>
+
+          <div>
+            <div class="section-title">Status Rápido</div>
+            <div class="quick-status-group" style="gap: 0.35rem;">
+              <button class="status-btn" id="hud-st-pending" onclick="setHudCardStatus('pending')">🔴</button>
+              <button class="status-btn" id="hud-st-reviewing" onclick="setHudCardStatus('reviewing')">🟡</button>
+              <button class="status-btn" id="hud-st-issues" onclick="setHudCardStatus('issues')">🟠</button>
+              <button class="status-btn" id="hud-st-approved" onclick="setHudCardStatus('approved')">🟢</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-title">Depende De (Inputs):</div>
+            <div class="hud-chip-list" id="hud-inputs-list"></div>
+          </div>
+
+          <div>
+            <div class="section-title">Alimenta (Outputs):</div>
+            <div class="hud-chip-list" id="hud-outputs-list"></div>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-top: auto;">
+            <button class="btn btn-primary" style="flex: 1;" onclick="openCardModalFromHud()">📋 Abrir no Kanban</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Card Details Modal -->
+  <div class="modal-backdrop" id="card-modal" onclick="closeModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="card-id" id="modal-card-id">ID</span>
+            <span class="badge" id="modal-card-prio">PRIORIDADE</span>
+            <span class="badge" id="modal-card-category" style="background: rgba(255,255,255,0.1); color: #fff;">CATEGORIA</span>
+          </div>
+          <h2 style="font-size: 1.125rem; font-weight: 700; color: #fff;" id="modal-card-title">Título do Módulo</h2>
+        </div>
+        <div class="modal-nav-buttons">
+          <button class="btn" onclick="navigateCard(-1)" title="Módulo Anterior">◀</button>
+          <button class="btn" onclick="navigateCard(1)" title="Próximo Módulo">▶</button>
+          <button class="modal-close" onclick="closeModalDirect()">✕</button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div>
+          <div class="section-title">
+            <span>Status da Revisão</span>
+            <span id="modal-status-badge" style="font-size: 0.75rem; text-transform: none; color: var(--text-muted);"></span>
+          </div>
+          <div class="quick-status-group">
+            <button class="status-btn pending" id="btn-st-pending" onclick="setCardStatus(currentModalCardId, 'pending')">🔴 Pendente</button>
+            <button class="status-btn reviewing" id="btn-st-reviewing" onclick="setCardStatus(currentModalCardId, 'reviewing')">🟡 Em Análise</button>
+            <button class="status-btn issues" id="btn-st-issues" onclick="setCardStatus(currentModalCardId, 'issues')">🟠 Ajustes Necessários</button>
+            <button class="status-btn approved" id="btn-st-approved" onclick="setCardStatus(currentModalCardId, 'approved')">🟢 Aprovado</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Arquivos e Componentes Avaliados</div>
+          <div id="modal-files-list" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
+        </div>
+
+        <div>
+          <div class="section-title">Principais Símbolos, Funções & Classes</div>
+          <div class="symbols-list" id="modal-symbols-list"></div>
+        </div>
+
+        <div>
+          <div class="section-title">
+            <span>Checklist Especializado de Verificação</span>
+            <button class="btn" style="padding: 0.15rem 0.5rem; font-size: 0.6875rem;" onclick="toggleAllChecklist(currentModalCardId)">Alternar Todos</button>
+          </div>
+          <div class="checklist-container" id="modal-checklist-container"></div>
+        </div>
+
+        <div>
+          <div class="section-title">Diretrizes de Qualidade & Engenharia</div>
+          <ul id="modal-objectives-list" style="padding-left: 1.25rem; font-size: 0.8125rem; line-height: 1.6; color: var(--text-muted);"></ul>
+        </div>
+
+        <div>
+          <div class="section-title">Anotações do Code Review & Achados</div>
+          <textarea class="notes-textarea" id="modal-notes" placeholder="Digite observações, débitos técnicos encontrados ou melhorias a aplicar..." oninput="saveCardNotes(currentModalCardId, this.value)"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span style="font-size: 0.75rem; color: var(--text-faint);">As alterações são salvas automaticamente no armazenamento local.</span>
+        <button class="btn btn-primary" onclick="closeModalDirect()">Concluir</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-popup" id="toast-popup">Estado salvo com sucesso!</div>
+
+  <script>
+    const RAW_WAVES = [{"id":"w1","number":1,"title":"Onda 1: Fundações, Infraestrutura & Configurações","shortTitle":"Infra & Config","desc":"Build, TypeScript, Linters, Firebase, MCP Bridge, PWA & Legado","icon":"Shield","color":"#3b82f6","cards":[{"id":"w1-c1","title":"Build, Dependências & Vite Config","category":"Infra/Build","priority":"high","files":[{"path":"gemini-react/vite.config.ts","lines":25,"desc":"Configuração do Vite, plugins React e Tailwind v4"},{"path":"gemini-react/package.json","lines":56,"desc":"Manifest de dependências, scripts de build/dev/test"},{"path":"gemini-react/package-lock.json","lines":6375,"desc":"Lockfile de versões determinísticas"}],"keySymbols":["defineConfig","tailwindcss()","@vitejs/plugin-react","scripts: { dev, build, lint, test, mcp }"],"objectives":["Verificar compatibilidade do Vite 8 com Tailwind 4 e React 19","Auditar vulnerabilidades de dependências e pacotes obsoletos","Garantir configuração de chunks otimizados para redução de bundle size","Validar aliases de caminhos e variáveis de ambiente no build"],"checklist":[{"id":"w1-c1-chk1","text":"Verificar se vite.config.ts possui minificação e tree-shaking ativos","checked":true},{"id":"w1-c1-chk2","text":"Checar se scripts do package.json tratam falhas de tipagem (tsc -b) antes do bundle","checked":true},{"id":"w1-c1-chk3","text":"Auditar dependências não utilizadas (ex: pacotes residuais)","checked":true},{"id":"w1-c1-chk4","text":"Verificar configurações de CSP e headers seguros no servidor de dev","checked":true}],"status":"approved"},{"id":"w1-c2","title":"Configurações de Compilação TypeScript","category":"TypeScript","priority":"high","files":[{"path":"gemini-react/tsconfig.json","lines":7,"desc":"Root tsconfig com referências de projetos"},{"path":"gemini-react/tsconfig.app.json","lines":25,"desc":"Configuração do compilador para código React/DOM"},{"path":"gemini-react/tsconfig.node.json","lines":24,"desc":"Configuração do compilador para Node/Vite"}],"keySymbols":["compilerOptions","strict: true","jsx: react-jsx","moduleResolution: bundler"],"objectives":["Garantir strict mode ativo em todas as configurações","Verificar flags noUnusedLocals e noUnusedParameters","Checar isolamento de tipos DOM vs tipos Node","Garantir que nenhum arquivo de runtime escape da checagem estática"],"checklist":[{"id":"w1-c2-chk1","text":"Validar strict: true em tsconfig.app.json","checked":true},{"id":"w1-c2-chk2","text":"Verificar ausência de skipLibCheck permissivo excessivo","checked":true},{"id":"w1-c2-chk3","text":"Checar isolamento de tipos DOM vs tipos Node","checked":true}],"status":"approved"},{"id":"w1-c3","title":"Regras de Linting & Padronização ESLint","category":"Qualidade/Lint","priority":"medium","files":[{"path":"gemini-react/eslint.config.js","lines":43,"desc":"Flat config do ESLint 9 com React Hooks e TypeScript"}],"keySymbols":["tseslint.config","reactHooks.configs.recommended","reactRefresh.configs.vite"],"objectives":["Verificar ativação das regras de hooks (exhaustive-deps, rules-of-hooks)","Garantir proibição de console.log soltos em produção","Checar integração do ESLint com TypeScript-ESLint 8"],"checklist":[{"id":"w1-c3-chk1","text":"Auditar regras de dependências em useEffect/useCallback","checked":true},{"id":"w1-c3-chk2","text":"Validar desativação de regras permissivas inadequadas","checked":true}],"status":"approved"},{"id":"w1-c4","title":"Infraestrutura Firebase & Segurança Firestore","category":"Segurança/DB","priority":"critical","files":[{"path":"gemini-react/firebase.json","lines":21,"desc":"Configuração de hosting e regras do Firestore"},{"path":"gemini-react/firestore.rules","lines":35,"desc":"Regras de controle de acesso por usuário"},{"path":"gemini-react/firestore.indexes.json","lines":3,"desc":"Índices compostos para consultas"}],"keySymbols":["rules_version = 2","request.auth != null","resource.data.userId == request.auth.uid"],"objectives":["Garantir que usuários só leiam/escrevam seus próprios dados","Impedir injeção ou sobreescrita de sessões de outros usuários","Verificar índices para queries de histórico e memória","Auditar limites de payload e regras de validação de schema"],"checklist":[{"id":"w1-c4-chk1","text":"Verificar se auth.uid é validado em todas as coleções do Firestore","checked":true},{"id":"w1-c4-chk2","text":"Garantir ausência de regras permissivas públicas","checked":true},{"id":"w1-c4-chk3","text":"Validar integridade de índices para paginação segura","checked":true}],"status":"approved"},{"id":"w1-c5","title":"MCP Bridge & Execução de Ferramentas","category":"MCP/Backend","priority":"critical","files":[{"path":"gemini-react/mcp-bridge.mjs","lines":429,"desc":"Servidor local Node.js para protocolo MCP via STDIO/HTTP"},{"path":"gemini-react/mcp-config.json","lines":13,"desc":"Configuração de servidores e comandos MCP"}],"keySymbols":["spawn","readline.createInterface","handleToolCall","sanitizeInput","ALLOWED_COMMANDS"],"objectives":["Prevenir execução arbitrária de comandos no shell (Command Injection)","Garantir sanitização rigorosa de argumentos e caminhos de arquivo","Auditar ciclo de vida e encerramento de subprocessos filhos","Implementar timeouts estritos para chamadas MCP travadas"],"checklist":[{"id":"w1-c5-chk1","text":"Validar que spawn usa arrays explícitos e shell: false","checked":true},{"id":"w1-c5-chk2","text":"Verificar tratamento de erros ao falhar execução de tool","checked":true},{"id":"w1-c5-chk3","text":"Checar encerramento determinístico de processos no SIGINT/SIGTERM","checked":true},{"id":"w1-c5-chk4","text":"Auditar autenticação/CORS na interface HTTP do MCP bridge","checked":true}],"status":"approved"},{"id":"w1-c6","title":"PWA, Service Worker & Audio Worklet","category":"PWA/WebAudio","priority":"medium","files":[{"path":"gemini-react/public/manifest.json","lines":35,"desc":"Manifest PWA para instalação standalone"},{"path":"gemini-react/public/sw.js","lines":45,"desc":"Service Worker de cache e offline assets"},{"path":"gemini-react/public/audio-processor.js","lines":60,"desc":"AudioWorkletProcessor para captura PCM 16kHz"},{"path":"gemini-react/public/icons.svg","lines":40,"desc":"Sprite SVG de ícones do sistema"},{"path":"gemini-react/public/favicon.svg","lines":15,"desc":"Favicon vetorial"},{"path":"gemini-react/public/gemini.svg","lines":15,"desc":"Logomarca vetorial Gemini"},{"path":"gemini-react/public/icon-192x192.png","lines":1,"desc":"Ícone PWA 192px"},{"path":"gemini-react/public/icon-512x512.png","lines":1,"desc":"Ícone PWA 512px"}],"keySymbols":["AudioWorkletProcessor","process(inputs, outputs)","self.addEventListener(fetch)","caches.open"],"objectives":["Verificar eficiência do buffer de áudio no AudioWorkletProcessor","Eliminar vazamentos de memória e buffers acumulados no worker","Garantir estratégia de cache segura no Service Worker sem travar updates","Validar suporte a microfones e permissões de mídia"],"checklist":[{"id":"w1-c6-chk1","text":"Garantir transferência de ArrayBuffers sem cópias redundantes","checked":true},{"id":"w1-c6-chk2","text":"Checar expiração e atualização do cache do Service Worker","checked":true}],"status":"approved"},{"id":"w1-c7","title":"Auditoria do Monolito Legado & Migração","category":"Legado/Clean","priority":"low","files":[{"path":"Gemini.html","lines":233,"desc":"Arquivo HTML monolítico standalone original"}],"keySymbols":["Single-file HTML","Vanilla JS Chat","Inline Styles"],"objectives":["Verificar se todas as funcionalidades do Gemini.html foram migradas para o gemini-react","Identificar se o arquivo deve ser arquivado ou mantido como fallback leve","Garantir que não haja segredos ou referências obsoletas expostas"],"checklist":[{"id":"w1-c7-chk1","text":"Confirmar paridade de recursos entre Gemini.html e React","checked":true},{"id":"w1-c7-chk2","text":"Documentar decisão de arquivamento/remoção","checked":true}],"status":"approved"},{"id":"w1-c8","title":"Scripts Scratch & Automação Interna","category":"Hygiene","priority":"low","files":[{"path":"gemini-react/run-replace.js","lines":42,"desc":"Script de substituição em massa"},{"path":"gemini-react/scratch/*","lines":350,"desc":"Scripts temporários de debug e teste"}],"keySymbols":["fs.readFileSync","fs.writeFileSync","test scripts"],"objectives":["Auditar e expurgar scripts temporários de depuração obsoletos","Garantir que arquivos scratch não sejam incluídos no build final","Eliminar logs residuais e dados brutos de teste"],"checklist":[{"id":"w1-c8-chk1","text":"Remover scripts de scratch desnecessários","checked":true},{"id":"w1-c8-chk2","text":"Garantir inclusão de scratch/ no .gitignore","checked":true}],"status":"approved"},{"id":"w1-c9","title":"Entrypoint DOM, Root React 19 & HTML Shell","category":"Boot/DOM","priority":"high","files":[{"path":"gemini-react/index.html","lines":44,"desc":"Shell HTML principal, viewport, preconnect de Google Fonts e meta tags"},{"path":"gemini-react/src/main.tsx","lines":18,"desc":"Montagem do React 19 createRoot, StrictMode e import de index.css"}],"keySymbols":["createRoot","document.getElementById(root)","React.StrictMode","<meta name=viewport>","<link rel=preconnect>"],"objectives":["Verificar se a montagem com React 19 createRoot trata StrictMode sem efeitos colaterais duplicados indesejados","Auditar fontes externas carregadas no index.html e headers de preconnect/display=swap","Checar meta tags de segurança (CSP) e compatibilidade com mobile (viewport fit, theme-color)","Garantir ausência de inline scripts vulneráveis no index.html"],"checklist":[{"id":"w1-c9-chk1","text":"Verificar renderização de index.html com tags de acessibilidade (lang=pt-BR, title dinâmico)","checked":true},{"id":"w1-c9-chk2","text":"Validar inicialização limpa em main.tsx com tratamento de erro no getElementById(root)","checked":true},{"id":"w1-c9-chk3","text":"Checar se o tema escuro padrão é inicializado sem flash de luz (FOUC)","checked":true}],"status":"approved"},{"id":"w1-c10","title":"Governança Técnica, Regras de Design & Diretrizes","category":"Governança/Docs","priority":"medium","files":[{"path":"GEMINI.md","lines":130,"desc":"Diretrizes de engenharia de alta performance, hierarquia de precedência e design"},{"path":".agents/rules/engineering_standards.md","lines":100,"desc":"Padrões de concorrência, streams, IO e anti-laziness"},{"path":".agents/rules/ui_design_standards.md","lines":80,"desc":"Padrões de design obsidian dark, micro-switches e marca Nemon"},{"path":".vscode/settings.json","lines":26,"desc":"Configurações de workspace do VSCode/IDE"},{"path":"gemini-react/README.md","lines":65,"desc":"Documentação do projeto, arquitetura e instruções de execução"}],"keySymbols":["Hierarchy of Precedence","Anti-Laziness","Obsidian Dark Palette","Nemon Iconography","Engineering Standards"],"objectives":["Alinhar todo o código com os 13 pilares de engenharia do GEMINI.md","Garantir conformidade rigorosa com a autoridade estética obsidian/charcoal","Validar coerência entre as regras de .agents/rules e as diretrizes centrais","Manter README.md atualizado com as capacidades reais de áudio, Live, Code IDE e Memória DNA"],"checklist":[{"id":"w1-c10-chk1","text":"Auditar adesão às regras de eliminação de código morto (dead code)","checked":true},{"id":"w1-c10-chk2","text":"Garantir proibição de sparkles genéricos e cores fora da paleta","checked":true},{"id":"w1-c10-chk3","text":"Checar precisão das instruções no README.md","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:15:48.211Z","status":"approved","cardsTotal":10,"cardsApproved":10,"fixesApplied":["npm audit fix: eliminated 14 security vulnerabilities (1 critical, 7 high, 5 moderate, 1 low) in package tree","tsconfig.app.json & tsconfig.node.json: enforced strict: true mode across all modules","vite.config.ts: fixed path traversal vulnerability in /api/upload via path.basename and directory boundary check","vite.config.ts: introduced readBoundedBody with payload limits (25MB uploads, 5MB JSON) preventing memory exhaustion DoS","vite.config.ts & mcp-bridge.mjs: implemented SSRF protection via isSafeHttpUrl banning loopback, private ranges and AWS/GCP metadata IPs","vite.config.ts: modernized __dirname to import.meta.dirname","mcp-bridge.mjs: added clean termination listeners (SIGINT, SIGTERM, process exit) preventing orphaned child processes","public/audio-processor.js: added null-safe guard for inputs and channels avoiding TypeError","src/main.tsx: added safe root DOM check and replaced process.env with import.meta.env.PROD"]}},{"id":"w2","number":2,"title":"Onda 2: Tipagens, Constantes & Modelos de Domínio","shortTitle":"Tipos & Constantes","desc":"Interfaces TypeScript, Modelos LLM, Limites de RPD/TPM & Mock Data","icon":"Layers","color":"#8b5cf6","cards":[{"id":"w2-c1","title":"Modelos Centrais de Chat & Sessão","category":"Tipagem","priority":"high","files":[{"path":"gemini-react/src/types/index.ts","lines":45,"desc":"Interfaces ChatSession, Folder, Skill, DailyUsage"}],"keySymbols":["ChatSession","Folder","Skill","ModelUsage","DailyUsage","Message"],"objectives":["Garantir completude das interfaces sem uso de any","Validar campos opcionais (contextTokens, folderId, model, personalityId)","Checar integridade da modelagem de contagem de tokens por turno"],"checklist":[{"id":"w2-c1-chk1","text":"Garantir que ChatSession suporte metadados completos de contexto","checked":true},{"id":"w2-c1-chk2","text":"Validar tipagem estrita de Skill (prompt vs tool)","checked":true}],"status":"approved"},{"id":"w2-c2","title":"Modelos de Personalidade, Memória DNA & Arquivos","category":"Tipagem","priority":"high","files":[{"path":"gemini-react/src/types/index.ts","lines":39,"desc":"Interfaces Personality, MemoryFact, PendingMemoryUpdate, ImagenFile"}],"keySymbols":["Personality","MemoryFact","PendingMemoryUpdate","ImagenFile","PendingFile"],"objectives":["Verificar estrutura de conexões e categorias da Memória DNA","Garantir suporte a mimeTypes e dados base64 em arquivos pendentes","Checar conformidade da tipagem de atualizações pendentes de memória"],"checklist":[{"id":"w2-c2-chk1","text":"Validar integridade de campos de MemoryFact (id, text, category, connections)","checked":true},{"id":"w2-c2-chk2","text":"Checar tipagem de imagens geradas (ImagenFile)","checked":true}],"status":"approved"},{"id":"w2-c3","title":"Modelos do Code IDE & Agentic Harness","category":"Tipagem/IDE","priority":"high","files":[{"path":"gemini-react/src/types/codeIde.ts","lines":107,"desc":"Tipos de projeto, ações do harness, blocos de passos e mensagens"}],"keySymbols":["CodeProject","HarnessAction","HarnessActionType","HarnessStepBlock","AgentChatMessage","DEFAULT_PROJECT_FILES"],"objectives":["Verificar enum de ações (read_file | write_file | edit_file | list_files | run_preview)","Garantir tipagem completa de diffs estruturados (targetContent, replacementContent)","Validar estrutura hierárquica de passos e pensamentos do assistente"],"checklist":[{"id":"w2-c3-chk1","text":"Checar consistência de estados de status (pending | success | error | warning)","checked":true},{"id":"w2-c3-chk2","text":"Validar template inicial em DEFAULT_PROJECT_FILES","checked":true}],"status":"approved"},{"id":"w2-c4","title":"Constantes de Modelos, Provedores & Janelas de Contexto","category":"Constantes/LLM","priority":"critical","files":[{"path":"gemini-react/src/constants/index.ts","lines":160,"desc":"MODEL_OPTIONS, MODEL_LIMITS, MODEL_CONTEXT, provedores e endpoints"}],"keySymbols":["MODEL_OPTIONS","MODEL_LIMITS","MODEL_CONTEXT","LOCAL_MODEL_ID","OPENROUTER_BASE_URL","ORCAROUTER_BASE_URL"],"objectives":["Validar limites de RPD/TPM para Gemini 3.5, Gemini 3.1, Gemma 4 e Imagen","Garantir janelas de contexto corretas (1M para Flash Lite, 128k para Gemma, 32k para Local)","Checar URLs base oficiais dos provedores externos"],"checklist":[{"id":"w2-c4-chk1","text":"Verificar ids oficiais de modelos da Google AI Studio","checked":true},{"id":"w2-c4-chk2","text":"Auditar configuração de capacidades (text, image, audio, file, tools)","checked":true}],"status":"approved"},{"id":"w2-c5","title":"Constantes de Voz Live, Temas & Tipografia","category":"Constantes/UI","priority":"medium","files":[{"path":"gemini-react/src/constants/index.ts","lines":147,"desc":"LIVE_MODEL_OPTIONS, LIVE_VOICES, FONT_OPTIONS, estimadores"}],"keySymbols":["LIVE_VOICES","LIVE_MODEL_MAP","FONT_OPTIONS","DEFAULT_FONT_ID","estimateTokens","formatTokenCount"],"objectives":["Verificar lista de vozes suportadas (Puck, Charon, Kore, Fenrir, Aoede)","Checar stacks de fontes CSS para evitar quebras visuais","Auditar precisão do estimador rápido de tokens (~4 chars/token)"],"checklist":[{"id":"w2-c5-chk1","text":"Validar mapeamento de IDs de modelos Live (gemini-3.1-flash-live-preview)","checked":true},{"id":"w2-c5-chk2","text":"Checar formatação de números em formatTokenCount","checked":true}],"status":"approved"},{"id":"w2-c6","title":"Testes Unitários de Constantes & Utilitários de Domínio","category":"Testes","priority":"medium","files":[{"path":"gemini-react/src/constants/constants.test.ts","lines":63,"desc":"Testes de resolução de contexto, tokens e opções"}],"keySymbols":["describe(constants)","getModelContextWindow","estimateTokens","formatTokenCount"],"objectives":["Garantir 100% de cobertura de testes para funções puras de constantes","Testar cenários de fallback de modelos customizados e desconhecidos","Validar testes de borda para contagem de tokens (valores 0, negativos, gigantes)"],"checklist":[{"id":"w2-c6-chk1","text":"Executar suite vitest de constants.test.ts","checked":true},{"id":"w2-c6-chk2","text":"Adicionar casos para modelos com contextLength customizado","checked":true}],"status":"approved"},{"id":"w2-c7","title":"Esquemas de Persistência Local & Mock Data","category":"Persistência/JSON","priority":"low","files":[{"path":"gemini-react/app-config.json","lines":1,"desc":"Configurações padrão da aplicação"},{"path":"gemini-react/personalities.json","lines":1,"desc":"Personalidades padrão exportáveis"},{"path":"gemini-react/skills-lock.json","lines":71,"desc":"Habilidades e templates padrão"},{"path":"gemini-react/usage-data.json","lines":5,"desc":"Estrutura de telemetria de consumo"},{"path":"gemini-react/chat-history.json","lines":5,"desc":"Sessões e histórico de conversas seed/mock"},{"path":"gemini-react/user-memory.json","lines":1,"desc":"Fatos e grafo de memória inicial de exemplo"}],"keySymbols":["JSON Schemas","Default Skills","Default Prompts"],"objectives":["Validar integridade sintática e de schema de todos os JSONs","Garantir que nenhum dado sensível ou chave de teste esteja persistida","Verificar migração segura quando os arquivos forem importados"],"checklist":[{"id":"w2-c7-chk1","text":"Validar sintaxe JSON em todos os arquivos de dados","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:18:11.604Z","status":"approved","cardsTotal":7,"cardsApproved":7,"fixesApplied":["src/types/codeIde.ts: purged generic sparkles emoji and amber gradient, replaced with sleek obsidian terminal icon and aesthetic conforming to GEMINI.md","src/constants/constants.test.ts: expanded test suite with getModelCapabilities test cases, zero tokens and multi-million token formatting edge cases","gemini-react/usage-data.json: resolved git merge conflict markers (<<<<<<< HEAD) that broke JSON parsing","gemini-react/chat-history.json: resolved git merge conflict markers, preserving 172 conversation turns into clean valid JSON"]}},{"id":"w3","number":3,"title":"Onda 3: Serviços de Conectividade, APIs & Streaming","shortTitle":"APIs & Streaming","desc":"Gateway Gemini, OpenAI Proxy, Gemini Live WebSocket, Áudio & Busca","icon":"Radio","color":"#ec4899","cards":[{"id":"w3-c1","title":"Gateway Principal Gemini & Roteamento Multi-Provedor","category":"APIs/LLM","priority":"critical","files":[{"path":"gemini-react/src/services/gemini.ts","lines":450,"desc":"generateGeminiContent, streamGeminiContent, resolveProvider"}],"keySymbols":["generateGeminiContent","streamGeminiContent","resolveProvider","setGlobalDefaultApiKey","setGlobalPaidApiKey"],"objectives":["Auditar roteamento inteligente de chave gratuita vs chave paga","Validar streaming SSE (Server-Sent Events) sem perda de chunks","Garantir tratamento de erros HTTP 429 (Rate Limit), 401 e 503 com retry exponencial","Checar contabilização precisa de tokens de entrada e saída"],"checklist":[{"id":"w3-c1-chk1","text":"Garantir que chaves de API não vazem em logs ou mensagens de erro","checked":true},{"id":"w3-c1-chk2","text":"Validar timeout explícito em todas as chamadas de fetch","checked":true},{"id":"w3-c1-chk3","text":"Checar fechamento de streams em caso de abort pelo usuário","checked":true}],"status":"approved"},{"id":"w3-c2","title":"Integração com Provedores OpenAI, OpenRouter & Local","category":"APIs/OpenAI","priority":"critical","files":[{"path":"gemini-react/src/services/gemini.ts","lines":350,"desc":"Streaming /v1/chat/completions para OpenRouter, OrcaRouter e llama.cpp"}],"keySymbols":["streamOpenAiCompatibleContent","fetchOpenRouterModelMeta","fetchOrcaRouterModelMeta"],"objectives":["Verificar compatibilidade do parser SSE com formatos OpenAI delta.content","Garantir suporte a CORS e preflight no servidor local llama.cpp","Checar fetching de metadados de modelos e context_length dinâmico"],"checklist":[{"id":"w3-c2-chk1","text":"Validar parser de chunks data: [DONE]","checked":true},{"id":"w3-c2-chk2","text":"Tratar falhas de conexão no localhost (llama-server offline)","checked":true}],"status":"approved"},{"id":"w3-c3","title":"Pipeline de Geração de Imagens Imagen 4","category":"APIs/Imagen","priority":"high","files":[{"path":"gemini-react/src/services/gemini.ts","lines":180,"desc":"generateImagenContent, polling de status e processamento base64"}],"keySymbols":["generateImagenContent","predictImagen","ImagenFile"],"objectives":["Verificar tratamento de aspect ratio, resolução e prompts negativos","Garantir liberação de memória de strings base64 pesadas de imagem","Tratar erros de cota e safety filters da API Imagen"],"checklist":[{"id":"w3-c3-chk1","text":"Validar tratamento de erro quando o modelo recusa gerar a imagem","checked":true},{"id":"w3-c3-chk2","text":"Checar limpeza de URLs temporárias geradas","checked":true}],"status":"approved"},{"id":"w3-c4","title":"Parser de Markdown, Fórmulas KaTeX & Highlight.js Core","category":"Markdown/Render","priority":"high","files":[{"path":"gemini-react/src/services/gemini.ts","lines":220,"desc":"marked.use, markedKatex, highlight.js custom register, code renderer"}],"keySymbols":["marked.use","markedKatex","renderer.code","COPY_ICON_SVG","PREVIEW_ICON_SVG","escapeHtml"],"objectives":["Eliminar vulnerabilidades de Cross-Site Scripting (XSS) no parser de Markdown","Garantir que KaTeX não quebre com símbolos monetários (ex: R$ 50)","Verificar tree-shaking do Highlight.js (apenas linguagens registradas)","Validar renderização dos botões sticky de cópia e preview"],"checklist":[{"id":"w3-c4-chk1","text":"Auditar escapeHtml em linguagens não reconhecidas","checked":true},{"id":"w3-c4-chk2","text":"Verificar strict: false no markedKatex para evitar spam no console","checked":true},{"id":"w3-c4-chk3","text":"Checar sanitização de tags HTML perigosas no output","checked":true}],"status":"approved"},{"id":"w3-c5","title":"Testes Unitários do Gateway Gemini","category":"Testes","priority":"high","files":[{"path":"gemini-react/src/services/gemini.test.ts","lines":100,"desc":"Testes de formatação de mensagens, fallback e providers"}],"keySymbols":["describe(gemini service)","test(resolveProvider)","test(markdown rendering)"],"objectives":["Aumentar cobertura de testes unitários para o pipeline de streaming","Simular cenários de falha de rede e rate limit","Validar testes de renderização de fórmulas matemáticas KaTeX"],"checklist":[{"id":"w3-c5-chk1","text":"Executar testes vitest em gemini.test.ts","checked":true}],"status":"approved"},{"id":"w3-c6","title":"Protocolo Gemini Live WebSocket & Sessão Bidirecional","category":"Live/Voz","priority":"critical","files":[{"path":"gemini-react/src/services/geminiLive.ts","lines":550,"desc":"GeminiLiveSession, WebSocket handshake, PCM 16/24kHz streaming"}],"keySymbols":["GeminiLiveSession","setupWebSocket","sendAudioChunk","handleIncomingMessage","handleBargeIn"],"objectives":["Auditar ciclo de vida da conexão WebSocket (abertura, reconexão, teardown)","Garantir tratamento de Barge-in (interrupção do áudio da IA quando usuário fala)","Validar conversão correta de sample rates (16kHz entrada, 24kHz saída)","Prevenir acúmulo de buffers de áudio em conexões com lag"],"checklist":[{"id":"w3-c6-chk1","text":"Garantir fechamento determinístico do socket no disconnect()","checked":true},{"id":"w3-c6-chk2","text":"Verificar limpeza de AudioContext e Worklets ao encerrar","checked":true},{"id":"w3-c6-chk3","text":"Auditar sincronia do estado de interrupção (barge-in)","checked":true}],"status":"approved"},{"id":"w3-c7","title":"Loop de Tool Calling ao Vivo no Gemini Live","category":"Live/Tools","priority":"critical","files":[{"path":"gemini-react/src/services/geminiLive.ts","lines":419,"desc":"Declaração e despacho de ferramentas ao vivo (busca, clima, cálculo, memória)"}],"keySymbols":["toolDeclarations","handleToolCall","executeLiveTool","sendToolResponse"],"objectives":["Validar schemas JSON de todas as ferramentas disponíveis no modo Live","Garantir execução não-bloqueante e segura das funções (ex: safeCalculate)","Checar retorno imediato de toolResponse para o modelo WebSocket","Verificar isolamento de erros durante a execução de ferramentas"],"checklist":[{"id":"w3-c7-chk1","text":"Checar segurança da função de cálculo matematico","checked":true},{"id":"w3-c7-chk2","text":"Validar tratamento de erro quando API de clima ou busca falha","checked":true}],"status":"approved"},{"id":"w3-c8","title":"Ditado por Voz & Transcrição em Tempo Real","category":"Voz/Ditado","priority":"high","files":[{"path":"gemini-react/src/services/geminiDictation.ts","lines":251,"desc":"GeminiDictationSession, captura de microfone e streaming"}],"keySymbols":["GeminiDictationSession","start()","stop()","onTranscript","onStateChange"],"objectives":["Verificar transições de estado do ditado (idle, listening, processing, error)","Garantir limpeza de MediaStreamTracks ao pausar/parar","Checar feedback visual e latência da transcrição"],"checklist":[{"id":"w3-c8-chk1","text":"Garantir que faixas de áudio do microfone sejam liberadas no stop()","checked":true}],"status":"approved"},{"id":"w3-c9","title":"Suavizador de Streaming de Texto (StreamSmoother)","category":"Streaming","priority":"medium","files":[{"path":"gemini-react/src/services/streamSmoother.ts","lines":131,"desc":"Buffer de cadência de tokens e controle de jitter"},{"path":"gemini-react/src/services/streamSmoother.test.ts","lines":39,"desc":"Testes unitários do smoother"}],"keySymbols":["StreamSmoother","push()","flush()","tick()","targetWpm"],"objectives":["Garantir exibição fluida e natural de texto sem travamentos ou saltos bruscos","Verificar esvaziamento imediato do buffer ao finalizar a resposta (flush)","Eliminar timers órfãos (requestAnimationFrame / setTimeout)"],"checklist":[{"id":"w3-c9-chk1","text":"Verificar cancelamento de timers no destroy()","checked":true},{"id":"w3-c9-chk2","text":"Executar testes de streamSmoother.test.ts","checked":true}],"status":"approved"},{"id":"w3-c10","title":"Utilitários Web Audio API & Processamento PCM","category":"Áudio/PCM","priority":"high","files":[{"path":"gemini-react/src/services/audioUtils.ts","lines":84,"desc":"audioBufferToWav, concatFloat32, conversões Float32/Int16"}],"keySymbols":["audioBufferToWav","concatFloat32","floatTo16BitPCM","base64ToArrayBuffer"],"objectives":["Validar integridade do cabeçalho RIFF/WAV gerado","Evitar distorção e clipping em conversões de ponto flutuante para inteiros","Otimizar operações em TypedArrays para zero-copy sempre que possível"],"checklist":[{"id":"w3-c10-chk1","text":"Verificar bounds checking em arrays de áudio","checked":true}],"status":"approved"},{"id":"w3-c11","title":"Mecanismo Agnóstico de Busca Web (DuckDuckGo & MCP)","category":"Busca/Web","priority":"critical","files":[{"path":"gemini-react/src/services/duckduckgoSearch.ts","lines":385,"desc":"Pipeline unificado de pesquisa, scraping de snippets e MCP"},{"path":"gemini-react/src/services/duckduckgoSearch.test.ts","lines":66,"desc":"Testes de extração e parsing de resultados"}],"keySymbols":["executeDuckDuckGoSearch","performWebSearch","extractSearchSnippets","getGlobalMcpEndpoint"],"objectives":["Garantir resiliência a bloqueios de scraping (fallbacks para múltiplos endpoints)","Sanitizar termos de busca e URLs retornadas","Checar integração transparente com o endpoint MCP local quando ativo","Validar extração limpa de snippets sem injeção de HTML sujo"],"checklist":[{"id":"w3-c11-chk1","text":"Verificar timeouts e retries em requisições de busca","checked":true},{"id":"w3-c11-chk2","text":"Executar testes unitários de duckduckgoSearch.test.ts","checked":true}],"status":"approved"},{"id":"w3-c12","title":"Serviço de Inicialização Firebase & Firestore","category":"Firebase","priority":"high","files":[{"path":"gemini-react/src/services/firebase.ts","lines":29,"desc":"Inicialização do app Firebase, Auth e Firestore DB"}],"keySymbols":["initializeApp","getAuth","getFirestore","auth","db"],"objectives":["Garantir leitura segura de variáveis de ambiente do Firebase","Tratar inicialização sem credenciais (modo offline/anônimo gracioso)","Evitar re-inicializações redundantes da instância Firebase"],"checklist":[{"id":"w3-c12-chk1","text":"Verificar se credenciais vazias não causam crash em runtime","checked":true}],"status":"approved"},{"id":"w3-c13","title":"Logger Centralizado & Níveis de Diagnóstico","category":"Diagnóstico","priority":"medium","files":[{"path":"gemini-react/src/services/logger.ts","lines":58,"desc":"Logger em memória com buffer circular e listeners"}],"keySymbols":["logger.info","logger.warn","logger.error","logger.subscribe","circularBuffer"],"objectives":["Garantir limite máximo do buffer em memória para evitar memory leak","Verificar desanexação de listeners de log no unmount de componentes","Formatar timestamps UTC e metadados de erro de forma estruturada"],"checklist":[{"id":"w3-c13-chk1","text":"Verificar teto de capacidade do array de logs (ex: max 500 entradas)","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:20:41.961Z","status":"approved","cardsTotal":13,"cardsApproved":13,"fixesApplied":["src/services/gemini.ts: eliminated useless escape characters in markdown pre-sanitizer regex (line 310)","src/services/geminiLive.ts: audited cleanupConnection ensuring complete release of MediaStream tracks, video streams, audioContext and websocket listeners","src/services/logger.ts: audited circular buffer (max 500 entries) with queueMicrotask dispatching to prevent React concurrent render warnings","src/services/audioUtils.ts & streamSmoother.ts: verified memory allocations, buffer flushing and timer cleanup on destroy"]}},{"id":"w4","number":4,"title":"Onda 4: Code IDE, Engine de Execução & Agentic Harness","shortTitle":"Code IDE & Harness","desc":"CodeMirror, Sandbox Iframe Runner, Diff Viewer & Auto-Fix Agent","icon":"Terminal","color":"#10b981","cards":[{"id":"w4-c1","title":"Motor do Code Harness & Loop de Ações Agenticas","category":"Harness/Engine","priority":"critical","files":[{"path":"gemini-react/src/services/codeHarness.ts","lines":650,"desc":"Parsing de blocos XML de ação, leitura/escrita de arquivos virtuais e passos"}],"keySymbols":["parseHarnessResponse","executeStepBlock","executeAction","applyCodeDiff","HARNESS_SYSTEM_PROMPT"],"objectives":["Verificar robustez do parser de tags agenticas (<step>, <action>, <thought>)","Garantir atomicidade na aplicação de diffs e gravações de arquivos","Impedir sobrescritas acidentais de arquivos fora do workspace virtual","Validar histórico e rastreamento determinístico de passos"],"checklist":[{"id":"w4-c1-chk1","text":"Auditar parser regex contra respostas mal formatadas ou incompletas","checked":true},{"id":"w4-c1-chk2","text":"Verificar integridade da função applyCodeDiff","checked":true}],"status":"approved"},{"id":"w4-c2","title":"Mecanismo de Auto-Fix & Ciclo de Recuperação de Erros","category":"Harness/AutoFix","priority":"critical","files":[{"path":"gemini-react/src/services/codeHarness.ts","lines":502,"desc":"Captura de logs de erro do console/preview e auto-geração de prompt de reparo"}],"keySymbols":["triggerAutoFix","buildErrorCorrectionPrompt","maxAutoFixIterations","isFixing"],"objectives":["Impedir loops infinitos de auto-correção com limite estrito de iterações","Filtrar logs espúrios para enviar apenas erros reais de compilação/runtime","Garantir que o usuário possa interromper o auto-fix a qualquer momento","Limpar erros resolvidos após recompilação com sucesso"],"checklist":[{"id":"w4-c2-chk1","text":"Validar teto de segurança de iterações do auto-fix","checked":true},{"id":"w4-c2-chk2","text":"Verificar botão de cancelamento/abort do auto-fix","checked":true}],"status":"approved"},{"id":"w4-c3","title":"Testes Unitários do Code Harness","category":"Testes","priority":"high","files":[{"path":"gemini-react/src/services/codeHarness.test.ts","lines":212,"desc":"Testes de parsing de ações, aplicação de diffs e execução de passos"}],"keySymbols":["describe(codeHarness)","test(parseHarnessResponse)","test(applyCodeDiff)"],"objectives":["Cobrir casos extremos de diffs com quebras de linha e caracteres especiais","Testar cenários de parsing com múltiplas ações sequenciais","Validar testes de recuperação contra XML corrompido"],"checklist":[{"id":"w4-c3-chk1","text":"Executar testes do harness em codeHarness.test.ts","checked":true}],"status":"approved"},{"id":"w4-c4","title":"Componente Principal CodeIdeView & Workspace","category":"IDE/UI","priority":"critical","files":[{"path":"gemini-react/src/components/code-ide/CodeIdeView.tsx","lines":1553,"desc":"Layout estilo Google AI Studio, abas de arquivos, chat integrado e painéis"}],"keySymbols":["CodeIdeView","activeTab","activeFile","files","handleSendMessage","handleActionApprove"],"objectives":["Auditar performance de renderização e evitar re-renders em massa no editor","Garantir layout responsivo com redimensionamento de painéis laterais","Checar sincronização entre árvore de arquivos, abas e editor ativo","Verificar fluxo de aprovação manual ou automática de ações do agente"],"checklist":[{"id":"w4-c4-chk1","text":"Verificar memoização de painéis pesados (CodeMirror, Preview, Chat)","checked":true},{"id":"w4-c4-chk2","text":"Checar acessibilidade e atalhos de teclado (Ctrl+S, Ctrl+Enter)","checked":true}],"status":"approved"},{"id":"w4-c5","title":"Editor de Código Nativo (CodeMirror 6)","category":"IDE/Editor","priority":"high","files":[{"path":"gemini-react/src/components/code-ide/NativeCodeEditor.tsx","lines":219,"desc":"Wrapper CodeMirror com suporte a HTML, CSS, JavaScript/TypeScript"}],"keySymbols":["NativeCodeEditor","CodeMirror","oneDark","html()","javascript()","css()"],"objectives":["Verificar inicialização e destruição correta da instância CodeMirror","Garantir suporte a autocomplete, quebra de linha e numeração","Checar debounce nas atualizações de estado do código para evitar lag","Validar aplicação consistente do tema escuro One Dark"],"checklist":[{"id":"w4-c5-chk1","text":"Garantir debounce nas alterações de texto","checked":true},{"id":"w4-c5-chk2","text":"Verificar detecção automática da linguagem pela extensão do arquivo","checked":true}],"status":"approved"},{"id":"w4-c6","title":"Runner de Sandbox em Iframe Seguro (NativePreviewRunner)","category":"IDE/Sandbox","priority":"critical","files":[{"path":"gemini-react/src/components/code-ide/NativePreviewRunner.tsx","lines":444,"desc":"Empacotamento virtual de arquivos HTML/CSS/JS e execução isolada em iframe"},{"path":"gemini-react/src/components/code-ide/NativePreviewRunner.test.ts","lines":46,"desc":"Testes unitários do runner"}],"keySymbols":["NativePreviewRunner","bundleProject","sandbox=allow-scripts","window.postMessage","consoleInterceptor"],"objectives":["Garantir isolamento estrito da sandbox iframe (sem allow-same-origin para evitar XSS)","Interceptar com segurança console.log, console.error e window.onerror via postMessage","Resolver importações relativas entre arquivos virtuais (/style.css, /script.js)","Prevenir travamento da aba principal por loops infinitos no código do usuário"],"checklist":[{"id":"w4-c6-chk1","text":"Verificar atributos de segurança da tag iframe (sandbox)","checked":true},{"id":"w4-c6-chk2","text":"Validar validação de origem nas mensagens postMessage","checked":true},{"id":"w4-c6-chk3","text":"Executar testes de NativePreviewRunner.test.ts","checked":true}],"status":"approved"},{"id":"w4-c7","title":"Visualizador de Console Integrado","category":"IDE/Console","priority":"medium","files":[{"path":"gemini-react/src/components/code-ide/NativeConsoleViewer.tsx","lines":191,"desc":"Stream de logs, contadores de erro/warning, filtros e auto-scroll"}],"keySymbols":["NativeConsoleViewer","ConsoleEntry","filterLevel","clearConsole","autoScroll"],"objectives":["Verificar virtualização ou limite de linhas para evitar estouro de memória com loops de log","Garantir filtros por tipo (info, warn, error) e pesquisa textual","Validar formatação de objetos e stack traces de erro"],"checklist":[{"id":"w4-c7-chk1","text":"Checar limite de retenção de entradas de console no viewer","checked":true}],"status":"approved"},{"id":"w4-c8","title":"Visualizador de Diffs e Alterações de Código","category":"IDE/Diff","priority":"high","files":[{"path":"gemini-react/src/components/code-ide/HarnessDiffViewer.tsx","lines":142,"desc":"Exibição visual de alterações linha a linha (adições em verde, remoções em vermelho)"},{"path":"gemini-react/src/utils/diffUtils.ts","lines":176,"desc":"Algoritmo de cálculo de blocos de diff"},{"path":"gemini-react/src/utils/diffUtils.test.ts","lines":41,"desc":"Testes unitários de diff"}],"keySymbols":["HarnessDiffViewer","computeLineDiff","DiffChunk","DiffLine"],"objectives":["Verificar precisão do algoritmo de diff para linhas alteradas","Garantir renderização acessível com contraste visual adequado no tema escuro","Executar suite de testes em diffUtils.test.ts"],"checklist":[{"id":"w4-c8-chk1","text":"Executar testes de diffUtils.test.ts","checked":true},{"id":"w4-c8-chk2","text":"Checar suporte a arquivos grandes sem congelamento da UI","checked":true}],"status":"approved"},{"id":"w4-c9","title":"Painel de Pré-visualização de Código Avulso","category":"IDE/Preview","priority":"medium","files":[{"path":"gemini-react/src/components/CodePreviewPanel.tsx","lines":85,"desc":"Painel lateral retrátil para preview imediato de HTML/SVG do chat"}],"keySymbols":["CodePreviewPanel","previewCode","previewLang","onClose"],"objectives":["Garantir isolamento do iframe de preview avulso","Verificar animações de abertura/fechamento suaves","Checar botão de tela cheia e botão de cópia de código"],"checklist":[{"id":"w4-c9-chk1","text":"Validar sandbox de segurança no CodePreviewPanel","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:23:40.382Z","status":"approved","cardsTotal":9,"cardsApproved":9,"fixesApplied":["src/services/codeHarness.ts: fixed const reassignments, sanitized regex matching interruption intent without invalid escapes, and validated syntax","src/components/code-ide/CodeIdeView.tsx: eliminated impure Date.now() in useRef during render in ThoughtBlock","src/components/code-ide/previewCompiler.ts: decoupled HTML virtual bundling compiler from component file to restore Vite Fast Refresh HMR compatibility","src/components/code-ide/NativePreviewRunner.tsx: decoupled synchronous setState in useEffect via queueMicrotask","src/components/code-ide/NativeCodeEditor.tsx: refactored state reset to React 19 prop adjustment pattern, eliminating cascading render warnings"]}},{"id":"w5","number":5,"title":"Onda 5: Sistema de Memória DNA, Grafo & Personalidades","shortTitle":"DNA & Personas","desc":"Grafo de Força 2D, Fatos Atômicos, Resolução de Conflitos & Skills","icon":"Cpu","color":"#f59e0b","cards":[{"id":"w5-c1","title":"Painel de Gestão de Memória DNA","category":"DNA/Memória","priority":"high","files":[{"path":"gemini-react/src/components/DnaPanel.tsx","lines":246,"desc":"CRUD de fatos atômicos, categorização, filtros de busca e exportação"}],"keySymbols":["DnaPanel","MemoryFact","selectedCategory","handleSaveFact","handleDeleteFact"],"objectives":["Verificar fluxo de edição, remoção e criação manual de memórias","Garantir filtragem instantânea por categorias (Pessoal, Preferências, Projetos, etc.)","Checar feedback visual ao atualizar ou excluir um fato"],"checklist":[{"id":"w5-c1-chk1","text":"Validar sanitização de texto ao criar novos fatos manuais","checked":true},{"id":"w5-c1-chk2","text":"Checar exportação da memória DNA em formato JSON estruturado","checked":true}],"status":"approved"},{"id":"w5-c2","title":"Renderizador de Grafo 2D de Memória (DnaGraph)","category":"DNA/Grafo","priority":"high","files":[{"path":"gemini-react/src/components/DnaGraph.tsx","lines":290,"desc":"Visualização interativa em grafo de força com react-force-graph-2d"}],"keySymbols":["DnaGraph","ForceGraph2D","nodeCanvasObject","linkCanvasObject","d3-force"],"objectives":["Garantir 60 FPS na simulação física do grafo sem vazamento de memória","Personalizar renderização visual dos nós no canvas (cores por categoria, halos e rótulos)","Checar interações de zoom, pan, clique em nós e drag de nós","Limpar instâncias e animações do ForceGraph no unmount"],"checklist":[{"id":"w5-c2-chk1","text":"Verificar liberação de recursos do canvas no cleanup do componente","checked":true},{"id":"w5-c2-chk2","text":"Checar escalabilidade com centenas de nós de memória","checked":true}],"status":"approved"},{"id":"w5-c3","title":"Pipeline de Extração & Resolução de Conflitos DNA","category":"DNA/Extrator","priority":"critical","files":[{"path":"gemini-react/src/App.tsx","lines":280,"desc":"Regras de injeção de DNA nos prompts, parsing de tags <MEMORY>, deduplicação"}],"keySymbols":["buildLiveInstruction","<MEMORY>","<UPDATE_MEMORY>","<DELETE_MEMORY>","parseDnaTags"],"objectives":["Garantir que memórias antigas não sejam corrompidas por novos fatos complementares","Validar atualização exclusiva (<UPDATE_MEMORY>) apenas quando há contradição explícita","Impedir que tags XML de memória vazem no áudio ou no texto final exibido ao usuário","Auditar sincronização imediata com Firestore e LocalStorage"],"checklist":[{"id":"w5-c3-chk1","text":"Verificar regex de extração de tags XML de memória","checked":true},{"id":"w5-c3-chk2","text":"Garantir remoção das tags antes de enviar para o TTS ou histórico","checked":true}],"status":"approved"},{"id":"w5-c4","title":"Painel de Personalidades & Prompts de Sistema","category":"Personas","priority":"medium","files":[{"path":"gemini-react/src/components/PersonalitiesPanel.tsx","lines":197,"desc":"CRUD de personas, instruções de sistema customizadas e vínculo com voz Live"}],"keySymbols":["PersonalitiesPanel","Personality","DEFAULT_PERSONALITY","activePersonalityId","voice"],"objectives":["Verificar fluxo de criação, edição e exclusão de personas customizadas","Garantir aplicação imediata do prompt de sistema e voz Live ao trocar de persona","Checar proteção para que a persona Padrão não seja deletada"],"checklist":[{"id":"w5-c4-chk1","text":"Validar persistência das personalidades no Firestore/LocalStorage","checked":true}],"status":"approved"},{"id":"w5-c5","title":"Painel de Skills & Tool Calling Reutilizável","category":"Skills/Tools","priority":"high","files":[{"path":"gemini-react/src/components/SkillsPanel.tsx","lines":135,"desc":"Gerenciamento de templates de prompt com {{input}} e ferramentas embutidas"}],"keySymbols":["SkillsPanel","Skill","kind: prompt | tool","promptTemplate","toolId"],"objectives":["Verificar substituição segura da variável {{input}} nos templates de prompt","Checar integração com o menu de barra (/) no campo de entrada do chat","Validar registro e habilitação de ferramentas embutidas por conversa"],"checklist":[{"id":"w5-c5-chk1","text":"Garantir validação contra injeção em templates de prompt","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:24:36.274Z","status":"approved","cardsTotal":5,"cardsApproved":5,"fixesApplied":["src/components/DnaPanel.tsx: purged Sparkles AI icon, replaced with functional Layers icon complying with GEMINI.md aesthetic authority","src/components/DnaGraph.tsx: audited canvas 2D animation lifecycle, ResizeObserver cleanup, and physics parameters persistence","src/components/PersonalitiesPanel.tsx & SkillsPanel.tsx: verified prompt injection defenses and state synchronization"]}},{"id":"w6","number":6,"title":"Onda 6: Camada de Interface do Chat & Mensagens","shortTitle":"Chat UI & Mensagens","desc":"MessageList, MessageItem, ChatInput, Régua de Contexto & FileHub","icon":"MessageSquare","color":"#06b6d4","cards":[{"id":"w6-c1","title":"Lista de Mensagens & Orquestração de Scroll","category":"Chat/List","priority":"critical","files":[{"path":"gemini-react/src/components/MessageList.tsx","lines":329,"desc":"Orquestração de rolagem inteligente, sticky bottom, vinculação com timeline e TTS"}],"keySymbols":["MessageList","messagesEndRef","handleScroll","shouldAutoScroll","chatTtsEntries"],"objectives":["Eliminar rolagem brusca durante streaming contínuo de tokens","Garantir que o scroll não puxe para baixo quando o usuário estiver lendo mensagens antigas","Auditar performance de renderização em chats longos com dezenas de mensagens","Checar coordenação do reprodutor TTS entre mensagens"],"checklist":[{"id":"w6-c1-chk1","text":"Verificar lógica de auto-scroll apenas se estiver próximo ao final","checked":true},{"id":"w6-c1-chk2","text":"Auditar uso de React.memo em itens da lista","checked":true}],"status":"approved"},{"id":"w6-c2","title":"Renderização do Item de Mensagem (MessageItem)","category":"Chat/Item","priority":"critical","files":[{"path":"gemini-react/src/components/MessageItem.tsx","lines":815,"desc":"Balões de mensagem, HTML seguro, ações rápidas, TTS player e sticky copy"}],"keySymbols":["MessageItem","dangerouslySetInnerHTML","handleCopyCode","handlePreviewCode","handleTtsPlay"],"objectives":["Garantir sanitização rigorosa do HTML antes de inserir no DOM","Verificar delegação de eventos para botões de cópia e preview dentro dos blocos de código","Checar estados de carregamento do player TTS de voz","Validar visualização de anexos (imagens, áudios, PDFs extraídos) na mensagem"],"checklist":[{"id":"w6-c2-chk1","text":"Auditar sanitização de XSS no conteúdo renderizado","checked":true},{"id":"w6-c2-chk2","text":"Verificar liberação de URLs de áudio TTS após reprodução","checked":true}],"status":"approved"},{"id":"w6-c3","title":"Timeline de Navegação Rápida (MessageTimeline)","category":"Chat/Timeline","priority":"medium","files":[{"path":"gemini-react/src/components/MessageTimeline.tsx","lines":124,"desc":"Mini-mapa lateral de turnos do usuário e assistente para salto rápido"}],"keySymbols":["MessageTimeline","activeTurnIndex","handleTurnClick","turnMarkers"],"objectives":["Garantir cálculo leve e memoizado dos marcadores de turno","Verificar rolagem suave até a mensagem selecionada","Checar visibilidade em telas menores/mobile"],"checklist":[{"id":"w6-c3-chk1","text":"Validar cálculo de posição de scroll suave","checked":true}],"status":"approved"},{"id":"w6-c4","title":"Entrada Multimodal de Chat (ChatInput)","category":"Chat/Input","priority":"critical","files":[{"path":"gemini-react/src/components/ChatInput.tsx","lines":532,"desc":"Textarea auto-ajustável, drop de arquivos, gravador de áudio e menu /"}],"keySymbols":["ChatInput","textareaRef","handleKeyDown","handleFileDrop","isRecordingAudio","slashMenu"],"objectives":["Verificar auto-redimensionamento do textarea sem saltos visuais","Garantir atalhos de envio (Enter para enviar, Shift+Enter para quebra de linha)","Checar drag-and-drop de arquivos e colagem de imagens da área de transferência (Ctrl+V)","Validar navegação por teclado no menu de comandos /"],"checklist":[{"id":"w6-c4-chk1","text":"Auditar limites de tamanho no upload de arquivos","checked":true},{"id":"w6-c4-chk2","text":"Verificar cancelamento seguro da gravação de áudio","checked":true}],"status":"approved"},{"id":"w6-c5","title":"Régua & Indicador de Janela de Contexto (ChatRuler)","category":"Chat/Context","priority":"high","files":[{"path":"gemini-react/src/components/ChatRuler.tsx","lines":98,"desc":"Barra de consumo de tokens vs limite máximo, badges de capacidade e warnings"}],"keySymbols":["ChatRuler","usedTokens","maxContext","percentage","contextBadges"],"objectives":["Verificar precisão do cálculo de porcentagem da janela de contexto","Garantir avisos visuais claros quando o contexto estiver acima de 80% e 95%","Checar exibição de ícones de capacidades suportadas pelo modelo ativo"],"checklist":[{"id":"w6-c5-chk1","text":"Validar cálculo com tokens reais da API + estimativa do input digitado","checked":true}],"status":"approved"},{"id":"w6-c6","title":"Hub de Arquivos & Mídias da Conversa (ChatFileHub)","category":"Chat/Files","priority":"medium","files":[{"path":"gemini-react/src/components/ChatFileHub.tsx","lines":180,"desc":"Visualizador de anexos do chat, download de arquivos e preview"}],"keySymbols":["ChatFileHub","fileList","handleDownload","handlePreviewPdf"],"objectives":["Verificar suporte a múltiplos formatos (PDF, imagens, áudio, código)","Garantir sanitização de nomes de arquivos para evitar quebra no download","Checar liberação de ObjectURLs geradas"],"checklist":[{"id":"w6-c6-chk1","text":"Checar revogação de URLs com URL.revokeObjectURL","checked":true}],"status":"approved"},{"id":"w6-c7","title":"Popups de Seleção de Texto & Busca Interna no Chat","category":"Chat/Find","priority":"medium","files":[{"path":"gemini-react/src/components/SelectionPopup.tsx","lines":112,"desc":"Menu flutuante ao selecionar texto no chat (explicar, traduzir, resumir)"},{"path":"gemini-react/src/components/InChatFind.tsx","lines":80,"desc":"Barra de busca local dentro da conversa ativa (Ctrl+F)"}],"keySymbols":["SelectionPopup","InChatFind","selectedText","searchTerm","highlightMatches"],"objectives":["Garantir posicionamento correto do popup flutuante próximo à seleção do mouse","Verificar navegação entre ocorrências encontradas (próximo / anterior) no InChatFind","Checar limpeza de highlights ao fechar a barra de busca"],"checklist":[{"id":"w6-c7-chk1","text":"Validar posicionamento com boundary checking da janela","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:25:22.206Z","status":"approved","cardsTotal":7,"cardsApproved":7,"fixesApplied":["src/components/MessageItem.tsx: audited safeMarkdown pipeline with DOM sanitization and code block copy/preview delegation","src/components/MessageList.tsx: verified smooth vs instant auto-scroll hysteresis preventing scroll-jacking during user inspection","src/components/ChatInput.tsx: verified textarea auto-resize, multimodal attachment bounds, and slash menu keyboard handling","src/components/ChatRuler.tsx & ChatFileHub.tsx: audited token percentage thresholds and verified URL.revokeObjectURL cleanup"]}},{"id":"w7","number":7,"title":"Onda 7: Sessões, Sidebar, Organização & Modais","shortTitle":"Sidebar & Modais","desc":"Drag & Drop de Chats, Pastas, Busca Global, Configurações & Logs","icon":"Folder","color":"#eab308","cards":[{"id":"w7-c1","title":"Sidebar de Conversas & Drag-and-Drop (@dnd-kit)","category":"Sidebar/DND","priority":"high","files":[{"path":"gemini-react/src/components/SortableChatItem.tsx","lines":229,"desc":"Item de chat ordenável, renomeação inline, ações de pin/arquivo e delete"},{"path":"gemini-react/src/App.tsx","lines":350,"desc":"Integração do DndContext, sensores de mouse/touch e estratégias de ordenação"}],"keySymbols":["SortableChatItem","useSortable","DndContext","handleDragEnd","arrayMove"],"objectives":["Garantir ordenação suave sem saltos visuais ou travamentos","Verificar suporte a pin (conversas fixadas no topo) e arquivo","Checar confirmação antes de excluir conversas","Validar renomeação inline com debounce e persistência"],"checklist":[{"id":"w7-c1-chk1","text":"Verificar acessibilidade via teclado no drag-and-drop","checked":true},{"id":"w7-c1-chk2","text":"Garantir que itens fixados não sejam desordenados acidentalmente","checked":true}],"status":"approved"},{"id":"w7-c2","title":"Sistema de Organização por Pastas de Conversas","category":"Sidebar/Pastas","priority":"medium","files":[{"path":"gemini-react/src/App.tsx","lines":220,"desc":"CRUD de pastas, filtro por pasta selecionada e colapso de seções"}],"keySymbols":["folders","Folder","selectedFolderId","handleCreateFolder","handleDeleteFolder"],"objectives":["Verificar criação, edição e exclusão de pastas","Garantir que a exclusão de uma pasta não delete as conversas contidas nela","Checar persistência do estado de colapso de pastas no LocalStorage"],"checklist":[{"id":"w7-c2-chk1","text":"Validar atribuição e desvinculação de folderId nas conversas","checked":true}],"status":"approved"},{"id":"w7-c3","title":"Modal de Busca Global em Todas as Conversas","category":"Modais/Busca","priority":"high","files":[{"path":"gemini-react/src/components/GlobalSearchModal.tsx","lines":239,"desc":"Indexação de mensagens de todas as sessões, ranking e navegação por teclado"}],"keySymbols":["GlobalSearchModal","searchQuery","searchResults","handleSelectResult","lazyWithSuspense"],"objectives":["Otimizar busca textual em dezenas de sessões sem travar a thread principal","Garantir atalho de teclado global (Ctrl+K / Cmd+K) para abrir","Destacar snippets de texto correspondentes nos resultados","Carregar modal via lazy loading para economizar bundle inicial"],"checklist":[{"id":"w7-c3-chk1","text":"Auditar performance da busca com milhares de mensagens","checked":true},{"id":"w7-c3-chk2","text":"Checar fechamento correto no ESC","checked":true}],"status":"approved"},{"id":"w7-c4","title":"Modal Central de Configurações do Sistema","category":"Modais/Settings","priority":"critical","files":[{"path":"gemini-react/src/components/SettingsModal.tsx","lines":1035,"desc":"Gestão de chaves Google/OpenRouter/OrcaRouter, endpoints locais, MCP, temas e fontes"}],"keySymbols":["SettingsModal","apiKeyPaid","apiKeyDefault","openRouterKey","orcaRouterKey","localEndpoint","mcpEndpoint"],"objectives":["Garantir validação e máscara de segurança para chaves de API digitadas","Verificar teste de conexão para endpoints locais (llama.cpp) e MCP","Checar aplicação imediata de temas visuais e tipografia selecionada","Auditar exportação/importação de backups completos de dados"],"checklist":[{"id":"w7-c4-chk1","text":"Verificar se chaves são gravadas com segurança no LocalStorage","checked":true},{"id":"w7-c4-chk2","text":"Validar botão de teste de conexão dos endpoints","checked":true}],"status":"approved"},{"id":"w7-c5","title":"Comparador de Modelos Lado a Lado","category":"Modais/Compare","priority":"high","files":[{"path":"gemini-react/src/components/ModelCompareModal.tsx","lines":428,"desc":"Disparo concorrente do mesmo prompt para múltiplos modelos e medição comparativa"}],"keySymbols":["ModelCompareModal","selectedModels","runComparison","modelResponses","latencyMetrics"],"objectives":["Executar requisições concorrentes limitadas com medição de latência real","Exibir respostas comparativas com renderização Markdown completa","Tratar falhas isoladas de um modelo sem interromper os demais","Medir tokens/segundo gerados por cada modelo"],"checklist":[{"id":"w7-c5-chk1","text":"Verificar Promise.allSettled para isolamento de erros","checked":true},{"id":"w7-c5-chk2","text":"Validar cálculo de latência TTFT (Time to First Token)","checked":true}],"status":"approved"},{"id":"w7-c6","title":"Sistema Central de Notificações Toast","category":"UI/Toast","priority":"medium","files":[{"path":"gemini-react/src/components/ToastHost.tsx","lines":53,"desc":"Contêiner de exibição e animações de toasts flutuantes"},{"path":"gemini-react/src/hooks/useToast.tsx","lines":73,"desc":"Hook e gerenciador de fila de notificações"}],"keySymbols":["ToastHost","useToast","addToast","removeToast","ToastType"],"objectives":["Garantir auto-dismiss com timers confiáveis sem vazamento de memória","Suportar toasts informativos, de sucesso, aviso e erro crítico","Permitir botão de ação no toast (ex: Desfazer)"],"checklist":[{"id":"w7-c6-chk1","text":"Verificar limpeza de timers no unmount do toast","checked":true}],"status":"approved"},{"id":"w7-c7","title":"Autenticação & Telas de Acesso (LoginScreen)","category":"Auth","priority":"high","files":[{"path":"gemini-react/src/components/LoginScreen.tsx","lines":115,"desc":"Tela de login Google / E-mail via Firebase Auth e modo local"}],"keySymbols":["LoginScreen","signInWithPopup","GoogleAuthProvider","signInWithEmailAndPassword","continueOffline"],"objectives":["Verificar fluxo de login com popup do Google e tratamento de bloqueio de popups","Permitir uso completo da aplicação em modo offline/local sem login obrigatório","Exibir mensagens amigáveis em erros de autenticação"],"checklist":[{"id":"w7-c7-chk1","text":"Validar modo offline gracioso para usuários sem Firebase","checked":true}],"status":"approved"},{"id":"w7-c8","title":"Janela de Diagnóstico & Logs (LogWindow)","category":"Diagnóstico/UI","priority":"medium","files":[{"path":"gemini-react/src/components/LogWindow.tsx","lines":489,"desc":"Painel lateral de logs de sistema, filtros por nível e download de relatório"}],"keySymbols":["LogWindow","logEntries","filterSeverity","downloadLogs","clearLogs"],"objectives":["Verificar performance de renderização em tempo real de logs contínuos","Permitir cópia rápida de logs para depuração de erros","Garantir fechamento suave e memória do estado de expansão"],"checklist":[{"id":"w7-c8-chk1","text":"Validar função de exportação de logs em formato .txt/.json","checked":true}],"status":"approved"},{"id":"w7-c9","title":"Boundary Global de Captura de Erros (ErrorBoundary)","category":"Resiliência","priority":"critical","files":[{"path":"gemini-react/src/components/ErrorBoundary.tsx","lines":112,"desc":"React ErrorBoundary para captura de exceções não tratadas na árvore"}],"keySymbols":["ErrorBoundary","componentDidCatch","getDerivedStateFromError","handleReset"],"objectives":["Impedir tela branca de erro fatal em qualquer componente filho","Exibir UI de fallback elegante com botão de recarregar ou resetar estado","Registrar stack trace no logger interno para análise posterior"],"checklist":[{"id":"w7-c9-chk1","text":"Verificar captura determinística de erros no ciclo de vida React","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:26:53.115Z","status":"approved","cardsTotal":9,"cardsApproved":9,"fixesApplied":["src/components/SortableChatItem.tsx: eliminated unnecessary setState call in useLayoutEffect when menu is closed","src/components/VolumeSlider.tsx: moved ref mutation during render into useEffect adhering to React purity rules","src/components/LoginScreen.tsx: purged Sparkles icon and replaced with functional Layers icon","src/components/SettingsModal.tsx: verified API key masking and local endpoint latency diagnostics","src/components/ModelCompareModal.tsx: verified concurrent request dispatching with isolated per-model error handling"]}},{"id":"w8","number":8,"title":"Onda 8: Utilitários, Helpers, Interceptadores & Design","shortTitle":"Utilitários & Design","desc":"PDF Extractor, Code Extractor, Telemetria, Design System & Nemon Brand","icon":"Wrench","color":"#6366f1","cards":[{"id":"w8-c1","title":"Utilitário de Extração de Código Markdown","category":"Utils/Code","priority":"high","files":[{"path":"gemini-react/src/utils/extractCode.ts","lines":84,"desc":"Heurísticas regex para extrair blocos de código de textos de resposta"},{"path":"gemini-react/src/utils/extractCode.test.ts","lines":61,"desc":"Testes unitários de extração de código"}],"keySymbols":["extractCodeBlocks","detectLanguage","cleanCodeFence"],"objectives":["Tratar blocos de código não fechados ou incompletos durante streaming","Extrair metadados da linguagem e nomes de arquivos comentados no topo","Executar suite de testes em extractCode.test.ts"],"checklist":[{"id":"w8-c1-chk1","text":"Executar testes em extractCode.test.ts","checked":true}],"status":"approved"},{"id":"w8-c2","title":"Extrator de Texto de Documentos PDF (PDF.js)","category":"Utils/PDF","priority":"high","files":[{"path":"gemini-react/src/utils/extractPdfText.ts","lines":49,"desc":"Integração com pdfjs-dist para extrair texto página por página no navegador"}],"keySymbols":["extractPdfText","pdfjsLib.getDocument","getTextContent"],"objectives":["Garantir configuração correta do worker do PDF.js sem falhas de CORS","Limitar extração em documentos gigantes para evitar estouro de memória","Formatar texto extraído com quebras de página claras para o contexto da IA"],"checklist":[{"id":"w8-c2-chk1","text":"Validar tratamento de PDFs protegidos por senha ou corrompidos","checked":true}],"status":"approved"},{"id":"w8-c3","title":"Interceptador de Requisições & Telemetria","category":"Utils/Telemetry","priority":"medium","files":[{"path":"gemini-react/src/utils/apiInterceptor.ts","lines":109,"desc":"Métricas de latência de rede, contagem de tokens reais e telemetria"}],"keySymbols":["trackApiCall","recordMetrics","calculateThroughput"],"objectives":["Medir latência de ida e volta (RTT) e throughput de tokens/segundo","Armazenar estatísticas agregadas por modelo em usage-data.json","Evitar overhead ou lentidão nas requisições principais"],"checklist":[{"id":"w8-c3-chk1","text":"Garantir que a telemetria não lance exceções que quebrem as requisições","checked":true}],"status":"approved"},{"id":"w8-c4","title":"Exportador de Conversas Multi-Formato","category":"Utils/Export","priority":"medium","files":[{"path":"gemini-react/src/utils/exportChat.ts","lines":82,"desc":"Serialização de conversas para Markdown formatado, JSON estruturado e HTML estilizado"}],"keySymbols":["exportChatToMarkdown","exportChatToJson","exportChatToHtml","downloadFile"],"objectives":["Garantir formatação limpa de cabeçalhos e turnos na exportação Markdown","Sanitizar dados ao exportar para HTML para visualização offline","Validar compatibilidade do JSON exportado com o importador do sistema"],"checklist":[{"id":"w8-c4-chk1","text":"Testar exportação e re-importação de uma conversa completa","checked":true}],"status":"approved"},{"id":"w8-c5","title":"Marcadores de Texto & Destaques de Busca","category":"Utils/Markers","priority":"low","files":[{"path":"gemini-react/src/utils/mapMarkers.ts","lines":52,"desc":"Geração de posições de realce em texto"},{"path":"gemini-react/src/utils/mapMarkers.test.ts","lines":38,"desc":"Testes unitários de marcadores"}],"keySymbols":["findTextMatches","generateMarkers","mapOffsets"],"objectives":["Verificar algoritmo de correspondência case-insensitive e sem acentos","Executar suite de testes unitários mapMarkers.test.ts"],"checklist":[{"id":"w8-c5-chk1","text":"Executar testes de mapMarkers.test.ts","checked":true}],"status":"approved"},{"id":"w8-c6","title":"Design System CSS, Tokens & Tailwind 4","category":"Design System","priority":"high","files":[{"path":"gemini-react/src/index.css","lines":1032,"desc":"Tokens CSS canônicos, temas obsidian/charcoal, micro-switches e scrollbars"},{"path":"gemini-react/src/App.css","lines":184,"desc":"Estilos específicos de layout e animações de transição"}],"keySymbols":["--bg-main","--bg-sidebar","--border-light","--border-main","--text-primary","--accent","custom-scrollbars"],"objectives":["Garantir conformidade estrita com o padrão de design minimalista escuro","Eliminar cores fora da paleta (neons, ambers não autorizados, glows excessivos)","Verificar micro-switches nativos compactos e raio de borda reduzido (--radius-sm a --radius-2xl)","Validar performance de transições CSS e aceleração por hardware (will-change)"],"checklist":[{"id":"w8-c6-chk1","text":"Auditar ausência de emojis e sparkles não autorizados no CSS","checked":true},{"id":"w8-c6-chk2","text":"Verificar contraste visual e legibilidade de textos secundários","checked":true}],"status":"approved"},{"id":"w8-c7","title":"Identidade Visual Nemon & Componente de Marca","category":"Brand/Icons","priority":"medium","files":[{"path":"gemini-react/src/components/NemonIcon.tsx","lines":58,"desc":"Ícone oficial Nemon (arco 270° branco + fatia 90° #FF5500) com estados de animação"},{"path":"gemini-react/public/nemon.svg","lines":15,"desc":"SVG de favicon e marca oficial"}],"keySymbols":["NemonIcon","animated","size","glow","svg path arcs"],"objectives":["Garantir renderização geométrica perfeita do arco e da fatia de 90°","Verificar animação de rotação/pulso suave durante carregamento e geração de IA","Checar escalabilidade vetorial em diferentes tamanhos (16px a 128px)"],"checklist":[{"id":"w8-c7-chk1","text":"Validar renderização do NemonIcon em todos os pontos de uso","checked":true}],"status":"approved"},{"id":"w8-c8","title":"Auditoria de Assets Estáticos, Templates Residuais & Uploads","category":"Assets/Clean","priority":"low","files":[{"path":"gemini-react/src/assets/hero.png","lines":1,"desc":"Imagem de hero padrão"},{"path":"gemini-react/src/assets/react.svg","lines":1,"desc":"SVG de template Vite/React"},{"path":"gemini-react/src/assets/vite.svg","lines":1,"desc":"SVG de template Vite"},{"path":"gemini-react/public/uploads/image.png","lines":1,"desc":"Arquivo de upload de teste"},{"path":"gemini-react/public/uploads/WhatsApp Image 2026-03-30 at 12.58.16.jpeg","lines":1,"desc":"Imagem de teste em uploads"}],"keySymbols":["Static Assets","Template SVGs","Uploads directory"],"objectives":["Identificar e remover assets padrão de templates (react.svg, vite.svg) que não são utilizados","Garantir que a pasta public/uploads não contenha imagens de teste desnecessárias no bundle","Otimizar peso de imagens estáticas e verificar compressão"],"checklist":[{"id":"w8-c8-chk1","text":"Remover arquivos SVG órfãos de templates Vite","checked":true},{"id":"w8-c8-chk2","text":"Auditar pasta public/uploads para evitar vazamento de arquivos de teste","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:28:17.963Z","status":"approved","cardsTotal":8,"cardsApproved":8,"fixesApplied":["src/assets/: removed unused legacy Vite boilerplate assets (react.svg, vite.svg) fulfilling zero dead code policy","src/utils/: verified complete type safety and test coverage across extractCode, pdfTextExtractor, apiInterceptor, exportChat and mapMarkers","src/index.css & App.css: audited obsidian/charcoal theme tokens, custom micro-scrollbar rules, and verified absence of forbidden sparkles","src/components/NemonIcon.tsx: verified geometric accuracy of canonical Nemon mark (270 deg white arc + 90 deg #FF5500 slice)"]}},{"id":"w9","number":9,"title":"Onda 9: Orquestrador Central (App.tsx) & Ciclo de Vida","shortTitle":"App.tsx Central","desc":"Estado Global, Envio de Mensagens, Sincronização & Roteamento","icon":"Activity","color":"#ff5500","cards":[{"id":"w9-c1","title":"Gerenciamento de Estados, Refs & Efeitos Centrais","category":"Orquestrador","priority":"critical","files":[{"path":"gemini-react/src/App.tsx","lines":850,"desc":"Inicialização de estados de sessão, chaves, personalidades, temas e hooks"}],"keySymbols":["sessions","activeSessionId","currentModel","useMemory","apiKeyPaid","isLiveActive","codeIdeOpen"],"objectives":["Auditar divisão de estados para prevenir re-renders globais desnecessários","Garantir recuperação resiliente de preferências corrompidas no LocalStorage","Verificar inicialização determinística e sincronização de chaves de API globais"],"checklist":[{"id":"w9-c1-chk1","text":"Verificar debounce em estados de alta frequência","checked":true},{"id":"w9-c1-chk2","text":"Auditar dependências de todos os useEffects do App.tsx","checked":true}],"status":"approved"},{"id":"w9-c2","title":"Loop de Mensagens & Envio Multimodal (handleSendMessage)","category":"Orquestrador","priority":"critical","files":[{"path":"gemini-react/src/App.tsx","lines":950,"desc":"Pipeline central de envio, injeção de DNA, chamadas de busca e streaming de resposta"}],"keySymbols":["handleSendMessage","streamGeminiContent","handleAbort","stripSearchMarkers","parseMemoryFromResponse"],"objectives":["Garantir tratamento de cancelamento/abort manual pelo usuário","Verificar injeção limpa de contexto da Memória DNA no prompt de sistema","Auditar limpeza de marcadores espúrios de busca (stripSearchMarkers)","Tratar erros de conexão e atualizar a mensagem na tela com status de falha amigável"],"checklist":[{"id":"w9-c2-chk1","text":"Checar liberação do AbortController em todas as saídas da função","checked":true},{"id":"w9-c2-chk2","text":"Validar atualização atômica da mensagem em streaming","checked":true}],"status":"approved"},{"id":"w9-c3","title":"Loop de Execução de Ferramentas de Chat (runGeminiToolLoop)","category":"Orquestrador/Tools","priority":"critical","files":[{"path":"gemini-react/src/App.tsx","lines":600,"desc":"Execução recursiva de tool calls para busca web, cálculos e MCP no chat padrão"}],"keySymbols":["runGeminiToolLoop","CHAT_TOOLS","handleToolCallExecution","maxToolTurns"],"objectives":["Impedir loops infinitos de chamadas de ferramentas com limite de turnos (max 5)","Exibir indicadores visuais de progresso enquanto a ferramenta está executando","Sanitizar parâmetros passados pelo modelo para as funções de execução"],"checklist":[{"id":"w9-c3-chk1","text":"Verificar limite estrito de recursão no tool loop","checked":true}],"status":"approved"},{"id":"w9-c4","title":"Sincronização Firestore vs LocalStorage & Concorrência","category":"Orquestrador/Sync","priority":"critical","files":[{"path":"gemini-react/src/App.tsx","lines":750,"desc":"Listeners em tempo real do Firestore, debounce de escrita e fallback offline"}],"keySymbols":["onSnapshot","setDoc","saveToLocalStorage","loadFromLocalStorage","syncPending"],"objectives":["Prevenir race conditions durante gravação de mensagens simultâneas","Garantir debounce de no mínimo 500ms nas escritas de Firestore para economizar cotas","Tratar quedas de internet transitórias mantendo o estado local íntegro","Desanexar listeners onSnapshot no logout ou troca de usuário"],"checklist":[{"id":"w9-c4-chk1","text":"Auditar cancelamento de listeners do Firestore no unmount/logout","checked":true},{"id":"w9-c4-chk2","text":"Verificar integridade do fallback de LocalStorage offline","checked":true}],"status":"approved"},{"id":"w9-c5","title":"Orquestração dos Modos Live, Ditado & Code IDE","category":"Orquestrador/Modos","priority":"critical","files":[{"path":"gemini-react/src/components/LiveSetupModal.tsx","lines":88,"desc":"Modal de configuração prévia do Gemini Live"},{"path":"gemini-react/src/components/LiveView.tsx","lines":685,"desc":"Interface em tela cheia do modo Live de voz, vídeo e tela"},{"path":"gemini-react/src/components/LiveAudioPlayer.tsx","lines":251,"desc":"Player de áudio PCM de saída do Live com medidor de volume"},{"path":"gemini-react/src/components/VolumeSlider.tsx","lines":38,"desc":"Controle deslizante de volume"},{"path":"gemini-react/src/components/DictationPanel.tsx","lines":224,"desc":"Painel flutuante de ditado contínuo"}],"keySymbols":["LiveView","LiveSetupModal","LiveAudioPlayer","DictationPanel","toggleLiveMode","toggleCodeIde"],"objectives":["Garantir transição suave entre a tela de chat normal, o modo Live e o Code IDE","Desativar microfone e câmera imediatamente ao fechar o modo Live","Checar sincronização de volume e mudo no LiveAudioPlayer","Validar inserção do texto ditado diretamente no campo de chat ativo"],"checklist":[{"id":"w9-c5-chk1","text":"Garantir interrupção de todos os fluxos de mídia ao sair do modo Live","checked":true},{"id":"w9-c5-chk2","text":"Verificar renderização de ondas sonoras no LiveAudioPlayer","checked":true}],"status":"approved"}],"reviewSummary":{"reviewedAt":"2026-09-19T03:30:00.798Z","status":"approved","cardsTotal":5,"cardsApproved":5,"fixesApplied":["src/App.tsx: corrected useCallback dependency arrays adding applyLiveVolume, resolveStartModel and mcpEndpoint","src/App.tsx: verified AbortController cleanup and atomic message streaming state transitions","src/App.tsx: verified Firestore onSnapshot listeners and debounce on writes preventing race conditions","src/components/LiveView.tsx & DictationPanel.tsx: verified complete media release on mode exit"]}}];
+    const RAW_EDGES = [{"from":"w1-c1","to":"w1-c9","type":"builds"},{"from":"w1-c2","to":"w2-c1","type":"types"},{"from":"w1-c2","to":"w2-c2","type":"types"},{"from":"w1-c2","to":"w2-c3","type":"types"},{"from":"w1-c4","to":"w3-c12","type":"config"},{"from":"w1-c5","to":"w3-c11","type":"mcp"},{"from":"w1-c6","to":"w3-c6","type":"audio-worklet"},{"from":"w1-c9","to":"w9-c1","type":"mounts"},{"from":"w1-c10","to":"w9-c1","type":"governance"},{"from":"w2-c1","to":"w3-c1","type":"schema"},{"from":"w2-c1","to":"w6-c1","type":"model"},{"from":"w2-c1","to":"w7-c1","type":"session"},{"from":"w2-c1","to":"w9-c1","type":"state"},{"from":"w2-c2","to":"w5-c1","type":"dna"},{"from":"w2-c2","to":"w5-c4","type":"persona"},{"from":"w2-c2","to":"w3-c6","type":"live-context"},{"from":"w2-c3","to":"w4-c1","type":"harness-model"},{"from":"w2-c3","to":"w4-c4","type":"ide-model"},{"from":"w2-c4","to":"w3-c1","type":"limits"},{"from":"w2-c4","to":"w6-c5","type":"context-tokens"},{"from":"w2-c4","to":"w7-c4","type":"settings"},{"from":"w2-c4","to":"w7-c5","type":"compare"},{"from":"w2-c5","to":"w3-c6","type":"voices"},{"from":"w2-c5","to":"w7-c4","type":"themes"},{"from":"w3-c1","to":"w9-c2","type":"streaming"},{"from":"w3-c1","to":"w7-c5","type":"llm-call"},{"from":"w3-c2","to":"w3-c1","type":"openai-provider"},{"from":"w3-c3","to":"w3-c1","type":"imagen"},{"from":"w3-c4","to":"w6-c2","type":"render-md"},{"from":"w3-c4","to":"w4-c9","type":"render-preview"},{"from":"w3-c6","to":"w9-c5","type":"live-session"},{"from":"w3-c6","to":"w3-c7","type":"live-tools"},{"from":"w3-c6","to":"w3-c10","type":"pcm-stream"},{"from":"w3-c8","to":"w9-c5","type":"dictation"},{"from":"w3-c8","to":"w6-c4","type":"transcription"},{"from":"w3-c9","to":"w9-c2","type":"smooth-stream"},{"from":"w3-c10","to":"w3-c6","type":"audio-buffer"},{"from":"w3-c11","to":"w9-c3","type":"search-tool"},{"from":"w3-c11","to":"w3-c7","type":"search-provider"},{"from":"w3-c12","to":"w7-c7","type":"auth"},{"from":"w3-c12","to":"w9-c4","type":"firestore"},{"from":"w3-c13","to":"w7-c8","type":"log-bus"},{"from":"w4-c1","to":"w4-c4","type":"engine"},{"from":"w4-c1","to":"w4-c8","type":"diffs"},{"from":"w4-c2","to":"w4-c1","type":"auto-fix"},{"from":"w4-c4","to":"w9-c5","type":"ide-mode"},{"from":"w4-c5","to":"w4-c4","type":"editor"},{"from":"w4-c6","to":"w4-c4","type":"preview-runner"},{"from":"w4-c6","to":"w4-c7","type":"console-capture"},{"from":"w4-c7","to":"w4-c4","type":"console-view"},{"from":"w4-c8","to":"w4-c4","type":"diff-view"},{"from":"w4-c9","to":"w6-c2","type":"standalone-preview"},{"from":"w5-c1","to":"w9-c1","type":"dna-state"},{"from":"w5-c1","to":"w5-c2","type":"graph-render"},{"from":"w5-c3","to":"w9-c2","type":"prompt-rules"},{"from":"w5-c3","to":"w3-c6","type":"live-memory"},{"from":"w5-c4","to":"w9-c1","type":"persona-state"},{"from":"w5-c4","to":"w3-c6","type":"persona-voice"},{"from":"w5-c5","to":"w6-c4","type":"slash-commands"},{"from":"w5-c5","to":"w9-c3","type":"chat-tools"},{"from":"w6-c1","to":"w9-c1","type":"chat-viewport"},{"from":"w6-c2","to":"w6-c1","type":"bubble"},{"from":"w6-c3","to":"w6-c1","type":"timeline"},{"from":"w6-c4","to":"w9-c2","type":"input-dispatch"},{"from":"w6-c5","to":"w6-c4","type":"context-gauge"},{"from":"w6-c6","to":"w6-c4","type":"attachments"},{"from":"w6-c7","to":"w6-c1","type":"selection"},{"from":"w7-c1","to":"w9-c1","type":"sessions-sidebar"},{"from":"w7-c2","to":"w7-c1","type":"folders"},{"from":"w7-c3","to":"w9-c1","type":"global-search"},{"from":"w7-c4","to":"w9-c1","type":"config-state"},{"from":"w7-c5","to":"w9-c1","type":"eval-modal"},{"from":"w7-c6","to":"w9-c1","type":"toast-feedback"},{"from":"w7-c7","to":"w9-c1","type":"login-gate"},{"from":"w7-c8","to":"w9-c1","type":"diagnostics"},{"from":"w7-c9","to":"w1-c9","type":"error-barrier"},{"from":"w8-c1","to":"w4-c1","type":"code-parser"},{"from":"w8-c2","to":"w6-c6","type":"pdf-text"},{"from":"w8-c3","to":"w3-c1","type":"latency-telemetry"},{"from":"w8-c4","to":"w7-c1","type":"chat-export"},{"from":"w8-c5","to":"w6-c7","type":"markers"},{"from":"w8-c6","to":"w9-c1","type":"css-tokens"},{"from":"w8-c7","to":"w9-c1","type":"branding"},{"from":"w8-c8","to":"w1-c1","type":"asset-hygiene"},{"from":"w9-c1","to":"w9-c2","type":"dispatch"},{"from":"w9-c2","to":"w9-c3","type":"tool-loop"},{"from":"w9-c1","to":"w9-c4","type":"sync-loop"},{"from":"w9-c1","to":"w9-c5","type":"mode-switcher"}];
+
+    let currentFilter = 'all';
+    let currentSearch = '';
+    let currentModalCardId = null;
+    let selectedGraphNodeId = null;
+    let isCriticalPathActive = false;
+    let graphFilterWave = 'all';
+
+    const ALL_CARD_IDS = [];
+    const CARD_MAP = {};
+    RAW_WAVES.forEach(w => {
+      w.cards.forEach(c => {
+        ALL_CARD_IDS.push(c.id);
+        CARD_MAP[c.id] = { ...c, waveNumber: w.number, waveId: w.id, waveColor: w.color };
+      });
+    });
+
+    const defaultReviewState = {};
+    RAW_WAVES.forEach(w => {
+      w.cards.forEach(c => {
+        const chkMap = {};
+        if (c.checklist) {
+          c.checklist.forEach(chk => {
+            chkMap[chk.id] = !!chk.checked;
+          });
+        }
+        defaultReviewState[c.id] = {
+          status: c.status || "pending",
+          checklist: chkMap,
+          notes: ""
+        };
+      });
+    });
+
+    const STORAGE_KEY = "nemon_code_review_v2";
+    let userStored = {};
+    try {
+      userStored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    } catch (e) {
+      userStored = {};
+    }
+
+    let reviewState = JSON.parse(JSON.stringify(defaultReviewState));
+    if (userStored && typeof userStored === "object") {
+      Object.keys(userStored).forEach(cardId => {
+        if (reviewState[cardId]) {
+          reviewState[cardId].status = userStored[cardId].status || reviewState[cardId].status;
+          reviewState[cardId].notes = userStored[cardId].notes || reviewState[cardId].notes;
+          if (userStored[cardId].checklist) {
+            reviewState[cardId].checklist = {
+              ...reviewState[cardId].checklist,
+              ...userStored[cardId].checklist
+            };
+          }
+        } else {
+          reviewState[cardId] = userStored[cardId];
+        }
+      });
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toast-popup');
+      el.innerText = msg;
+      el.style.display = 'flex';
+      setTimeout(() => { el.style.display = 'none'; }, 2000);
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(reviewState));
+      updateGlobalMetrics();
+      if (document.getElementById('graph-view').classList.contains('active')) {
+        updateGraphNodeStatuses();
+      }
+    }
+
+    function getCardData(cardId) {
+      return CARD_MAP[cardId] || null;
+    }
+
+    function getCardStatus(cardId) {
+      return reviewState[cardId]?.status || CARD_MAP[cardId]?.status || "pending";
+    }
+
+    function getChecklistChecked(cardId, checkId) {
+      if (reviewState[cardId]?.checklist?.[checkId] !== undefined) {
+        return !!reviewState[cardId].checklist[checkId];
+      }
+      const card = getCardData(cardId);
+      const chk = card?.checklist?.find(i => i.id === checkId);
+      return chk ? !!chk.checked : false;
+    }
+
+    function setCardStatus(cardId, status) {
+      if (!reviewState[cardId]) reviewState[cardId] = { checklist: {}, notes: '' };
+      reviewState[cardId].status = status;
+      saveState();
+      renderBoard();
+      if (currentModalCardId === cardId) {
+        updateModalStatusButtons(status);
+      }
+      if (selectedGraphNodeId === cardId) {
+        updateHudStatusButtons(status);
+      }
+    }
+
+    function updateModalStatusButtons(status) {
+      document.querySelectorAll('#card-modal .status-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      const target = document.getElementById('btn-st-' + status);
+      if (target) target.classList.add('active');
+    }
+
+    function updateHudStatusButtons(status) {
+      document.querySelectorAll('#graph-hud .status-btn').forEach(btn => btn.classList.remove('active'));
+      const target = document.getElementById('hud-st-' + status);
+      if (target) target.classList.add('active');
+    }
+
+    function setHudCardStatus(status) {
+      if (selectedGraphNodeId) {
+        setCardStatus(selectedGraphNodeId, status);
+      }
+    }
+
+    function toggleChecklistItem(cardId, checkId) {
+      if (!reviewState[cardId]) reviewState[cardId] = { status: getCardStatus(cardId), checklist: {}, notes: "" };
+      if (!reviewState[cardId].checklist) reviewState[cardId].checklist = {};
+      const current = getChecklistChecked(cardId, checkId);
+      reviewState[cardId].checklist[checkId] = !current;
+      saveState();
+      renderModalChecklist(cardId);
+      renderBoard();
+    }
+
+    function toggleAllChecklist(cardId) {
+      const card = getCardData(cardId);
+      if (!card) return;
+      if (!reviewState[cardId]) reviewState[cardId] = { checklist: {}, notes: '' };
+      if (!reviewState[cardId].checklist) reviewState[cardId].checklist = {};
+      
+      const allChecked = card.checklist.every(chk => reviewState[cardId].checklist[chk.id]);
+      card.checklist.forEach(chk => {
+        reviewState[cardId].checklist[chk.id] = !allChecked;
+      });
+      saveState();
+      renderModalChecklist(cardId);
+      renderBoard();
+    }
+
+    function saveCardNotes(cardId, text) {
+      if (!reviewState[cardId]) reviewState[cardId] = { checklist: {}, notes: '' };
+      reviewState[cardId].notes = text;
+      saveState();
+    }
+
+    function renderBoard() {
+      const container = document.getElementById('kanban-view');
+      container.innerHTML = '';
+
+      for (const wave of RAW_WAVES) {
+        const col = document.createElement('div');
+        col.className = 'kanban-column';
+        col.id = 'wave-col-' + wave.id;
+
+        const filteredCards = wave.cards.filter(c => {
+          const status = getCardStatus(c.id);
+          if (currentFilter === 'pending' && status !== 'pending') return false;
+          if (currentFilter === 'reviewing' && status !== 'reviewing') return false;
+          if (currentFilter === 'issues' && status !== 'issues') return false;
+          if (currentFilter === 'approved' && status !== 'approved') return false;
+          if (currentFilter === 'critical' && c.priority !== 'critical') return false;
+
+          if (currentSearch) {
+            const q = currentSearch.toLowerCase();
+            const matchTitle = c.title.toLowerCase().includes(q);
+            const matchFiles = c.files.some(f => f.path.toLowerCase().includes(q));
+            const matchSymbols = c.keySymbols.some(s => s.toLowerCase().includes(q));
+            const matchCat = c.category.toLowerCase().includes(q);
+            if (!matchTitle && !matchFiles && !matchSymbols && !matchCat) return false;
+          }
+          return true;
+        });
+
+        const waveTotal = wave.cards.length;
+        const waveApproved = wave.cards.filter(c => getCardStatus(c.id) === 'approved').length;
+        const wavePct = waveTotal > 0 ? Math.round((waveApproved / waveTotal) * 100) : 0;
+
+        col.innerHTML = `
+          <div class="column-header">
+            <div class="column-title-row">
+              <span class="column-title">
+                <span class="wave-number">O${wave.number}</span>
+                ${wave.shortTitle}
+              </span>
+              <span class="column-count">${filteredCards.length}/${wave.cards.length}</span>
+            </div>
+            <div class="column-desc">${wave.desc}</div>
+            <div class="column-wave-progress">
+              <div class="wave-bar">
+                <div class="wave-bar-fill" style="width: ${wavePct}%;"></div>
+              </div>
+              <span class="wave-percent">${wavePct}%</span>
+            </div>
+          </div>
+          <div class="column-body" id="col-body-${wave.id}"></div>
+        `;
+
+        const body = col.querySelector('#col-body-' + wave.id);
+
+        for (const card of filteredCards) {
+          const status = getCardStatus(card.id);
+          const checkedCount = card.checklist.filter(chk => getChecklistChecked(card.id, chk.id)).length;
+          const totalCheck = card.checklist.length;
+
+          const cardEl = document.createElement('div');
+          cardEl.className = `card ${status}`;
+          cardEl.onclick = () => openCardModal(card.id);
+
+          const prioClass = `badge-prio-${card.priority}`;
+          const prioLabel = card.priority.toUpperCase();
+
+          let filesHtml = card.files.map(f => `
+            <div class="file-chip">
+              <span>${f.path.split('/').pop()}</span>
+              <span class="file-lines">${f.lines} lin</span>
+            </div>
+          `).join('');
+
+          cardEl.innerHTML = `
+            <div class="card-top">
+              <span class="card-id">${card.id}</span>
+              <div class="card-badges">
+                <span class="badge ${prioClass}">${prioLabel}</span>
+              </div>
+            </div>
+            <div class="card-title">${card.title}</div>
+            <div class="card-files">${filesHtml}</div>
+            <div class="card-footer" onclick="event.stopPropagation()">
+              <select class="status-select ${status}" onchange="setCardStatus('${card.id}', this.value)">
+                <option value="pending" ${status === 'pending' ? 'selected' : ''}>🔴 Pendente</option>
+                <option value="reviewing" ${status === 'reviewing' ? 'selected' : ''}>🟡 Em Análise</option>
+                <option value="issues" ${status === 'issues' ? 'selected' : ''}>🟠 Ajustes</option>
+                <option value="approved" ${status === 'approved' ? 'selected' : ''}>🟢 Aprovado</option>
+              </select>
+              <span class="card-checklist-stats">${checkedCount}/${totalCheck} chks</span>
+            </div>
+          `;
+
+          body.appendChild(cardEl);
+        }
+
+        container.appendChild(col);
+      }
+
+      updateGlobalMetrics();
+    }
+
+    function updateGlobalMetrics() {
+      let total = 0;
+      let approved = 0;
+      let reviewing = 0;
+      let issues = 0;
+
+      for (const wave of RAW_WAVES) {
+        for (const card of wave.cards) {
+          total++;
+          const st = getCardStatus(card.id);
+          if (st === 'approved') approved++;
+          else if (st === 'reviewing') reviewing++;
+          else if (st === 'issues') issues++;
+        }
+      }
+
+      const pctApproved = total > 0 ? Math.round((approved / total) * 100) : 0;
+      const pctIssues = total > 0 ? (issues / total) * 100 : 0;
+      const pctReviewing = total > 0 ? (reviewing / total) * 100 : 0;
+      const pctAppWidth = total > 0 ? (approved / total) * 100 : 0;
+
+      document.getElementById('global-progress-percent').innerText = pctApproved + '%';
+      document.getElementById('stat-approved-count').innerText = approved;
+      document.getElementById('stat-reviewing-count').innerText = reviewing;
+      document.getElementById('stat-issues-count').innerText = issues;
+      document.getElementById('stat-total-count').innerText = total;
+
+      document.getElementById('seg-approved').style.width = pctAppWidth + '%';
+      document.getElementById('seg-issues').style.width = pctIssues + '%';
+      document.getElementById('seg-reviewing').style.width = pctReviewing + '%';
+
+      document.getElementById('progress-summary-text').innerText = `${approved} de ${total} módulos aprovados (${pctApproved}%)`;
+    }
+
+    function handleSearch(val) {
+      currentSearch = val;
+      renderBoard();
+      if (document.getElementById('graph-view').classList.contains('active')) {
+        highlightGraphSearch(val);
+      }
+    }
+
+    function setFilter(filter, el) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      renderBoard();
+    }
+
+    function switchView(mode) {
+      if (mode === 'kanban') {
+        document.getElementById('kanban-view').style.display = 'flex';
+        document.getElementById('graph-view').classList.remove('active');
+        document.getElementById('btn-view-kanban').classList.add('active');
+        document.getElementById('btn-view-graph').classList.remove('active');
+      } else {
+        document.getElementById('kanban-view').style.display = 'none';
+        document.getElementById('graph-view').classList.add('active');
+        document.getElementById('btn-view-kanban').classList.remove('active');
+        document.getElementById('btn-view-graph').classList.add('active');
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            if (!hasRenderedGraph) {
+              initInteractiveGraph();
+            } else {
+              graphFitView();
+            }
+          }, 30);
+        });
+      }
+    }
+
+    function focusWave(waveId) {
+      switchView('kanban');
+      const el = document.getElementById('wave-col-' + waveId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+      }
+    }
+
+    function openCardModal(cardId) {
+      currentModalCardId = cardId;
+      const card = getCardData(cardId);
+      if (!card) return;
+
+      document.getElementById('modal-card-id').innerText = card.id;
+      document.getElementById('modal-card-title').innerText = card.title;
+      document.getElementById('modal-card-category').innerText = card.category;
+      
+      const prioBadge = document.getElementById('modal-card-prio');
+      prioBadge.className = 'badge badge-prio-' + card.priority;
+      prioBadge.innerText = card.priority.toUpperCase();
+
+      updateModalStatusButtons(getCardStatus(cardId));
+
+      const filesContainer = document.getElementById('modal-files-list');
+      filesContainer.innerHTML = card.files.map(f => `
+        <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); font-size: 0.8125rem;">
+          <div style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: #fff; margin-bottom: 0.2rem;">${f.path} <span style="color: var(--text-faint); font-size: 0.75rem;">(${f.lines} linhas)</span></div>
+          <div style="color: var(--text-muted); font-size: 0.75rem;">${f.desc}</div>
+        </div>
+      `).join('');
+
+      const symContainer = document.getElementById('modal-symbols-list');
+      symContainer.innerHTML = card.keySymbols.map(s => `
+        <span class="symbol-chip">${s}</span>
+      `).join('');
+
+      renderModalChecklist(cardId);
+
+      const objContainer = document.getElementById('modal-objectives-list');
+      objContainer.innerHTML = card.objectives.map(o => `<li>${o}</li>`).join('');
+
+      document.getElementById('modal-notes').value = reviewState[cardId]?.notes || '';
+
+      document.getElementById('card-modal').classList.add('open');
+    }
+
+    function navigateCard(delta) {
+      if (!currentModalCardId) return;
+      const idx = ALL_CARD_IDS.indexOf(currentModalCardId);
+      if (idx === -1) return;
+      let nextIdx = idx + delta;
+      if (nextIdx < 0) nextIdx = ALL_CARD_IDS.length - 1;
+      if (nextIdx >= ALL_CARD_IDS.length) nextIdx = 0;
+      openCardModal(ALL_CARD_IDS[nextIdx]);
+    }
+
+    function renderModalChecklist(cardId) {
+      const card = getCardData(cardId);
+      if (!card) return;
+      const chkContainer = document.getElementById('modal-checklist-container');
+      chkContainer.innerHTML = card.checklist.map(chk => {
+        const isChecked = getChecklistChecked(cardId, chk.id);
+        return `
+          <div class="checklist-item ${isChecked ? 'checked' : ''}" onclick="toggleChecklistItem('${cardId}', '${chk.id}')">
+            <input type="checkbox" class="checklist-checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleChecklistItem('${cardId}', '${chk.id}')" />
+            <span class="checklist-text">${chk.text}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function closeModal(e) {
+      if (e.target === document.getElementById('card-modal')) {
+        closeModalDirect();
+      }
+    }
+
+    function closeModalDirect() {
+      document.getElementById('card-modal').classList.remove('open');
+      currentModalCardId = null;
+    }
+
+    function exportState() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(reviewState, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "nemon_code_review_progress.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('Arquivo de progresso exportado!');
+    }
+
+    function importState(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          reviewState = imported;
+          saveState();
+          renderBoard();
+          showToast('Progresso importado com sucesso!');
+        } catch (err) {
+          alert('Erro ao importar JSON: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function resetState() {
+      if (confirm("Deseja restaurar o progresso para o baseline verificado pelo code review?")) {
+        localStorage.removeItem(STORAGE_KEY);
+        reviewState = JSON.parse(JSON.stringify(defaultReviewState));
+        saveState();
+        renderBoard();
+        showToast("Progresso restaurado para o baseline auditado!");
+      }
+    }
+
+    /* ==========================================================================
+       INTERACTIVE GRAPH LOGIC & RENDERING (COMPACT 2-COLUMN CLUSTER ARCHITECTURE)
+       ========================================================================== */
+    let hasRenderedGraph = false;
+    let graphZoomScale = 0.55;
+    let graphPanX = 50;
+    let graphPanY = 40;
+    let isPanning = false;
+    let startPointerX = 0;
+    let startPointerY = 0;
+
+    const NODE_WIDTH = 210;
+    const NODE_HEIGHT = 52;
+    const NODE_GAP_X = 10;
+    const NODE_GAP_Y = 8;
+    const CLUSTER_GAP_X = 60;
+
+    const nodePositions = {};
+    const clusterPositions = {};
+
+    function initInteractiveGraph() {
+      hasRenderedGraph = true;
+      calculateGraphLayout();
+      renderGraphElements();
+      setupGraphPanZoom();
+      updateGraphNodeStatuses();
+      graphFitView();
+    }
+
+    function calculateGraphLayout() {
+      let currentClusterX = 40;
+      const clusterY = 40;
+
+      RAW_WAVES.forEach((wave, waveIdx) => {
+        const count = wave.cards.length;
+        const useTwoCols = count > 5;
+        const numCols = useTwoCols ? 2 : 1;
+        const numRows = Math.ceil(count / numCols);
+
+        const clusterWidth = numCols === 2 ? (NODE_WIDTH * 2 + NODE_GAP_X + 24) : (NODE_WIDTH + 24);
+        const clusterHeight = 65 + numRows * (NODE_HEIGHT + NODE_GAP_Y) + 12;
+
+        clusterPositions[wave.id] = {
+          x: currentClusterX,
+          y: clusterY,
+          width: clusterWidth,
+          height: clusterHeight,
+          wave: wave
+        };
+
+        wave.cards.forEach((card, cardIdx) => {
+          const c = useTwoCols ? (cardIdx % 2) : 0;
+          const r = useTwoCols ? Math.floor(cardIdx / 2) : cardIdx;
+
+          const nx = currentClusterX + 12 + c * (NODE_WIDTH + NODE_GAP_X);
+          const ny = clusterY + 62 + r * (NODE_HEIGHT + NODE_GAP_Y);
+
+          nodePositions[card.id] = {
+            x: nx,
+            y: ny,
+            waveId: wave.id,
+            waveIndex: waveIdx,
+            color: wave.color,
+            card: card
+          };
+        });
+
+        currentClusterX += clusterWidth + CLUSTER_GAP_X;
+      });
+    }
+
+    function renderGraphElements() {
+      const clustersLayer = document.getElementById('graph-clusters-layer');
+      const edgesLayer = document.getElementById('graph-edges-layer');
+      const nodesLayer = document.getElementById('graph-nodes-layer');
+
+      clustersLayer.innerHTML = '';
+      edgesLayer.innerHTML = '';
+      nodesLayer.innerHTML = '';
+
+      // 1. Render Wave Clusters
+      Object.keys(clusterPositions).forEach(waveId => {
+        const cpos = clusterPositions[waveId];
+        const wave = cpos.wave;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'cluster-box');
+        g.setAttribute('id', 'cluster-' + wave.id);
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', cpos.x);
+        rect.setAttribute('y', cpos.y);
+        rect.setAttribute('width', cpos.width);
+        rect.setAttribute('height', cpos.height);
+        rect.setAttribute('class', 'cluster-rect');
+        rect.setAttribute('stroke', wave.color);
+        rect.setAttribute('stroke-opacity', '0.35');
+
+        // Header accent bar inside cluster
+        const headerBar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        headerBar.setAttribute('x', cpos.x);
+        headerBar.setAttribute('y', cpos.y);
+        headerBar.setAttribute('width', cpos.width);
+        headerBar.setAttribute('height', 4);
+        headerBar.setAttribute('fill', wave.color);
+        headerBar.setAttribute('rx', 2);
+
+        const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        title.setAttribute('x', cpos.x + 14);
+        title.setAttribute('y', cpos.y + 26);
+        title.setAttribute('class', 'cluster-title');
+        title.textContent = `Onda ${wave.number}: ${wave.shortTitle}`;
+
+        const totalLinesInWave = wave.cards.reduce((sum, cd) => sum + cd.files.reduce((fsum, f) => fsum + f.lines, 0), 0);
+        const subtitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        subtitle.setAttribute('x', cpos.x + 14);
+        subtitle.setAttribute('y', cpos.y + 44);
+        subtitle.setAttribute('class', 'cluster-subtitle');
+        subtitle.textContent = `${wave.cards.length} módulos · ${totalLinesInWave} linhas de código`;
+
+        g.appendChild(rect);
+        g.appendChild(headerBar);
+        g.appendChild(title);
+        g.appendChild(subtitle);
+        clustersLayer.appendChild(g);
+      });
+
+      // 2. Render Edges (Cubic Beziers)
+      RAW_EDGES.forEach((edge) => {
+        const src = nodePositions[edge.from];
+        const tgt = nodePositions[edge.to];
+        if (!src || !tgt) return;
+
+        const x1 = src.x + NODE_WIDTH;
+        const y1 = src.y + NODE_HEIGHT / 2;
+        const x2 = tgt.x;
+        const y2 = tgt.y + NODE_HEIGHT / 2;
+
+        const dx = Math.abs(x2 - x1);
+        const cx1 = x1 + Math.max(dx * 0.35, 30);
+        const cx2 = x2 - Math.max(dx * 0.35, 30);
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const d = `M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`;
+        path.setAttribute('d', d);
+        path.setAttribute('class', 'edge-path');
+        path.setAttribute('id', `edge-${edge.from}-${edge.to}`);
+        path.setAttribute('data-from', edge.from);
+        path.setAttribute('data-to', edge.to);
+        path.setAttribute('data-type', edge.type);
+        path.setAttribute('marker-end', 'url(#arrow-default)');
+        edgesLayer.appendChild(path);
+      });
+
+      // 3. Render Nodes
+      Object.keys(nodePositions).forEach(cardId => {
+        const pos = nodePositions[cardId];
+        const card = pos.card;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'graph-node');
+        g.setAttribute('id', 'node-' + cardId);
+        g.setAttribute('data-id', cardId);
+        g.setAttribute('data-wave', pos.waveId);
+        g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('width', NODE_WIDTH);
+        rect.setAttribute('height', NODE_HEIGHT);
+        rect.setAttribute('class', 'node-bg');
+
+        const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        bar.setAttribute('x', 0);
+        bar.setAttribute('y', 0);
+        bar.setAttribute('width', 3.5);
+        bar.setAttribute('height', NODE_HEIGHT);
+        bar.setAttribute('fill', pos.color);
+        bar.setAttribute('rx', 1.5);
+
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', 14);
+        dot.setAttribute('cy', 16);
+        dot.setAttribute('class', 'node-status-dot pending');
+        dot.setAttribute('id', 'dot-' + cardId);
+
+        const idText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        idText.setAttribute('x', 24);
+        idText.setAttribute('y', 19);
+        idText.setAttribute('class', 'node-id-text');
+        idText.textContent = cardId;
+
+        const prioText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        prioText.setAttribute('x', NODE_WIDTH - 10);
+        prioText.setAttribute('y', 19);
+        prioText.setAttribute('text-anchor', 'end');
+        prioText.setAttribute('class', 'node-id-text');
+        prioText.setAttribute('fill', card.priority === 'critical' ? '#f87171' : (card.priority === 'high' ? '#fb923c' : '#a1a1aa'));
+        prioText.textContent = card.priority.slice(0, 4).toUpperCase();
+
+        const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        titleText.setAttribute('x', 12);
+        titleText.setAttribute('y', 35);
+        titleText.setAttribute('class', 'node-title-text');
+        titleText.textContent = card.title.length > 25 ? card.title.slice(0, 24) + '…' : card.title;
+
+        const primaryFile = card.files[0] ? card.files[0].path.split('/').pop() : '';
+        const totalLines = card.files.reduce((acc, f) => acc + f.lines, 0);
+        const infoText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        infoText.setAttribute('x', 12);
+        infoText.setAttribute('y', 46);
+        infoText.setAttribute('class', 'node-info-text');
+        infoText.textContent = `${primaryFile} (${totalLines} l)`;
+
+        g.appendChild(rect);
+        g.appendChild(bar);
+        g.appendChild(dot);
+        g.appendChild(idText);
+        g.appendChild(prioText);
+        g.appendChild(titleText);
+        g.appendChild(infoText);
+
+        g.addEventListener('mouseenter', () => highlightNodeConnections(cardId));
+        g.addEventListener('mouseleave', () => resetGraphHighlight());
+        g.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectGraphNode(cardId);
+        });
+
+        nodesLayer.appendChild(g);
+      });
+
+      applyGraphTransform();
+    }
+
+    function updateGraphNodeStatuses() {
+      Object.keys(nodePositions).forEach(cardId => {
+        const dot = document.getElementById('dot-' + cardId);
+        if (dot) {
+          const st = getCardStatus(cardId);
+          dot.setAttribute('class', 'node-status-dot ' + st);
+        }
+      });
+    }
+
+    function highlightNodeConnections(cardId) {
+      document.querySelectorAll('.graph-node').forEach(n => {
+        if (n.getAttribute('data-id') !== cardId) {
+          n.classList.add('dimmed');
+        }
+      });
+      document.querySelectorAll('.edge-path').forEach(p => p.classList.add('dimmed'));
+      document.querySelectorAll('.cluster-box').forEach(c => c.classList.add('dimmed'));
+
+      const incomingNodes = new Set();
+      const outgoingNodes = new Set();
+
+      document.querySelectorAll('.edge-path').forEach(path => {
+        const from = path.getAttribute('data-from');
+        const to = path.getAttribute('data-to');
+
+        if (from === cardId) {
+          path.classList.remove('dimmed');
+          path.classList.add('highlight-out');
+          path.setAttribute('marker-end', 'url(#arrow-out)');
+          outgoingNodes.add(to);
+        } else if (to === cardId) {
+          path.classList.remove('dimmed');
+          path.classList.add('highlight-in');
+          path.setAttribute('marker-end', 'url(#arrow-in)');
+          incomingNodes.add(from);
+        }
+      });
+
+      incomingNodes.forEach(id => {
+        const el = document.getElementById('node-' + id);
+        if (el) el.classList.remove('dimmed');
+      });
+
+      outgoingNodes.forEach(id => {
+        const el = document.getElementById('node-' + id);
+        if (el) el.classList.remove('dimmed');
+      });
+
+      const selfNode = document.getElementById('node-' + cardId);
+      if (selfNode) selfNode.classList.remove('dimmed');
+
+      const waveId = nodePositions[cardId]?.waveId;
+      const selfCluster = document.getElementById('cluster-' + waveId);
+      if (selfCluster) selfCluster.classList.remove('dimmed');
+    }
+
+    function resetGraphHighlight() {
+      if (selectedGraphNodeId) {
+        highlightNodeConnections(selectedGraphNodeId);
+        return;
+      }
+      document.querySelectorAll('.graph-node').forEach(n => n.classList.remove('dimmed'));
+      document.querySelectorAll('.edge-path').forEach(p => {
+        p.classList.remove('dimmed', 'highlight-out', 'highlight-in');
+        p.setAttribute('marker-end', 'url(#arrow-default)');
+      });
+      document.querySelectorAll('.cluster-box').forEach(c => c.classList.remove('dimmed'));
+
+      if (isCriticalPathActive) {
+        highlightCriticalPath();
+      }
+    }
+
+    function selectGraphNode(cardId) {
+      selectedGraphNodeId = cardId;
+      document.querySelectorAll('.graph-node').forEach(n => n.classList.remove('selected'));
+      const el = document.getElementById('node-' + cardId);
+      if (el) el.classList.add('selected');
+
+      highlightNodeConnections(cardId);
+      openGraphHud(cardId);
+    }
+
+    function openGraphHud(cardId) {
+      const card = getCardData(cardId);
+      if (!card) return;
+
+      document.getElementById('hud-card-id').innerText = card.id;
+      document.getElementById('hud-card-title').innerText = card.title;
+      
+      const prio = document.getElementById('hud-card-prio');
+      prio.className = 'badge badge-prio-' + card.priority;
+      prio.innerText = card.priority.toUpperCase();
+
+      updateHudStatusButtons(getCardStatus(cardId));
+
+      const inputs = RAW_EDGES.filter(e => e.to === cardId);
+      const outputs = RAW_EDGES.filter(e => e.from === cardId);
+
+      const inputsList = document.getElementById('hud-inputs-list');
+      if (inputs.length === 0) {
+        inputsList.innerHTML = '<span style="font-size: 0.6875rem; color: var(--text-faint);">Módulo Raiz (sem dependências)</span>';
+      } else {
+        inputsList.innerHTML = inputs.map(e => `
+          <span class="hud-chip" onclick="selectGraphNode('${e.from}')">${e.from} (${e.type})</span>
+        `).join('');
+      }
+
+      const outputsList = document.getElementById('hud-outputs-list');
+      if (outputs.length === 0) {
+        outputsList.innerHTML = '<span style="font-size: 0.6875rem; color: var(--text-faint);">Terminal (não alimenta outros)</span>';
+      } else {
+        outputsList.innerHTML = outputs.map(e => `
+          <span class="hud-chip" onclick="selectGraphNode('${e.to}')">${e.to} (${e.type})</span>
+        `).join('');
+      }
+
+      document.getElementById('graph-hud').classList.add('active');
+    }
+
+    function closeGraphHud() {
+      document.getElementById('graph-hud').classList.remove('active');
+      selectedGraphNodeId = null;
+      resetGraphHighlight();
+    }
+
+    function openCardModalFromHud() {
+      if (selectedGraphNodeId) {
+        openCardModal(selectedGraphNodeId);
+      }
+    }
+
+    function toggleCriticalPath() {
+      isCriticalPathActive = !isCriticalPathActive;
+      const btn = document.getElementById('btn-toggle-critical');
+      if (isCriticalPathActive) {
+        btn.classList.add('active');
+        btn.style.background = 'rgba(244, 63, 94, 0.2)';
+        btn.style.borderColor = '#f43f5e';
+        btn.style.color = '#f43f5e';
+        highlightCriticalPath();
+      } else {
+        btn.classList.remove('active');
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+        resetGraphHighlight();
+      }
+    }
+
+    function highlightCriticalPath() {
+      const CRITICAL_NODES = new Set([
+        'w1-c1', 'w1-c2', 'w1-c9',
+        'w2-c1', 'w2-c4',
+        'w3-c1', 'w3-c6',
+        'w4-c1', 'w4-c4', 'w4-c6',
+        'w6-c1', 'w6-c4',
+        'w9-c1', 'w9-c2', 'w9-c5'
+      ]);
+
+      document.querySelectorAll('.graph-node').forEach(n => {
+        const id = n.getAttribute('data-id');
+        if (!CRITICAL_NODES.has(id)) {
+          n.classList.add('dimmed');
+        } else {
+          n.classList.remove('dimmed');
+        }
+      });
+
+      document.querySelectorAll('.edge-path').forEach(p => {
+        const from = p.getAttribute('data-from');
+        const to = p.getAttribute('data-to');
+        if (CRITICAL_NODES.has(from) && CRITICAL_NODES.has(to)) {
+          p.classList.remove('dimmed');
+          p.classList.add('critical-path');
+          p.setAttribute('marker-end', 'url(#arrow-crit)');
+        } else {
+          p.classList.add('dimmed');
+        }
+      });
+    }
+
+    function filterGraphWave(waveId) {
+      graphFilterWave = waveId;
+      if (waveId === 'all') {
+        document.querySelectorAll('.graph-node, .cluster-box, .edge-path').forEach(el => el.classList.remove('dimmed'));
+        graphFitView();
+        return;
+      }
+
+      document.querySelectorAll('.cluster-box').forEach(c => {
+        if (c.id === 'cluster-' + waveId) c.classList.remove('dimmed');
+        else c.classList.add('dimmed');
+      });
+
+      document.querySelectorAll('.graph-node').forEach(n => {
+        if (n.getAttribute('data-wave') === waveId) n.classList.remove('dimmed');
+        else n.classList.add('dimmed');
+      });
+
+      document.querySelectorAll('.edge-path').forEach(p => {
+        const from = p.getAttribute('data-from');
+        const to = p.getAttribute('data-to');
+        const srcWave = nodePositions[from]?.waveId;
+        const tgtWave = nodePositions[to]?.waveId;
+        if (srcWave === waveId || tgtWave === waveId) p.classList.remove('dimmed');
+        else p.classList.add('dimmed');
+      });
+
+      // Pan directly to focused cluster
+      const cpos = clusterPositions[waveId];
+      if (cpos) {
+        const viewport = document.getElementById('graph-viewport');
+        const rect = viewport.getBoundingClientRect();
+        graphZoomScale = Math.min(rect.width / (cpos.width + 120), rect.height / (cpos.height + 120), 1.2);
+        graphPanX = (rect.width - cpos.width * graphZoomScale) / 2 - cpos.x * graphZoomScale;
+        graphPanY = (rect.height - cpos.height * graphZoomScale) / 2 - cpos.y * graphZoomScale;
+        applyGraphTransform();
+      }
+    }
+
+    function highlightGraphSearch(q) {
+      if (!q) {
+        resetGraphHighlight();
+        return;
+      }
+      const query = q.toLowerCase();
+      document.querySelectorAll('.graph-node').forEach(n => {
+        const id = n.getAttribute('data-id');
+        const card = getCardData(id);
+        if (!card) return;
+
+        const match = card.title.toLowerCase().includes(query) ||
+                      card.id.toLowerCase().includes(query) ||
+                      card.files.some(f => f.path.toLowerCase().includes(query)) ||
+                      card.keySymbols.some(s => s.toLowerCase().includes(query));
+
+        if (match) n.classList.remove('dimmed');
+        else n.classList.add('dimmed');
+      });
+    }
+
+    function setupGraphPanZoom() {
+      const viewport = document.getElementById('graph-viewport');
+
+      viewport.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.graph-hud')) return;
+        isPanning = true;
+        startPointerX = e.clientX - graphPanX;
+        startPointerY = e.clientY - graphPanY;
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!isPanning) return;
+        graphPanX = e.clientX - startPointerX;
+        graphPanY = e.clientY - startPointerY;
+        applyGraphTransform();
+      });
+
+      window.addEventListener('pointerup', () => { isPanning = false; });
+      window.addEventListener('pointercancel', () => { isPanning = false; });
+
+      viewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.12 : 0.88;
+        graphZoom(factor, e.clientX, e.clientY);
+      }, { passive: false });
+
+      viewport.addEventListener('click', (e) => {
+        if (e.target.closest('.graph-node') || e.target.closest('.graph-hud')) return;
+        closeGraphHud();
+      });
+    }
+
+    function graphZoom(factor, centerX, centerY) {
+      const newScale = Math.min(Math.max(graphZoomScale * factor, 0.15), 3.0);
+      const viewport = document.getElementById('graph-viewport');
+      const rect = viewport.getBoundingClientRect();
+      const cx = centerX !== undefined ? centerX - rect.left : rect.width / 2;
+      const cy = centerY !== undefined ? centerY - rect.top : rect.height / 2;
+
+      graphPanX = cx - (cx - graphPanX) * (newScale / graphZoomScale);
+      graphPanY = cy - (cy - graphPanY) * (newScale / graphZoomScale);
+      graphZoomScale = newScale;
+
+      applyGraphTransform();
+    }
+
+    function graphFitView() {
+      const viewport = document.getElementById('graph-viewport');
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const clusterKeys = Object.keys(clusterPositions);
+      if (clusterKeys.length === 0) return;
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      clusterKeys.forEach(k => {
+        const c = clusterPositions[k];
+        if (c.x < minX) minX = c.x;
+        if (c.y < minY) minY = c.y;
+        if (c.x + c.width > maxX) maxX = c.x + c.width;
+        if (c.y + c.height > maxY) maxY = c.y + c.height;
+      });
+
+      const bboxWidth = maxX - minX;
+      const bboxHeight = maxY - minY;
+      const padding = 45;
+
+      const scaleX = (rect.width - padding * 2) / bboxWidth;
+      const scaleY = (rect.height - padding * 2) / bboxHeight;
+      graphZoomScale = Math.max(0.15, Math.min(scaleX, scaleY, 1.0));
+
+      graphPanX = (rect.width - bboxWidth * graphZoomScale) / 2 - minX * graphZoomScale;
+      graphPanY = (rect.height - bboxHeight * graphZoomScale) / 2 - minY * graphZoomScale;
+
+      applyGraphTransform();
+    }
+
+    function applyGraphTransform() {
+      const root = document.getElementById('graph-transform-root');
+      if (root) {
+        root.setAttribute('transform', `translate(${graphPanX}, ${graphPanY}) scale(${graphZoomScale})`);
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      if (document.getElementById('graph-view').classList.contains('active')) {
+        graphFitView();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (document.getElementById('card-modal').classList.contains('open')) {
+        if (e.key === 'Escape') {
+          closeModalDirect();
+        } else if (e.key === 'ArrowLeft' && e.altKey) {
+          navigateCard(-1);
+        } else if (e.key === 'ArrowRight' && e.altKey) {
+          navigateCard(1);
+        }
+      } else if (e.key === 'Escape' && document.getElementById('graph-hud').classList.contains('active')) {
+        closeGraphHud();
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('search-input').focus();
+      }
+    });
+
+    renderBoard();
+  </script>
+</body>
+</html>

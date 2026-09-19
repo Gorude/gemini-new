@@ -5,15 +5,15 @@ import tailwindcss from '@tailwindcss/vite'
 import fs from 'fs'
 import path from 'path'
 
-const chatFile = path.resolve(__dirname, 'chat-history.json')
-const memoryFile = path.resolve(__dirname, 'user-memory.json')
-const personalitiesFile = path.resolve(__dirname, 'personalities.json')
-const usageFile = path.resolve(__dirname, 'usage-data.json')
-const configFile = path.resolve(__dirname, 'app-config.json')
+const chatFile = path.resolve(import.meta.dirname, 'chat-history.json')
+const memoryFile = path.resolve(import.meta.dirname, 'user-memory.json')
+const personalitiesFile = path.resolve(import.meta.dirname, 'personalities.json')
+const usageFile = path.resolve(import.meta.dirname, 'usage-data.json')
+const configFile = path.resolve(import.meta.dirname, 'app-config.json')
 
 if (!fs.existsSync(usageFile)) fs.writeFileSync(usageFile, JSON.stringify({ dailyUsage: [] }))
 if (!fs.existsSync(configFile)) fs.writeFileSync(configFile, JSON.stringify({ paidApiKey: '' }))
-const uploadsDir = path.resolve(__dirname, 'public/uploads')
+const uploadsDir = path.resolve(import.meta.dirname, 'public/uploads')
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 
 async function fetchDuckDuckGoLiteOrHtml(query: string, max_results: number = 50) {
@@ -88,244 +88,210 @@ async function fetchDuckDuckGoLiteOrHtml(query: string, max_results: number = 50
   return results;
 }
 
+function readBoundedBody(req: import("http").IncomingMessage, limitBytes: number = 5 * 1024 * 1024): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    let bytes = 0;
+    req.on("data", (chunk: string | Buffer) => {
+      bytes += typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length;
+      if (bytes > limitBytes) {
+        req.destroy();
+        reject(new Error("PAYLOAD_TOO_LARGE"));
+        return;
+      }
+      body += chunk;
+    });
+    req.on("end", () => resolve(body));
+    req.on("error", (err) => reject(err));
+  });
+}
+
+function isSafeHttpUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const h = parsed.hostname.toLowerCase();
+    if (h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "0.0.0.0" || h === "169.254.169.254") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function chatHistoryApi() {
   return {
-    name: 'chat-history-api',
-    configureServer(server: import('vite').ViteDevServer) {
-      server.middlewares.use((req: import('http').IncomingMessage, res: import('http').ServerResponse, next: () => void) => {
-        if (req.url === '/api/history' && req.method === 'GET') {
-          res.setHeader('Content-Type', 'application/json')
-          if (fs.existsSync(chatFile)) {
-            res.end(fs.readFileSync(chatFile, 'utf-8'))
-          } else {
-            res.end(JSON.stringify([]))
-          }
-        } else if (req.url === '/api/history' && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', () => {
-            fs.writeFileSync(chatFile, body, 'utf-8')
-            res.end(JSON.stringify({ success: true }))
-          })
-        } else if (req.url === '/api/memory' && req.method === 'GET') {
-          res.setHeader('Content-Type', 'application/json')
-          if (fs.existsSync(memoryFile)) {
-            res.end(fs.readFileSync(memoryFile, 'utf-8'))
-          } else {
-            res.end(JSON.stringify([]))
-          }
-        } else if (req.url === '/api/memory' && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', () => {
-            fs.writeFileSync(memoryFile, body, 'utf-8')
-            res.end(JSON.stringify({ success: true }))
-          })
-        } else if (req.url === '/api/personalities' && req.method === 'GET') {
-          res.setHeader('Content-Type', 'application/json')
-          if (fs.existsSync(personalitiesFile)) {
-            res.end(fs.readFileSync(personalitiesFile, 'utf-8'))
-          } else {
-            res.end(JSON.stringify([]))
-          }
-        } else if (req.url === '/api/personalities' && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', () => {
-            fs.writeFileSync(personalitiesFile, body, 'utf-8')
-            res.end(JSON.stringify({ success: true }))
-          })
-        } else if (req.url === '/api/usage' && req.method === 'GET') {
-          res.setHeader('Content-Type', 'application/json')
-          if (fs.existsSync(usageFile)) {
-            res.end(fs.readFileSync(usageFile, 'utf-8'))
-          } else {
-            res.end(JSON.stringify({}))
-          }
-        } else if (req.url === '/api/usage' && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', () => {
-            fs.writeFileSync(usageFile, body, 'utf-8')
-            res.end(JSON.stringify({ success: true }))
-          })
-        } else if (req.url === '/api/config' && req.method === 'GET') {
-          res.setHeader('Content-Type', 'application/json')
-          res.end(fs.readFileSync(configFile, 'utf-8'))
-        } else if (req.url === '/api/config' && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', () => {
-            fs.writeFileSync(configFile, body, 'utf-8')
-            res.end(JSON.stringify({ success: true }))
-          })
-        } else if (req.url === '/api/upload' && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', () => {
-            try {
-              const payload = JSON.parse(body)
-              const buffer = Buffer.from(payload.data, 'base64')
-              fs.writeFileSync(path.join(uploadsDir, payload.filename), buffer)
-              res.end(JSON.stringify({ success: true, path: '/uploads/' + payload.filename }))
-            } catch {
-              res.end(JSON.stringify({ error: true }))
+    name: "chat-history-api",
+    configureServer(server: import("vite").ViteDevServer) {
+      server.middlewares.use(async (req: import("http").IncomingMessage, res: import("http").ServerResponse, next: () => void) => {
+        const sendJson = (status: number, data: any) => {
+          res.statusCode = status;
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.end(JSON.stringify(data));
+        };
+
+        try {
+          if (req.url === "/api/history" && req.method === "GET") {
+            res.setHeader("Content-Type", "application/json");
+            res.end(fs.existsSync(chatFile) ? fs.readFileSync(chatFile, "utf-8") : JSON.stringify([]));
+          } else if (req.url === "/api/history" && req.method === "POST") {
+            const body = await readBoundedBody(req, 20 * 1024 * 1024);
+            JSON.parse(body); // validate JSON
+            fs.writeFileSync(chatFile, body, "utf-8");
+            sendJson(200, { success: true });
+          } else if (req.url === "/api/memory" && req.method === "GET") {
+            res.setHeader("Content-Type", "application/json");
+            res.end(fs.existsSync(memoryFile) ? fs.readFileSync(memoryFile, "utf-8") : JSON.stringify([]));
+          } else if (req.url === "/api/memory" && req.method === "POST") {
+            const body = await readBoundedBody(req, 10 * 1024 * 1024);
+            JSON.parse(body);
+            fs.writeFileSync(memoryFile, body, "utf-8");
+            sendJson(200, { success: true });
+          } else if (req.url === "/api/personalities" && req.method === "GET") {
+            res.setHeader("Content-Type", "application/json");
+            res.end(fs.existsSync(personalitiesFile) ? fs.readFileSync(personalitiesFile, "utf-8") : JSON.stringify([]));
+          } else if (req.url === "/api/personalities" && req.method === "POST") {
+            const body = await readBoundedBody(req, 5 * 1024 * 1024);
+            JSON.parse(body);
+            fs.writeFileSync(personalitiesFile, body, "utf-8");
+            sendJson(200, { success: true });
+          } else if (req.url === "/api/usage" && req.method === "GET") {
+            res.setHeader("Content-Type", "application/json");
+            res.end(fs.existsSync(usageFile) ? fs.readFileSync(usageFile, "utf-8") : JSON.stringify({}));
+          } else if (req.url === "/api/usage" && req.method === "POST") {
+            const body = await readBoundedBody(req, 5 * 1024 * 1024);
+            JSON.parse(body);
+            fs.writeFileSync(usageFile, body, "utf-8");
+            sendJson(200, { success: true });
+          } else if (req.url === "/api/config" && req.method === "GET") {
+            res.setHeader("Content-Type", "application/json");
+            res.end(fs.existsSync(configFile) ? fs.readFileSync(configFile, "utf-8") : JSON.stringify({ paidApiKey: "" }));
+          } else if (req.url === "/api/config" && req.method === "POST") {
+            const body = await readBoundedBody(req, 1 * 1024 * 1024);
+            JSON.parse(body);
+            fs.writeFileSync(configFile, body, "utf-8");
+            sendJson(200, { success: true });
+          } else if (req.url === "/api/upload" && req.method === "POST") {
+            const body = await readBoundedBody(req, 25 * 1024 * 1024);
+            const payload = JSON.parse(body);
+            const safeName = path.basename(payload.filename || "upload_" + Date.now() + ".bin").replace(/[^a-zA-Z0-9._-]/g, "_");
+            const targetPath = path.resolve(uploadsDir, safeName);
+            if (!targetPath.startsWith(uploadsDir)) {
+              return sendJson(400, { error: "Path traversal detected" });
             }
-          })
-        } else if (req.url?.startsWith('/api/duckduckgo') && req.method === 'GET') {
-          const urlObj = new URL(req.url, 'http://localhost')
-          const q = urlObj.searchParams.get('q') || ''
-          if (!q) {
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify([]))
-            return
-          }
-          fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            const buffer = Buffer.from(payload.data, "base64");
+            fs.writeFileSync(targetPath, buffer);
+            sendJson(200, { success: true, path: "/uploads/" + safeName });
+          } else if (req.url?.startsWith("/api/duckduckgo") && req.method === "GET") {
+            const urlObj = new URL(req.url, "http://localhost");
+            const q = urlObj.searchParams.get("q") || "";
+            if (!q) {
+              return sendJson(200, []);
             }
-          })
-            .then(r => r.text())
-            .then(html => {
-              res.setHeader('Content-Type', 'text/html; charset=utf-8')
-              res.setHeader('Access-Control-Allow-Origin', '*')
-              res.end(html)
-            })
-            .catch(err => {
-              res.statusCode = 502
-              res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ error: err.message }))
-            })
-        } else if ((req.url === '/health' || req.url === '/api/mcp/health') && req.method === 'GET') {
-          res.setHeader('Content-Type', 'application/json')
-          res.setHeader('Access-Control-Allow-Origin', '*')
-          res.end(JSON.stringify({ status: 'ok', service: 'vite-duckduckgo-mcp-bridge' }))
-        } else if ((req.url === '/search' || req.url === '/api/mcp/search') && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', async () => {
-            try {
-              const { query, max_results = 50 } = JSON.parse(body || '{}')
-              const results = await fetchDuckDuckGoLiteOrHtml(query, max_results)
-              res.setHeader('Content-Type', 'application/json')
-              res.setHeader('Access-Control-Allow-Origin', '*')
-              res.end(JSON.stringify({ success: true, via: 'vite-mcp-internal', results }))
-            } catch (err: any) {
-              res.statusCode = 500
-              res.setHeader('Content-Type', 'application/json')
-              res.setHeader('Access-Control-Allow-Origin', '*')
-              res.end(JSON.stringify({ error: err.message }))
-            }
-          })
-        } else if ((req.url === '/fetch' || req.url === '/api/mcp/fetch') && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', async () => {
-            try {
-              const { url } = JSON.parse(body || '{}')
-              if (!url) {
-                res.statusCode = 400
-                res.end(JSON.stringify({ error: 'url is required' }))
-                return
+            fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q), {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
               }
-              const fetchRes = await fetch(url, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-                signal: AbortSignal.timeout(6000)
+            })
+              .then(r => r.text())
+              .then(html => {
+                res.setHeader("Content-Type", "text/html; charset=utf-8");
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                res.end(html);
               })
-              const html = await fetchRes.text()
-              const clean = html
-                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-                .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
-                .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
-                .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
-                .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
-                .replace(/<[^>]+>/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .slice(0, 3000)
-              res.setHeader('Content-Type', 'application/json')
-              res.setHeader('Access-Control-Allow-Origin', '*')
-              res.end(JSON.stringify({ success: true, url, content: clean }))
-            } catch (err: any) {
-              res.statusCode = 500
-              res.setHeader('Content-Type', 'application/json')
-              res.setHeader('Access-Control-Allow-Origin', '*')
-              res.end(JSON.stringify({ error: err.message }))
+              .catch(err => {
+                sendJson(502, { error: err.message });
+              });
+          } else if ((req.url === "/health" || req.url === "/api/mcp/health") && req.method === "GET") {
+            sendJson(200, { status: "ok", service: "vite-duckduckgo-mcp-bridge" });
+          } else if ((req.url === "/search" || req.url === "/api/mcp/search") && req.method === "POST") {
+            const body = await readBoundedBody(req, 1 * 1024 * 1024);
+            const { query, max_results = 50 } = JSON.parse(body || "{}");
+            const results = await fetchDuckDuckGoLiteOrHtml(query, max_results);
+            sendJson(200, { success: true, via: "vite-mcp-internal", results });
+          } else if ((req.url === "/fetch" || req.url === "/api/mcp/fetch") && req.method === "POST") {
+            const body = await readBoundedBody(req, 1 * 1024 * 1024);
+            const { url } = JSON.parse(body || "{}");
+            if (!url || !isSafeHttpUrl(url)) {
+              return sendJson(400, { error: "Valid external http(s) url is required" });
             }
-          })
-        } else if ((req.url === '/tools/call' || req.url === '/api/mcp/tools/call') && req.method === 'POST') {
-          let body = ''
-          req.on('data', (chunk: string) => body += chunk)
-          req.on('end', async () => {
-            try {
-              const payload = JSON.parse(body || '{}')
-              const toolName = payload.params?.name || payload.name
-              const toolArgs = payload.params?.arguments || payload.arguments || {}
-              const query = toolArgs.query || ''
-              const max_results = toolArgs.max_results || toolArgs.count || 50
+            const fetchRes = await fetch(url, {
+              headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+              signal: AbortSignal.timeout(6000)
+            });
+            const html = await fetchRes.text();
+            const clean = html
+              .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+              .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+              .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, "")
+              .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, "")
+              .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, "")
+              .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, "")
+              .replace(/<[^>]+>/g, " ")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 3000);
+            sendJson(200, { success: true, url, content: clean });
+          } else if ((req.url === "/tools/call" || req.url === "/api/mcp/tools/call") && req.method === "POST") {
+            const body = await readBoundedBody(req, 2 * 1024 * 1024);
+            const payload = JSON.parse(body || "{}");
+            const toolName = payload.params?.name || payload.name;
+            const toolArgs = payload.params?.arguments || payload.arguments || {};
+            const query = toolArgs.query || "";
+            const max_results = toolArgs.max_results || toolArgs.count || 50;
 
-              // Tool: fetch
-              if (toolName === 'fetch' || toolArgs.url) {
-                const targetUrl = toolArgs.url || toolArgs.uri || ''
-                const fetchRes = await fetch(targetUrl, {
-                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-                  signal: AbortSignal.timeout(6000)
-                })
-                const html = await fetchRes.text()
-                const clean = html
-                  .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                  .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-                  .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
-                  .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
-                  .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
-                  .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
-                  .replace(/<[^>]+>/g, ' ')
-                  .replace(/\s+/g, ' ')
-                  .trim()
-                  .slice(0, 3000)
-
-                res.setHeader('Content-Type', 'application/json')
-                res.setHeader('Access-Control-Allow-Origin', '*')
-                res.end(JSON.stringify({
-                  jsonrpc: '2.0',
+            if (toolName === "fetch" || toolArgs.url) {
+              const targetUrl = toolArgs.url || toolArgs.uri || "";
+              if (!targetUrl || !isSafeHttpUrl(targetUrl)) {
+                return sendJson(400, {
+                  jsonrpc: "2.0",
                   id: payload.id || 1,
-                  result: {
-                    content: [{ type: 'text', text: clean }]
-                  }
-                }))
-                return
+                  error: { code: -32602, message: "Invalid or restricted target URL" }
+                });
               }
+              const fetchRes = await fetch(targetUrl, {
+                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+                signal: AbortSignal.timeout(6000)
+              });
+              const html = await fetchRes.text();
+              const clean = html
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+                .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, "")
+                .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, "")
+                .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, "")
+                .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, "")
+                .replace(/<[^>]+>/g, " ")
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 3000);
 
-              const results = await fetchDuckDuckGoLiteOrHtml(query, max_results)
-
-              res.setHeader('Content-Type', 'application/json')
-              res.setHeader('Access-Control-Allow-Origin', '*')
-              res.end(JSON.stringify({
-                jsonrpc: '2.0',
+              return sendJson(200, {
+                jsonrpc: "2.0",
                 id: payload.id || 1,
-                result: {
-                  content: [
-                    {
-                      type: 'text',
-                      text: JSON.stringify(results)
-                    }
-                  ]
-                }
-              }))
-            } catch (err: any) {
-              res.statusCode = 500
-              res.setHeader('Content-Type', 'application/json')
-              res.setHeader('Access-Control-Allow-Origin', '*')
-              res.end(JSON.stringify({ error: err.message }))
+                result: { content: [{ type: "text", text: clean }] }
+              });
             }
-          })
-        } else {
-          next()
+
+            const results = await fetchDuckDuckGoLiteOrHtml(query, max_results);
+            return sendJson(200, {
+              jsonrpc: "2.0",
+              id: payload.id || 1,
+              result: { content: [{ type: "text", text: JSON.stringify(results) }] }
+            });
+          } else {
+            next();
+          }
+        } catch (err: any) {
+          if (err.message === "PAYLOAD_TOO_LARGE") {
+            sendJson(413, { error: "Payload too large" });
+          } else {
+            sendJson(500, { error: err.message || "Internal server error" });
+          }
         }
-      })
+      });
     }
-  }
+  };
 }
 
 // https://vite.dev/config/

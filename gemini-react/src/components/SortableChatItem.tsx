@@ -61,10 +61,7 @@ const SortableChatItem: React.FC<SortableChatItemProps> = ({
   };
 
   useLayoutEffect(() => {
-    if (menuOpenId !== chat.id) {
-      setOpenUpward(false);
-      return;
-    }
+    if (menuOpenId !== chat.id) return;
 
     const checkPosition = () => {
       setOpenUpward(calculatePlacement());

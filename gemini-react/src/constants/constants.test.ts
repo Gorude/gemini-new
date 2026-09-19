@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  getModelCapabilities,
   estimateTokens,
   getModelContextWindow,
   formatTokenCount,
@@ -59,5 +60,27 @@ describe('formatTokenCount', () => {
 
   it('mostra 1 casa para milhares abaixo de 10k', () => {
     expect(formatTokenCount(1500)).toBe('1.5k');
+  });
+});
+
+describe("getModelCapabilities", () => {
+  it("retorna as capacidades de modelos internos", () => {
+    const caps = getModelCapabilities("gemini-3.5-flash-lite");
+    expect(caps).toContain("text");
+    expect(caps).toContain("tools");
+  });
+
+  it("prioriza capacidades customizadas quando presentes", () => {
+    const custom: CustomModel[] = [{
+      id: "custom/vision",
+      name: "Custom Vision",
+      provider: "openrouter",
+      capabilities: ["text", "image"]
+    }];
+    expect(getModelCapabilities("custom/vision", custom)).toEqual(["text", "image"]);
+  });
+
+  it("retorna fallback [text] para desconhecidos", () => {
+    expect(getModelCapabilities("unknown-model")).toEqual(["text"]);
   });
 });

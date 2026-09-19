@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compileProjectToHtml } from './NativePreviewRunner';
+import { compileProjectToHtml } from './previewCompiler';
 
 describe('compileProjectToHtml', () => {
   it('compiles single-file HTML and injects telemetry script', () => {

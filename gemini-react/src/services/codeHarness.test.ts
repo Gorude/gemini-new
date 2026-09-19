@@ -58,6 +58,12 @@ describe('applyFileEdit', () => {
 });
 
 describe('robustParseToolArgs', () => {
+  it("preserva sequências de escape literais como barra invertida n sem corromper para quebra de linha", () => {
+    // Exemplo: código com regex const r = /\\n/;
+    const raw = `{"path": "/script.js", "content": "const regex = /\\\\n/;"}`;
+    const parsed = robustParseToolArgs(raw);
+    expect(parsed.content).toBe("const regex = /\\n/;");
+  });
   it('faz parse de JSON válido normalmente', () => {
     const raw = `{"path": "/index.html", "content": "<h1>Olá</h1>"}`;
     const parsed = robustParseToolArgs(raw);

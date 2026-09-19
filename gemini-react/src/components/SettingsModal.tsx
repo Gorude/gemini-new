@@ -19,7 +19,7 @@ import {
   Plus,
   Star,
   ChevronDown,
-  Wand2
+  Sliders
 } from 'lucide-react';
 import { MODEL_OPTIONS, LIVE_MODEL_OPTIONS, FONT_OPTIONS, CUSTOM_MODEL_PROVIDERS, formatTokenCount, type CustomModel, type CustomModelProvider } from '../constants';
 import { fetchOpenRouterModelMeta, fetchOrcaRouterModelMeta } from '../services/gemini';
@@ -463,7 +463,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             className={`flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-2xl transition-all duration-300 shrink-0 ${activeTab === 'skills' ? 'text-white shadow-lg font-bold scale-[1.03]' : 'text-(--text-secondary) hover:bg-(--bg-chat-hover) hover:text-(--text-primary) md:hover:translate-x-1'}`}
             style={activeTab === 'skills' ? { background: `linear-gradient(to right, var(--accent), var(--accent-hover))`, boxShadow: `0 10px 15px -3px var(--accent-glow)` } : {}}
           >
-            <Wand2 size={15} className="text-violet-400" /> Skills
+            <Sliders size={15} className="text-(--accent)" /> Skills
           </button>
           <button
             onClick={() => setActiveTab('dna')}

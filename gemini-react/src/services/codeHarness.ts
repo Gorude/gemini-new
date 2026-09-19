@@ -1,3 +1,23 @@
+function unescapeJsonString(str: string): string {
+  return str.replace(/\\(["\\/bfnrt]|u[0-9a-fA-F]{4})/g, (_match, token) => {
+    switch (token) {
+      case '"': return '"';
+      case "\\": return "\\";
+      case "/": return "/";
+      case "b": return "\b";
+      case "f": return "\f";
+      case "n": return "\n";
+      case "r": return "\r";
+      case "t": return "\t";
+      default:
+        if (token.startsWith("u")) {
+          return String.fromCharCode(parseInt(token.slice(1), 16));
+        }
+        return token;
+    }
+  });
+}
+
 import { streamGeminiContent } from './gemini';
 import type { HarnessAction, HarnessStepBlock } from '../types/codeIde';
 import type { PendingFile } from '../types';
@@ -180,12 +200,7 @@ export function robustParseToolArgs(raw: string): {
       if (targetRaw.endsWith('"') && !targetRaw.endsWith('\\"')) {
         targetRaw = targetRaw.slice(0, -1);
       }
-      result.target_content = targetRaw
-        .replace(/\\n/g, '\n')
-        .replace(/\\r/g, '\r')
-        .replace(/\\t/g, '\t')
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, '\\');
+      result.target_content = unescapeJsonString(targetRaw);
     }
 
     const repHeader = trimmed.slice(repIdx).match(/"replacement_content"\s*:\s*"/);
@@ -196,12 +211,7 @@ export function robustParseToolArgs(raw: string): {
       if (repRaw.endsWith('"') && !repRaw.endsWith('\\"')) {
         repRaw = repRaw.slice(0, -1);
       }
-      result.replacement_content = repRaw
-        .replace(/\\n/g, '\n')
-        .replace(/\\r/g, '\r')
-        .replace(/\\t/g, '\t')
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, '\\');
+      result.replacement_content = unescapeJsonString(repRaw);
     }
     return result;
   }
@@ -218,12 +228,7 @@ export function robustParseToolArgs(raw: string): {
       if (body.endsWith('"') && !body.endsWith('\\"')) {
         body = body.slice(0, -1);
       }
-      result.content = body
-        .replace(/\\n/g, '\n')
-        .replace(/\\r/g, '\r')
-        .replace(/\\t/g, '\t')
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, '\\');
+      result.content = unescapeJsonString(body);
     }
   } else {
     // Fallback: procura bloco de código markdown ```...``` dentro dos argumentos
@@ -321,7 +326,7 @@ export function validateScriptSyntax(content: string, path: string): { valid: bo
  */
 export function cleanStepTitle(rawTitle: string): string {
   if (!rawTitle) return '';
-  let cleaned = rawTitle
+  const cleaned = rawTitle
     .replace(/^\[?(?:Passo|Passeo|Paso|Step|Etapa)\s+\d+(?:\s*(?:\/|de)\s*\d+)?\]?:?\s*/i, '')
     .replace(/<\/?(?:tool_call|function_call)[^>]*>?/gi, '')
     .replace(/\[(?:tag_close|close|close_tag)\]/gi, '')
@@ -384,7 +389,7 @@ export function detectUnfulfilledActionIntent(text: string): { hasIntent: boolea
   }
 
   // Se o texto termina com dois pontos ":" (típico de introdução interrompida antes de tool_call ou código)
-  if (/(?:[a-zA-ZÀ-ÿ0-9_\-\)\]])\s*:\s*$/i.test(cleaned)) {
+  if (/[a-zA-ZÀ-ÿ0-9_()[\]-]\s*:\s*$/i.test(cleaned)) {
     return { hasIntent: true, phrase: 'declaração de continuidade interrompida (terminada em dois pontos)' };
   }
 
@@ -510,7 +515,7 @@ export async function runHarnessCycle({
   onLiveWriting,
   signal,
 }: RunHarnessOptions): Promise<{ finalResponse: string; actions: HarnessAction[] }> {
-  let currentFiles = { ...files };
+  const currentFiles = { ...files };
   const actions: HarnessAction[] = [];
 
   // Constrói o contexto inicial com os arquivos principais disponíveis

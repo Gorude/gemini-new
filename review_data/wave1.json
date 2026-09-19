@@ -1,0 +1,544 @@
+{
+  "id": "w1",
+  "number": 1,
+  "title": "Onda 1: Fundações, Infraestrutura & Configurações",
+  "shortTitle": "Infra & Config",
+  "desc": "Build, TypeScript, Linters, Firebase, MCP Bridge, PWA & Legado",
+  "icon": "Shield",
+  "color": "#3b82f6",
+  "cards": [
+    {
+      "id": "w1-c1",
+      "title": "Build, Dependências & Vite Config",
+      "category": "Infra/Build",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/vite.config.ts",
+          "lines": 25,
+          "desc": "Configuração do Vite, plugins React e Tailwind v4"
+        },
+        {
+          "path": "gemini-react/package.json",
+          "lines": 56,
+          "desc": "Manifest de dependências, scripts de build/dev/test"
+        },
+        {
+          "path": "gemini-react/package-lock.json",
+          "lines": 6375,
+          "desc": "Lockfile de versões determinísticas"
+        }
+      ],
+      "keySymbols": [
+        "defineConfig",
+        "tailwindcss()",
+        "@vitejs/plugin-react",
+        "scripts: { dev, build, lint, test, mcp }"
+      ],
+      "objectives": [
+        "Verificar compatibilidade do Vite 8 com Tailwind 4 e React 19",
+        "Auditar vulnerabilidades de dependências e pacotes obsoletos",
+        "Garantir configuração de chunks otimizados para redução de bundle size",
+        "Validar aliases de caminhos e variáveis de ambiente no build"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c1-chk1",
+          "text": "Verificar se vite.config.ts possui minificação e tree-shaking ativos",
+          "checked": true
+        },
+        {
+          "id": "w1-c1-chk2",
+          "text": "Checar se scripts do package.json tratam falhas de tipagem (tsc -b) antes do bundle",
+          "checked": true
+        },
+        {
+          "id": "w1-c1-chk3",
+          "text": "Auditar dependências não utilizadas (ex: pacotes residuais)",
+          "checked": true
+        },
+        {
+          "id": "w1-c1-chk4",
+          "text": "Verificar configurações de CSP e headers seguros no servidor de dev",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c2",
+      "title": "Configurações de Compilação TypeScript",
+      "category": "TypeScript",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/tsconfig.json",
+          "lines": 7,
+          "desc": "Root tsconfig com referências de projetos"
+        },
+        {
+          "path": "gemini-react/tsconfig.app.json",
+          "lines": 25,
+          "desc": "Configuração do compilador para código React/DOM"
+        },
+        {
+          "path": "gemini-react/tsconfig.node.json",
+          "lines": 24,
+          "desc": "Configuração do compilador para Node/Vite"
+        }
+      ],
+      "keySymbols": [
+        "compilerOptions",
+        "strict: true",
+        "jsx: react-jsx",
+        "moduleResolution: bundler"
+      ],
+      "objectives": [
+        "Garantir strict mode ativo em todas as configurações",
+        "Verificar flags noUnusedLocals e noUnusedParameters",
+        "Checar isolamento de tipos DOM vs tipos Node",
+        "Garantir que nenhum arquivo de runtime escape da checagem estática"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c2-chk1",
+          "text": "Validar strict: true em tsconfig.app.json",
+          "checked": true
+        },
+        {
+          "id": "w1-c2-chk2",
+          "text": "Verificar ausência de skipLibCheck permissivo excessivo",
+          "checked": true
+        },
+        {
+          "id": "w1-c2-chk3",
+          "text": "Checar isolamento de tipos DOM vs tipos Node",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c3",
+      "title": "Regras de Linting & Padronização ESLint",
+      "category": "Qualidade/Lint",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "gemini-react/eslint.config.js",
+          "lines": 43,
+          "desc": "Flat config do ESLint 9 com React Hooks e TypeScript"
+        }
+      ],
+      "keySymbols": [
+        "tseslint.config",
+        "reactHooks.configs.recommended",
+        "reactRefresh.configs.vite"
+      ],
+      "objectives": [
+        "Verificar ativação das regras de hooks (exhaustive-deps, rules-of-hooks)",
+        "Garantir proibição de console.log soltos em produção",
+        "Checar integração do ESLint com TypeScript-ESLint 8"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c3-chk1",
+          "text": "Auditar regras de dependências em useEffect/useCallback",
+          "checked": true
+        },
+        {
+          "id": "w1-c3-chk2",
+          "text": "Validar desativação de regras permissivas inadequadas",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c4",
+      "title": "Infraestrutura Firebase & Segurança Firestore",
+      "category": "Segurança/DB",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/firebase.json",
+          "lines": 21,
+          "desc": "Configuração de hosting e regras do Firestore"
+        },
+        {
+          "path": "gemini-react/firestore.rules",
+          "lines": 35,
+          "desc": "Regras de controle de acesso por usuário"
+        },
+        {
+          "path": "gemini-react/firestore.indexes.json",
+          "lines": 3,
+          "desc": "Índices compostos para consultas"
+        }
+      ],
+      "keySymbols": [
+        "rules_version = 2",
+        "request.auth != null",
+        "resource.data.userId == request.auth.uid"
+      ],
+      "objectives": [
+        "Garantir que usuários só leiam/escrevam seus próprios dados",
+        "Impedir injeção ou sobreescrita de sessões de outros usuários",
+        "Verificar índices para queries de histórico e memória",
+        "Auditar limites de payload e regras de validação de schema"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c4-chk1",
+          "text": "Verificar se auth.uid é validado em todas as coleções do Firestore",
+          "checked": true
+        },
+        {
+          "id": "w1-c4-chk2",
+          "text": "Garantir ausência de regras permissivas públicas",
+          "checked": true
+        },
+        {
+          "id": "w1-c4-chk3",
+          "text": "Validar integridade de índices para paginação segura",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c5",
+      "title": "MCP Bridge & Execução de Ferramentas",
+      "category": "MCP/Backend",
+      "priority": "critical",
+      "files": [
+        {
+          "path": "gemini-react/mcp-bridge.mjs",
+          "lines": 429,
+          "desc": "Servidor local Node.js para protocolo MCP via STDIO/HTTP"
+        },
+        {
+          "path": "gemini-react/mcp-config.json",
+          "lines": 13,
+          "desc": "Configuração de servidores e comandos MCP"
+        }
+      ],
+      "keySymbols": [
+        "spawn",
+        "readline.createInterface",
+        "handleToolCall",
+        "sanitizeInput",
+        "ALLOWED_COMMANDS"
+      ],
+      "objectives": [
+        "Prevenir execução arbitrária de comandos no shell (Command Injection)",
+        "Garantir sanitização rigorosa de argumentos e caminhos de arquivo",
+        "Auditar ciclo de vida e encerramento de subprocessos filhos",
+        "Implementar timeouts estritos para chamadas MCP travadas"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c5-chk1",
+          "text": "Validar que spawn usa arrays explícitos e shell: false",
+          "checked": true
+        },
+        {
+          "id": "w1-c5-chk2",
+          "text": "Verificar tratamento de erros ao falhar execução de tool",
+          "checked": true
+        },
+        {
+          "id": "w1-c5-chk3",
+          "text": "Checar encerramento determinístico de processos no SIGINT/SIGTERM",
+          "checked": true
+        },
+        {
+          "id": "w1-c5-chk4",
+          "text": "Auditar autenticação/CORS na interface HTTP do MCP bridge",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c6",
+      "title": "PWA, Service Worker & Audio Worklet",
+      "category": "PWA/WebAudio",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "gemini-react/public/manifest.json",
+          "lines": 35,
+          "desc": "Manifest PWA para instalação standalone"
+        },
+        {
+          "path": "gemini-react/public/sw.js",
+          "lines": 45,
+          "desc": "Service Worker de cache e offline assets"
+        },
+        {
+          "path": "gemini-react/public/audio-processor.js",
+          "lines": 60,
+          "desc": "AudioWorkletProcessor para captura PCM 16kHz"
+        },
+        {
+          "path": "gemini-react/public/icons.svg",
+          "lines": 40,
+          "desc": "Sprite SVG de ícones do sistema"
+        },
+        {
+          "path": "gemini-react/public/favicon.svg",
+          "lines": 15,
+          "desc": "Favicon vetorial"
+        },
+        {
+          "path": "gemini-react/public/gemini.svg",
+          "lines": 15,
+          "desc": "Logomarca vetorial Gemini"
+        },
+        {
+          "path": "gemini-react/public/icon-192x192.png",
+          "lines": 1,
+          "desc": "Ícone PWA 192px"
+        },
+        {
+          "path": "gemini-react/public/icon-512x512.png",
+          "lines": 1,
+          "desc": "Ícone PWA 512px"
+        }
+      ],
+      "keySymbols": [
+        "AudioWorkletProcessor",
+        "process(inputs, outputs)",
+        "self.addEventListener(fetch)",
+        "caches.open"
+      ],
+      "objectives": [
+        "Verificar eficiência do buffer de áudio no AudioWorkletProcessor",
+        "Eliminar vazamentos de memória e buffers acumulados no worker",
+        "Garantir estratégia de cache segura no Service Worker sem travar updates",
+        "Validar suporte a microfones e permissões de mídia"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c6-chk1",
+          "text": "Garantir transferência de ArrayBuffers sem cópias redundantes",
+          "checked": true
+        },
+        {
+          "id": "w1-c6-chk2",
+          "text": "Checar expiração e atualização do cache do Service Worker",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c7",
+      "title": "Auditoria do Monolito Legado & Migração",
+      "category": "Legado/Clean",
+      "priority": "low",
+      "files": [
+        {
+          "path": "Gemini.html",
+          "lines": 233,
+          "desc": "Arquivo HTML monolítico standalone original"
+        }
+      ],
+      "keySymbols": [
+        "Single-file HTML",
+        "Vanilla JS Chat",
+        "Inline Styles"
+      ],
+      "objectives": [
+        "Verificar se todas as funcionalidades do Gemini.html foram migradas para o gemini-react",
+        "Identificar se o arquivo deve ser arquivado ou mantido como fallback leve",
+        "Garantir que não haja segredos ou referências obsoletas expostas"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c7-chk1",
+          "text": "Confirmar paridade de recursos entre Gemini.html e React",
+          "checked": true
+        },
+        {
+          "id": "w1-c7-chk2",
+          "text": "Documentar decisão de arquivamento/remoção",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c8",
+      "title": "Scripts Scratch & Automação Interna",
+      "category": "Hygiene",
+      "priority": "low",
+      "files": [
+        {
+          "path": "gemini-react/run-replace.js",
+          "lines": 42,
+          "desc": "Script de substituição em massa"
+        },
+        {
+          "path": "gemini-react/scratch/*",
+          "lines": 350,
+          "desc": "Scripts temporários de debug e teste"
+        }
+      ],
+      "keySymbols": [
+        "fs.readFileSync",
+        "fs.writeFileSync",
+        "test scripts"
+      ],
+      "objectives": [
+        "Auditar e expurgar scripts temporários de depuração obsoletos",
+        "Garantir que arquivos scratch não sejam incluídos no build final",
+        "Eliminar logs residuais e dados brutos de teste"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c8-chk1",
+          "text": "Remover scripts de scratch desnecessários",
+          "checked": true
+        },
+        {
+          "id": "w1-c8-chk2",
+          "text": "Garantir inclusão de scratch/ no .gitignore",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c9",
+      "title": "Entrypoint DOM, Root React 19 & HTML Shell",
+      "category": "Boot/DOM",
+      "priority": "high",
+      "files": [
+        {
+          "path": "gemini-react/index.html",
+          "lines": 44,
+          "desc": "Shell HTML principal, viewport, preconnect de Google Fonts e meta tags"
+        },
+        {
+          "path": "gemini-react/src/main.tsx",
+          "lines": 18,
+          "desc": "Montagem do React 19 createRoot, StrictMode e import de index.css"
+        }
+      ],
+      "keySymbols": [
+        "createRoot",
+        "document.getElementById(root)",
+        "React.StrictMode",
+        "<meta name=viewport>",
+        "<link rel=preconnect>"
+      ],
+      "objectives": [
+        "Verificar se a montagem com React 19 createRoot trata StrictMode sem efeitos colaterais duplicados indesejados",
+        "Auditar fontes externas carregadas no index.html e headers de preconnect/display=swap",
+        "Checar meta tags de segurança (CSP) e compatibilidade com mobile (viewport fit, theme-color)",
+        "Garantir ausência de inline scripts vulneráveis no index.html"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c9-chk1",
+          "text": "Verificar renderização de index.html com tags de acessibilidade (lang=pt-BR, title dinâmico)",
+          "checked": true
+        },
+        {
+          "id": "w1-c9-chk2",
+          "text": "Validar inicialização limpa em main.tsx com tratamento de erro no getElementById(root)",
+          "checked": true
+        },
+        {
+          "id": "w1-c9-chk3",
+          "text": "Checar se o tema escuro padrão é inicializado sem flash de luz (FOUC)",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "w1-c10",
+      "title": "Governança Técnica, Regras de Design & Diretrizes",
+      "category": "Governança/Docs",
+      "priority": "medium",
+      "files": [
+        {
+          "path": "GEMINI.md",
+          "lines": 130,
+          "desc": "Diretrizes de engenharia de alta performance, hierarquia de precedência e design"
+        },
+        {
+          "path": ".agents/rules/engineering_standards.md",
+          "lines": 100,
+          "desc": "Padrões de concorrência, streams, IO e anti-laziness"
+        },
+        {
+          "path": ".agents/rules/ui_design_standards.md",
+          "lines": 80,
+          "desc": "Padrões de design obsidian dark, micro-switches e marca Nemon"
+        },
+        {
+          "path": ".vscode/settings.json",
+          "lines": 26,
+          "desc": "Configurações de workspace do VSCode/IDE"
+        },
+        {
+          "path": "gemini-react/README.md",
+          "lines": 65,
+          "desc": "Documentação do projeto, arquitetura e instruções de execução"
+        }
+      ],
+      "keySymbols": [
+        "Hierarchy of Precedence",
+        "Anti-Laziness",
+        "Obsidian Dark Palette",
+        "Nemon Iconography",
+        "Engineering Standards"
+      ],
+      "objectives": [
+        "Alinhar todo o código com os 13 pilares de engenharia do GEMINI.md",
+        "Garantir conformidade rigorosa com a autoridade estética obsidian/charcoal",
+        "Validar coerência entre as regras de .agents/rules e as diretrizes centrais",
+        "Manter README.md atualizado com as capacidades reais de áudio, Live, Code IDE e Memória DNA"
+      ],
+      "checklist": [
+        {
+          "id": "w1-c10-chk1",
+          "text": "Auditar adesão às regras de eliminação de código morto (dead code)",
+          "checked": true
+        },
+        {
+          "id": "w1-c10-chk2",
+          "text": "Garantir proibição de sparkles genéricos e cores fora da paleta",
+          "checked": true
+        },
+        {
+          "id": "w1-c10-chk3",
+          "text": "Checar precisão das instruções no README.md",
+          "checked": true
+        }
+      ],
+      "status": "approved"
+    }
+  ],
+  "reviewSummary": {
+    "reviewedAt": "2026-09-19T03:15:48.211Z",
+    "status": "approved",
+    "cardsTotal": 10,
+    "cardsApproved": 10,
+    "fixesApplied": [
+      "npm audit fix: eliminated 14 security vulnerabilities (1 critical, 7 high, 5 moderate, 1 low) in package tree",
+      "tsconfig.app.json & tsconfig.node.json: enforced strict: true mode across all modules",
+      "vite.config.ts: fixed path traversal vulnerability in /api/upload via path.basename and directory boundary check",
+      "vite.config.ts: introduced readBoundedBody with payload limits (25MB uploads, 5MB JSON) preventing memory exhaustion DoS",
+      "vite.config.ts & mcp-bridge.mjs: implemented SSRF protection via isSafeHttpUrl banning loopback, private ranges and AWS/GCP metadata IPs",
+      "vite.config.ts: modernized __dirname to import.meta.dirname",
+      "mcp-bridge.mjs: added clean termination listeners (SIGINT, SIGTERM, process exit) preventing orphaned child processes",
+      "public/audio-processor.js: added null-safe guard for inputs and channels avoiding TypeError",
+      "src/main.tsx: added safe root DOM check and replaced process.env with import.meta.env.PROD"
+    ]
+  }
+}
