@@ -1940,13 +1940,21 @@ function App() {
             ? liveToolCallRef.current(name, args)
             : Promise.resolve({ result: 'Ferramenta indisponível.' }),
           controller.signal,
+          undefined,
+          thinkingEnabled,
         );
         toolRun.toolsUsed.forEach(n => {
           toolsUsedForMessage.push(n);
           try { liveToolUsedRef.current?.(n); } catch { /* ignore */ }
         });
         fullText = toolRun.text;
-        smoother.setTargets(stripMapMarkers(stripSearchMarkers(parseMemoryTags(fullText).trim())), '');
+        if (thinkingEnabled && toolRun.thoughts) {
+          fullThoughts = toolRun.thoughts;
+        }
+        smoother.setTargets(
+          stripMapMarkers(stripSearchMarkers(parseMemoryTags(fullText).trim())),
+          fullThoughts
+        );
       } else {
         const stream = streamGeminiContent(requestText, activeModel, apiHistory, effectiveSystemInstruction, requestFiles, effectiveWebSearch, controller.signal, thinkingEnabled);
         for await (const chunk of stream) {
@@ -1968,19 +1976,20 @@ function App() {
           let streamingText = fullText;
           let streamingThoughts = fullThoughts;
 
-          // 1. Extrair blocos completos de <thinking>
-          const completeThinkingMatch = /<thinking>([\s\S]*?)<\/thinking>/g;
+          // 1. Extrair blocos completos de raciocínio (<thinking>, <thought>, <think>)
+          const completeThinkingMatch = /<(thinking|thought|think)>([\s\S]*?)<\/\1>/gi;
           let m;
           while ((m = completeThinkingMatch.exec(fullText)) !== null) {
-            if (thinkingEnabled && !streamingThoughts.includes(m[1].trim())) {
-              streamingThoughts += (streamingThoughts ? "\n" : "") + m[1].trim();
+            if (thinkingEnabled && !streamingThoughts.includes(m[2].trim())) {
+              streamingThoughts += (streamingThoughts ? "\n" : "") + m[2].trim();
             }
             streamingText = streamingText.replace(m[0], '');
           }
 
           // 2. Ocultar blocos incompletos ou texto que parece ser raciocínio (fallback)
-          if (streamingText.includes('<thinking>')) {
-            streamingText = streamingText.split('<thinking>')[0];
+          const openTagMatch = /<(thinking|thought|think)>/i.exec(streamingText);
+          if (openTagMatch && openTagMatch.index !== undefined) {
+            streamingText = streamingText.substring(0, openTagMatch.index);
           }
 
           const currentCleanText = stripMapMarkers(stripSearchMarkers(parseMemoryTags(streamingText).trim()));
@@ -2028,15 +2037,15 @@ function App() {
       // 1. Limpeza e extração final
       let finalCleanedText = fullText;
       let finalThoughts = fullThoughts;
-      const thinkingRegex = /<thinking>([\s\S]*?)<\/thinking>/g;
+      const thinkingRegex = /<(thinking|thought|think)>([\s\S]*?)<\/\1>/gi;
       let mMatch;
       while ((mMatch = thinkingRegex.exec(fullText)) !== null) {
-        if (thinkingEnabled && !finalThoughts.includes(mMatch[1])) {
-          finalThoughts += (finalThoughts ? "\n" : "") + mMatch[1];
+        if (thinkingEnabled && !finalThoughts.includes(mMatch[2].trim())) {
+          finalThoughts += (finalThoughts ? "\n" : "") + mMatch[2].trim();
         }
         finalCleanedText = finalCleanedText.replace(mMatch[0], '');
       }
-      finalCleanedText = finalCleanedText.replace(/<\/thinking>/g, '').replace(/<thinking>/g, '').trim();
+      finalCleanedText = finalCleanedText.replace(/<\/?(thinking|thought|think)>/gi, '').trim();
 
       let memoryUpdated = false;
       let finalCleanText = stripSearchMarkers(parseMemoryTags(finalCleanedText, true, () => {

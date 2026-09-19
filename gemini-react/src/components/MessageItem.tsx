@@ -11,7 +11,6 @@ import {
   Trash2, 
   Download, 
   AlertCircle,
-  Lightbulb, 
   ChevronRight,
   Edit2,
   ShieldCheck,
@@ -288,6 +287,13 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
               </div>
             )}
 
+            {isGenerating && !msg.text && !msg.isSearching && !msg.isVerifying && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.04] border border-(--border-light) rounded-full text-[11px] font-medium text-(--text-secondary) animate-in fade-in duration-300 ml-1">
+                <Brain className="w-3.5 h-3.5 text-(--text-secondary) animate-pulse" />
+                <span>{msg.thoughts ? "Pensando..." : "Processando..."}</span>
+              </div>
+            )}
+
             {/* Web Search Sources Icons */}
             {(msg.sources && msg.sources.length > 0 || msg.isSearching) && (
               <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-500 ml-1">
@@ -490,10 +496,15 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
           </div>
 
           {msg.thoughts && msg.thoughts.trim() && (
-            <details className="thinking-drawer mb-3 group/think">
+            <details
+              className="thinking-drawer mb-3 group/think"
+              open={isGenerating && !msg.text ? true : undefined}
+            >
               <summary className="flex items-center gap-2 cursor-pointer text-xs text-(--text-secondary) hover:text-(--text-primary) transition select-none py-1.5 px-3 rounded-lg hover:bg-(--bg-user-bubble)/50 w-fit">
-                <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-                <span className="font-medium">Mostrar Raciocínio</span>
+                <Brain className="w-3.5 h-3.5 text-(--text-secondary)" />
+                <span className="font-medium">
+                  {isGenerating && !msg.text ? "Pensando..." : "Mostrar Raciocínio"}
+                </span>
                 <ChevronRight className="w-3 h-3 transition-transform group-open/think:rotate-90" />
               </summary>
               <div className="thought-panel text-[13px] leading-relaxed whitespace-pre-wrap">

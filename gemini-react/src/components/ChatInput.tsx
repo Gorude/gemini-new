@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Plus,
   Globe,
-  Lightbulb,
+  Brain,
   Image,
   ChevronDown,
   Send,
@@ -354,11 +354,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
               <button 
                 onClick={onToggleThinking} 
-                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${thinkingEnabled ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'hover:bg-(--bg-chat-hover) text-(--text-placeholder)'}`}
-                title="Pensamento (a IA raciocina antes de responder)"
+                className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 duration-200 relative ${thinkingEnabled ? 'bg-white/10 text-(--text-primary) border border-white/20' : 'hover:bg-(--bg-chat-hover) text-(--text-placeholder)'}`}
+                title={thinkingEnabled ? "Raciocínio ativado (a IA pensa antes de responder)" : "Ativar raciocínio (a IA pensa antes de responder)"}
               >
-                <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5" />
-                {thinkingEnabled && <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-amber-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.8)]"></span>}
+                <Brain className="w-4 h-4 sm:w-5 sm:h-5" />
+                {thinkingEnabled && <span className="absolute top-1 right-1 sm:top-2 sm:right-2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-400 rounded-full animate-pulse shadow-xs"></span>}
               </button>
 
               <button 

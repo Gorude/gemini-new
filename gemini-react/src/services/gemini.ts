@@ -1105,6 +1105,63 @@ function buildOpenAIConfig(
   };
 }
 
+/**
+ * Monta a configuração de raciocínio (thinkingConfig) conforme as especificações
+ * oficiais da API do Google AI Studio para cada família de modelos.
+ */
+export function buildGeminiThinkingConfig(
+  model: string,
+  thinking: boolean,
+  webSearch: boolean = false,
+): { includeThoughts?: boolean; thinkingLevel?: string; thinkingBudget?: number } | undefined {
+  const isGemma = model.includes("gemma");
+  const isGemini3 = model.includes("gemini-3");
+  const isGemini25 =
+    model.includes("gemini-2.5") ||
+    model.includes("gemini-2.0") ||
+    model.includes("thinking");
+
+  if (thinking) {
+    if (isGemma) {
+      // Gemma 4 aceita thinkingLevel ("HIGH" ou "MINIMAL"), mas rejeita thinkingBudget com erro 400.
+      return { thinkingLevel: "HIGH" };
+    }
+    if (isGemini3) {
+      // Família Gemini 3 (ex.: 3.5 Flash Lite, 3.1 Flash Lite) usa thinkingLevel: "HIGH"
+      // e includeThoughts: true para emitir partes com part.thought === true.
+      return {
+        includeThoughts: true,
+        thinkingLevel: "HIGH",
+      };
+    }
+    if (isGemini25) {
+      // Família Gemini 2.5 / 2.0 usa thinkingBudget (-1 para dinâmico) e includeThoughts: true.
+      // Rejeita thinkingLevel com erro 400 (parâmetros mutuamente exclusivos).
+      return {
+        includeThoughts: true,
+        thinkingBudget: -1,
+      };
+    }
+    // Fallback para modelos que aceitam thinkingConfig padrão
+    return {
+      includeThoughts: true,
+      thinkingLevel: "HIGH",
+    };
+  } else {
+    // Quando o raciocínio está DESATIVADO:
+    if (isGemma && !webSearch) {
+      return { thinkingLevel: "MINIMAL" };
+    }
+    if (isGemini3) {
+      return { thinkingLevel: "MINIMAL" };
+    }
+    if (isGemini25) {
+      return { thinkingBudget: 0 };
+    }
+    return undefined;
+  }
+}
+
 export async function* streamGeminiContent(
   text: string,
   model: string,
@@ -1175,42 +1232,28 @@ export async function* streamGeminiContent(
     },
   };
 
-  if (thinking) {
-    // Modelos com raciocínio nativo (Gemini 2.0/2.5/3.x, incl. Flash Lite) aceitam
-    // thinkingConfig. Eles NÃO emitem tags <thinking> no texto — devolvem partes com
-    // part.thought === true, que só chegam quando includeThoughts: true é enviado.
-    // Sem isso, o modo thinking não retorna nenhum raciocínio.
-    const supportsThinkingConfig =
-      model.includes("thinking") ||
-      model.includes("gemini-2.0") ||
-      model.includes("gemini-2.5") ||
-      model.includes("gemini-3");
+  const thinkingConfig = buildGeminiThinkingConfig(model, thinking, webSearch);
+  if (thinkingConfig) {
+    payload.generationConfig.thinkingConfig = thinkingConfig;
+  }
 
-    if (supportsThinkingConfig) {
-      payload.generationConfig.thinkingConfig = {
-        includeThoughts: true,
-        thinkingLevel: "HIGH",
-      };
-    } else {
-      // Fallback: Instrução via prompt para modelos que não aceitam thinkingConfig
-      const searchInstruction = webSearch
-        ? "\n\nPESQUISA OBRIGATÓRIA: Planeje e use 'google_search' para basear sua resposta em fatos REAIS."
-        : "";
-      currentParts.unshift({
-        text:
-          "Missão Final: Fornecer uma resposta útil e direta ao usuário.\n\n1. Raciocínio (Privado): SEMPRE use <thinking>...</thinking> para seu processo interno.\n2. Conclusão (Público): Após fechar o </thinking>, você DEVE obrigatoriamente escrever a resposta final detalhada que o usuário verá. NUNCA termine sua mensagem apenas com o raciocínio." +
-          searchInstruction,
-      });
-    }
-  } else if (model.includes("gemma") && !webSearch) {
-    // Gemma 4 gasta "thought tokens" mesmo com o raciocínio desligado. A doc confirma que
-    // ele NÃO aceita thinkingBudget (retorna 400) e IGNORA includeThoughts, mas ACEITA
-    // thinkingLevel — restrito a MINIMAL ou HIGH. Quando NÃO há busca, MINIMAL corta esse
-    // overhead e acelera respostas diretas.
-    // ATENÇÃO: NÃO usar MINIMAL com google_search — o Gemma precisa do raciocínio para
-    // planejar e executar a ferramenta de busca; com MINIMAL ele pula o grounding e volta
-    // vazio (sources: [], text: ""). Por isso o guard `!webSearch`.
-    payload.generationConfig.thinkingConfig = { thinkingLevel: "MINIMAL" };
+  const hasNativeThinking =
+    model.includes("gemini-3") ||
+    model.includes("gemini-2.5") ||
+    model.includes("gemini-2.0") ||
+    model.includes("gemma") ||
+    model.includes("thinking");
+
+  if (thinking && !hasNativeThinking) {
+    // Fallback: Instrução via prompt para modelos que não aceitam thinkingConfig nativo
+    const searchInstruction = webSearch
+      ? "\n\nPESQUISA OBRIGATÓRIA: Planeje e use 'google_search' para basear sua resposta em fatos REAIS."
+      : "";
+    currentParts.unshift({
+      text:
+        "Missão Final: Fornecer uma resposta útil e direta ao usuário.\n\n1. Raciocínio (Privado): SEMPRE use <thinking>...</thinking> para seu processo interno.\n2. Conclusão (Público): Após fechar o </thinking>, você DEVE obrigatoriamente escrever a resposta final detalhada que o usuário verá. NUNCA termine sua mensagem apenas com o raciocínio." +
+        searchInstruction,
+    });
   }
 
   if (webSearch) {
@@ -1545,13 +1588,15 @@ export async function runGeminiToolLoop(
   executor: ChatToolExecutor,
   signal?: AbortSignal,
   manualApiKey?: string,
-): Promise<{ text: string; toolsUsed: string[] }> {
+  thinking: boolean = false,
+): Promise<{ text: string; toolsUsed: string[]; thoughts: string }> {
   const key = await getApiKey(manualApiKey);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
   const declarations = CHAT_TOOLS.filter(t => toolIds.includes(t.id)).map(t => t.gemini);
 
   const contents: any[] = [...history, { role: "user", parts: [{ text }] }];
   const toolsUsed: string[] = [];
+  let accumulatedThoughts = "";
 
   for (let iter = 0; iter < 5; iter++) {
     const payload: any = {
@@ -1560,6 +1605,11 @@ export async function runGeminiToolLoop(
       generationConfig: { temperature: 0.7 },
     };
     if (systemInstruction) payload.systemInstruction = { role: "system", parts: [{ text: systemInstruction }] };
+
+    const thinkingConfig = buildGeminiThinkingConfig(model, thinking, false);
+    if (thinkingConfig) {
+      payload.generationConfig.thinkingConfig = thinkingConfig;
+    }
 
     const res = await fetch(url, {
       method: "POST",
@@ -1572,16 +1622,32 @@ export async function runGeminiToolLoop(
       throw new Error(err?.error?.message || `Erro na API (${res.status})`);
     }
     const data = await res.json();
-    const parts: any[] = data?.candidates?.[0]?.content?.parts || [];
+    const candidate = data?.candidates?.[0];
+    const parts: any[] = candidate?.content?.parts || [];
+
+    // Extrai partes com raciocínio nativo (thought: true)
+    for (const p of parts) {
+      if ((p.thought === true || p.thought === "true") && p.text && thinking) {
+        accumulatedThoughts += (accumulatedThoughts ? "\n\n" : "") + p.text;
+      }
+    }
+
     const calls = parts.filter(p => p.functionCall);
 
     if (calls.length === 0) {
-      const finalText = parts.map(p => p.text || "").join("").trim();
-      return { text: finalText, toolsUsed };
+      // Filtra partes de raciocínio para manter apenas o texto visível da resposta
+      const textParts = parts.filter(p => !p.thought && p.text);
+      const finalText = textParts.map(p => p.text).join("").trim();
+      return { text: finalText, toolsUsed, thoughts: accumulatedThoughts };
     }
 
-    // Registra a chamada do modelo e executa cada ferramenta, devolvendo os resultados.
-    contents.push({ role: "model", parts: calls.map(c => ({ functionCall: c.functionCall })) });
+    // Registra a resposta do modelo preservando os metadados (como functionCall e assinaturas)
+    if (candidate?.content) {
+      contents.push(candidate.content);
+    } else {
+      contents.push({ role: "model", parts: calls.map(c => ({ functionCall: c.functionCall })) });
+    }
+
     const responseParts: any[] = [];
     for (const c of calls) {
       const name = c.functionCall.name;
@@ -1598,7 +1664,7 @@ export async function runGeminiToolLoop(
     contents.push({ role: "user", parts: responseParts });
   }
 
-  return { text: "Não foi possível concluir com as ferramentas (limite de iterações atingido).", toolsUsed };
+  return { text: "Não foi possível concluir com as ferramentas (limite de iterações atingido).", toolsUsed, thoughts: accumulatedThoughts };
 }
 
 /**

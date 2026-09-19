@@ -4,6 +4,7 @@ import {
   safeMarkdown,
   resolveProvider,
   setGlobalCustomModels,
+  buildGeminiThinkingConfig,
 } from './gemini';
 import type { CustomModel } from '../constants';
 
@@ -113,5 +114,56 @@ describe('resolveProvider', () => {
 
   it('modelo desconhecido cai em gemini (nativo)', () => {
     expect(resolveProvider('modelo-inexistente-xyz')).toBe('gemini');
+  });
+});
+
+describe('buildGeminiThinkingConfig', () => {
+  it('configura Gemini 3 com thinkingLevel HIGH e includeThoughts true quando ativado', () => {
+    const config = buildGeminiThinkingConfig('gemini-3.5-flash-lite', true);
+    expect(config).toEqual({
+      includeThoughts: true,
+      thinkingLevel: 'HIGH',
+    });
+  });
+
+  it('desativa raciocínio em Gemini 3 com thinkingLevel MINIMAL quando desativado', () => {
+    const config = buildGeminiThinkingConfig('gemini-3.5-flash-lite', false);
+    expect(config).toEqual({
+      thinkingLevel: 'MINIMAL',
+    });
+  });
+
+  it('configura Gemini 2.5 com thinkingBudget -1 e includeThoughts true quando ativado', () => {
+    const config = buildGeminiThinkingConfig('gemini-2.5-flash', true);
+    expect(config).toEqual({
+      includeThoughts: true,
+      thinkingBudget: -1,
+    });
+  });
+
+  it('desativa raciocínio em Gemini 2.5 com thinkingBudget 0 quando desativado', () => {
+    const config = buildGeminiThinkingConfig('gemini-2.5-flash', false);
+    expect(config).toEqual({
+      thinkingBudget: 0,
+    });
+  });
+
+  it('configura Gemma 4 com thinkingLevel HIGH quando ativado', () => {
+    const config = buildGeminiThinkingConfig('gemma-4-31b-it', true);
+    expect(config).toEqual({
+      thinkingLevel: 'HIGH',
+    });
+  });
+
+  it('configura Gemma 4 com thinkingLevel MINIMAL quando desativado sem busca web', () => {
+    const config = buildGeminiThinkingConfig('gemma-4-31b-it', false, false);
+    expect(config).toEqual({
+      thinkingLevel: 'MINIMAL',
+    });
+  });
+
+  it('não corta tokens de raciocínio de Gemma 4 quando busca web está ativa', () => {
+    const config = buildGeminiThinkingConfig('gemma-4-31b-it', false, true);
+    expect(config).toBeUndefined();
   });
 });
