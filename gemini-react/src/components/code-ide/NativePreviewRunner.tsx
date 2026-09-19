@@ -1,4 +1,4 @@
-import { compileProjectToHtml } from './previewCompiler';
+import { compileProjectToHtml, generateSandboxedRunnerHtml } from './previewCompiler';
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   RotateCw,
@@ -117,13 +117,14 @@ export const NativePreviewRunner: React.FC<NativePreviewRunnerProps> = ({
     setReloadKey(k => k + 1);
   }, [onStatsChange, onErrorLogsChange, onClearLogs]);
 
-  // Abre em nova aba como Blob URL
+  // Abre em nova aba dentro de um invólucro de iframe sandboxed seguro (sem allow-same-origin)
   const handleOpenNewTab = () => {
     try {
-      const blob = new Blob([compiledHtml], { type: 'text/html;charset=utf-8' });
+      const runnerHtml = generateSandboxedRunnerHtml(compiledHtml);
+      const blob = new Blob([runnerHtml], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
     } catch {
       /* fallback */
     }

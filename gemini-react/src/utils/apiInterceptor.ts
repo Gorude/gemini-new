@@ -1,3 +1,5 @@
+import { safeLocalStorageSet } from './storageUtils';
+
 const originalFetch = window.fetch;
 
 // Helper to get fallback values from localStorage
@@ -8,14 +10,6 @@ const getLocalStorageFallback = (key: string, defaultValue: string): string => {
   } catch (e) {
     console.error(`Error reading ${key} from localStorage:`, e);
     return defaultValue;
-  }
-};
-
-const setLocalStorageFallback = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value);
-  } catch (e) {
-    console.error(`Error writing ${key} to localStorage:`, e);
   }
 };
 
@@ -78,7 +72,7 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Pr
       const response = await originalFetch(input, init);
       if (response.ok) {
         const text = await response.clone().text();
-        setLocalStorageFallback(storageKey, text);
+        safeLocalStorageSet(storageKey, text);
         return response;
       }
       throw new Error(`Server returned ${response.status}`);
@@ -107,7 +101,7 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Pr
     }
 
     if (bodyText) {
-      setLocalStorageFallback(storageKey, bodyText);
+      safeLocalStorageSet(storageKey, bodyText);
     }
 
     try {

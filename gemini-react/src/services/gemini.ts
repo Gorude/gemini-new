@@ -373,6 +373,8 @@ export interface Message {
     category: string;
     oldText: string;
     newText: string;
+    connections?: string[];
+    isNew?: boolean;
     resolved?: "accepted" | "ignored";
   }>;
   continuationText?: string;

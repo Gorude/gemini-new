@@ -21,7 +21,8 @@ import {
   VolumeX,
   GitBranch,
   MapPin,
-  ExternalLink
+  ExternalLink,
+  Plus
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
@@ -533,10 +534,12 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: 'var(--accent-text)' }}>
-                    Atualizar DNA de Memória?
+                    {msg.pendingMemoryUpdates.every(u => !u.oldText || u.isNew) ? 'Adicionar ao DNA de Memória?' : 'Atualizar DNA de Memória?'}
                   </h4>
                   <p className="text-[9.5px] text-(--text-secondary) mt-0.5 leading-normal">
-                    Identifiquei uma contradição ou nova informação sobre você. Deseja atualizar seu DNA?
+                    {msg.pendingMemoryUpdates.every(u => !u.oldText || u.isNew)
+                      ? 'Identifiquei novas informações relevantes sobre você. Deseja registrá-las no seu DNA?'
+                      : 'Identifiquei uma contradição ou nova informação sobre você. Deseja atualizar seu DNA?'}
                   </p>
                 </div>
               </div>
@@ -544,22 +547,32 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
               <div className="space-y-2 mb-3">
                 {msg.pendingMemoryUpdates.map((upd, idx) => {
                   const isResolved = !!upd.resolved;
+                  const isNewFact = !upd.oldText || upd.isNew;
                   return (
                     <div key={idx} className="bg-(--bg-main)/40 border border-(--border-light)/50 rounded-xl p-3 text-[10.5px]">
                       <div className="font-bold text-[8px] uppercase tracking-wider opacity-50 mb-1">
                         Categoria: {upd.category}
                       </div>
-                      <div className="line-through text-red-400/80 mb-1.5 wrap-break-word">
-                        Antigo: "{upd.oldText}"
-                      </div>
-                      <div className="text-green-400 font-semibold wrap-break-word">
-                        Novo: "{upd.newText}"
-                      </div>
+                      {isNewFact ? (
+                        <div className="text-emerald-400 font-semibold wrap-break-word flex items-start gap-1.5">
+                          <Plus className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-400" />
+                          <span>Novo fato: "{upd.newText}"</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="line-through text-red-400/80 mb-1.5 wrap-break-word">
+                            Antigo: "{upd.oldText}"
+                          </div>
+                          <div className="text-emerald-400 font-semibold wrap-break-word">
+                            Novo: "{upd.newText}"
+                          </div>
+                        </>
+                      )}
                       {isResolved && (
                         <div className="mt-2.5 pt-2 border-t border-(--border-light)/30 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider">
                           {upd.resolved === 'accepted' ? (
-                            <span className="text-green-400 flex items-center gap-1">
-                              <Check className="w-3.5 h-3.5" /> DNA Atualizado
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" /> {isNewFact ? 'Registrado no DNA' : 'DNA Atualizado'}
                             </span>
                           ) : (
                             <span className="text-(--text-placeholder) flex items-center gap-1">
@@ -595,7 +608,7 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                     className="px-3 py-1.5 rounded-xl font-bold text-white shadow-lg transition-all cursor-pointer"
                     style={{ background: 'var(--accent)', boxShadow: '0 4px 12px var(--accent-glow)' }}
                   >
-                    Atualizar DNA
+                    {msg.pendingMemoryUpdates.every(u => !u.oldText || u.isNew) ? 'Adicionar ao DNA' : 'Atualizar DNA'}
                   </button>
                 </div>
               )}

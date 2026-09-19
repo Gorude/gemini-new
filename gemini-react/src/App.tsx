@@ -90,6 +90,8 @@ import {
 } from './types';
 
 import { v4 as uuidv4 } from 'uuid';
+import { sanitizeChatForStorage, safeLocalStorageSet } from './utils/storageUtils';
+import { parseAllMemoryProposals, formatMemoryContext } from './utils/memoryUtils';
 
 const DEFAULT_PERSONALITY: Personality = {
   id: 'default',
@@ -104,8 +106,7 @@ const DEFAULT_PERSONALITY: Personality = {
 function buildLiveInstruction(personalityPrompt: string, memoryFacts: MemoryFact[], useMemory: boolean): string {
   let dnaContext = "";
   if (useMemory && memoryFacts.length > 0) {
-    dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" +
-      memoryFacts.map(f => `- [ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n");
+    dnaContext = "\n\nSua MEMÓRIA DNA atual:\n" + formatMemoryContext(memoryFacts, 30);
   }
 
   const memoryRules = useMemory ? `
@@ -115,6 +116,7 @@ REGRAS DE MEMÓRIA (MODO LIVE):
 3. Use <UPDATE_MEMORY id='...' category='...'>texto</UPDATE_MEMORY> para atualizar um fato APENAS quando a informação antiga daquele ID específico for diretamente contradita/substituída por uma nova (ex: mudou de idade ou de cidade).
 4. Use <DELETE_MEMORY id='...' /> para remover.
 5. IMPORTANTE: NUNCA, SOB HIPÓTESE ALGUMA, PRONUNCIE AS TAGS XML EM VOZ ALTA. Elas devem ficar invisíveis no áudio.
+6. NUNCA afirme ou diga que dados foram salvos/registrados no DNA sem emitir a tag XML correspondente.
 ` : "";
 
   return `${personalityPrompt}${dnaContext}${memoryRules}\n\nResponda sempre de forma natural e conversacional.`;
@@ -1035,7 +1037,6 @@ function App() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentAiMsgIdRef = useRef<string | null>(null);
   const factCheckControllersRef = useRef<Record<string, AbortController>>({});
-  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Refs for closing popups when clicking outside
   const personalityRef = useRef<HTMLDivElement>(null);
@@ -1465,7 +1466,11 @@ function App() {
 
             if (hasChanged) {
               const chatDocRef = doc(db, 'users', uid, 'chats', chat.id);
-              await setDoc(chatDocRef, chat).catch(e => console.error("Erro ao salvar chat no Firestore:", e));
+              const safeChat = sanitizeChatForStorage(chat);
+              await setDoc(chatDocRef, safeChat).catch(e => {
+                console.error("Erro ao salvar chat no Firestore:", e);
+                toast.error("Falha ao sincronizar conversa com a nuvem.");
+              });
             }
           }
         }
@@ -1493,7 +1498,7 @@ function App() {
     return () => {
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
-  }, [chats, isLoading, isAuthLoading, isInitialLoading]);
+  }, [chats, isLoading, isAuthLoading, isInitialLoading, toast]);
 
   // Sync Preferences/Settings to Firestore
   useEffect(() => {
@@ -1618,51 +1623,44 @@ function App() {
     const deleteTagRegex = /<DELETE_MEMORY\s+id=['"]([^'"]*?)['"]\s*\/>/g;
 
     if (isFinal) {
-      let newMemories = [...memoryFacts];
-      let hasMemoryUpdates = false;
-      let match;
+      const { proposals, autoDeletes } = parseAllMemoryProposals(str, memoryFacts);
 
-      // Adicionar novos fatos automaticamente (não são contradições)
-      while ((match = memoryTagRegex.exec(str)) !== null) {
-        const categoryValue = match[1] || 'Diversos';
-        const connectionsValue = match[2] ? match[2].split(',').map(s => s.trim()) : [];
-        const textValue = match[3].trim();
-        newMemories.push({ id: uuidv4(), text: textValue, category: categoryValue, connections: connectionsValue, timestamp: Date.now() });
-        hasMemoryUpdates = true;
+      // Se houver deleções automáticas
+      if (autoDeletes.length > 0) {
+        setMemoryFacts(prev => {
+          const updated = prev.filter(m => !autoDeletes.includes(m.id));
+          saveMemoryFactsToFirestore(updated);
+          safeLocalStorageSet('nemon_user_memory', JSON.stringify(updated));
+          return updated;
+        });
       }
 
-      // Deletar fatos automaticamente
-      while ((match = deleteTagRegex.exec(str)) !== null) {
-        const idValue = match[1];
-        newMemories = newMemories.filter((m: MemoryFact) => m.id !== idValue);
-        hasMemoryUpdates = true;
-      }
-
-      // Interceptar atualizações de fatos (contradições/mudanças) para confirmação visual
-      const updates: PendingMemoryUpdate[] = [];
-      updateTagRegex.lastIndex = 0;
-      while ((match = updateTagRegex.exec(str)) !== null) {
-        const idValue = match[1];
-        const categoryValue = match[2];
-        const textValue = match[3].trim();
-        const oldFact = memoryFacts.find(m => m.id === idValue);
-        if (oldFact && oldFact.text !== textValue) {
-          updates.push({
-            id: idValue,
-            category: categoryValue || oldFact.category,
-            oldText: oldFact.text,
-            newText: textValue
+      // Se houver propostas (novos fatos ou atualizações)
+      if (proposals.length > 0) {
+        if (onFindUpdates) {
+          onFindUpdates(proposals);
+        } else {
+          // Fallback para contextos sem UI interativa de chat (ex: Live Mode)
+          setMemoryFacts(prev => {
+            let updated = [...prev];
+            for (const prop of proposals) {
+              if (prop.isNew) {
+                updated.push({
+                  id: prop.id,
+                  text: prop.newText,
+                  category: prop.category || 'Geral',
+                  connections: prop.connections || [],
+                  timestamp: Date.now()
+                });
+              } else {
+                updated = updated.map(m => m.id === prop.id ? { ...m, text: prop.newText, category: prop.category || m.category, timestamp: Date.now() } : m);
+              }
+            }
+            saveMemoryFactsToFirestore(updated);
+            safeLocalStorageSet('nemon_user_memory', JSON.stringify(updated));
+            return updated;
           });
         }
-      }
-
-      if (updates.length > 0 && onFindUpdates) {
-        onFindUpdates(updates);
-      }
-
-      if (hasMemoryUpdates) {
-        setMemoryFacts(newMemories);
-        saveMemoryFactsToFirestore(newMemories);
       }
     }
 
@@ -1716,7 +1714,7 @@ function App() {
       `- Use a ferramenta 'get_current_time' sempre que precisar confirmar o horário exato.\n` +
       `- Para qualquer assunto sobre fatos, dados, eventos ou estado atual ("hoje", "atual", "mais recente", "último"), priorize informações atualizadas para o ano de ${currentYear}.\n\n` +
       (selectedPersonality.prompt ? `INSTRUÇÃO DE PERSONALIDADE ATIVA: "${selectedPersonality.prompt}"\n\n` : "") +
-      (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + memoryFacts.map((f: MemoryFact) => `[ID: ${f.id}] [Categoria: ${f.category}] ${f.text}`).join("\n") + "\n\n" : "") +
+      (memoryFacts.length > 0 ? "Fatos que você já sabe sobre o usuário:\n" + formatMemoryContext(memoryFacts) + "\n\n" : "") +
       "Regras de Pesquisa e Memória:\n" +
       "1. SISTEMA UNIFICADO DE PESQUISA:\n" +
       "   - Sempre que houver resultados de pesquisa web no contexto (ou ferramentas disponíveis), sua resposta deve ser estritamente fundamentada nessas evidências.\n" +
@@ -1731,6 +1729,8 @@ function App() {
       "     * Use <UPDATE_MEMORY id='ID'>novo texto</UPDATE_MEMORY> APENAS quando um fato salvo anteriormente tiver mudado de verdade (ex: mudou de idade, mudou de cidade, mudou de emprego) ou estiver comprovadamente errado/desatualizado. A atualização serve para substituir a informação desatualizada pela nova, mantendo o mesmo ID.\n" +
       "       Exemplo: Se já existe [ID: 456] 'O usuário tem 19 anos' e ele diz 'Fiz 20 anos hoje', use <UPDATE_MEMORY id='456'>O usuário tem 20 anos</UPDATE_MEMORY>.\n" +
       "   - NUNCA atualize uma memória se a nova informação for apenas complementar e puder ser armazenada em um fato separado.\n" +
+      "   - REGRA DE SINCRONIZAÇÃO MANDATÓRIA:\n" +
+      "     * NUNCA afirme ou diga na sua resposta conversacional que fatos foram salvos, memorizados ou registrados no DNA a menos que você gere explicitamente as tags XML (<MEMORY> ou <UPDATE_MEMORY>) nessa mesma resposta. Se não emitir a tag XML, você NÃO salvou o fato e NÃO deve mentir para o usuário que salvou.\n" +
       "3. Seja conciso e direto ao ponto quando possível.\n" +
       "4. LOCALIZAÇÃO/MAPA: Quando o usuário perguntar ONDE fica um lugar, endereço, ponto de referência ou estabelecimento, escreva sua resposta normalmente e inclua um marcador no formato [MAP: <local o mais específico possível, com cidade/estado se souber>]. O marcador vira um mapa interativo embutido — não descreva o marcador nem o mencione em voz alta, apenas inclua-o. Ex.: 'Fica no centro histórico. [MAP: Praça da Sé, São Paulo, SP]'. Use apenas quando fizer sentido geográfico.";
 
@@ -1742,16 +1742,6 @@ function App() {
       const startTime = performance.now();
       const currentAiMsgId = replaceId || (Date.now() + 1).toString() + '-ai';
       currentAiMsgIdRef.current = currentAiMsgId;
-
-      // Iniciar Timer Real-time
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = setInterval(() => {
-        const elapsed = (performance.now() - startTime) / 1000;
-        setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
-          ...c,
-          messages: c.messages.map((m: Message) => m.id === currentAiMsgId ? { ...m, duration: elapsed } : m)
-        } : c));
-      }, 100);
 
       setChats(prev => prev.map(c => {
         if (c.id === targetChatId) {
@@ -2101,10 +2091,6 @@ function App() {
         return { ...c, messages: [...c.messages, errorMsg] };
       }));
     } finally {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
       setIsLoading(false);
       abortControllerRef.current = null;
       currentAiMsgIdRef.current = null;
@@ -2139,10 +2125,6 @@ function App() {
         }));
       }
 
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
       setIsLoading(false);
       currentAiMsgIdRef.current = null;
       setChats(prev => prev);
@@ -3196,21 +3178,15 @@ function App() {
   }, [activeChatId, activeChat, executeAIRequest, isLiveActive, resetProactivityState, selectedPersonalityId, model]);
 
   const handleResolveMemoryUpdate = useCallback((messageId: string, updateId: string, action: 'accepted' | 'ignored') => {
-    let updateToApply: any = null;
-    let originalText = '';
-    let originalThoughts = '';
+    let updateToApply: PendingMemoryUpdate | null = null;
     const chat = chats.find(c => c.id === activeChatId);
     let msgIndex = -1;
 
     if (chat) {
       msgIndex = chat.messages.findIndex(m => m.id === messageId);
       const msg = msgIndex !== -1 ? chat.messages[msgIndex] : null;
-      if (msg) {
-        originalText = msg.text || '';
-        originalThoughts = msg.thoughts || '';
-        if (msg.pendingMemoryUpdates) {
-          updateToApply = msg.pendingMemoryUpdates.find(upd => upd.id === updateId);
-        }
+      if (msg && msg.pendingMemoryUpdates) {
+        updateToApply = msg.pendingMemoryUpdates.find(upd => upd.id === updateId) || null;
       }
     }
 
@@ -3227,40 +3203,41 @@ function App() {
       } : m)
     } : c));
 
-    // 2. Persist in Firestore if accepted
+    // 2. Persist in memoryFacts, Firestore, and LocalStorage if accepted
     if (action === 'accepted' && updateToApply) {
-      const newMemories = memoryFacts.map((m: MemoryFact) =>
-        m.id === updateId ? { ...m, text: updateToApply.newText, category: updateToApply.category, timestamp: Date.now() } : m
-      );
-      setMemoryFacts(newMemories);
-      saveMemoryFactsToFirestore(newMemories);
+      setMemoryFacts((prev: MemoryFact[]) => {
+        const exists = prev.some(m => m.id === updateId);
+        let updated: MemoryFact[];
+        if (exists) {
+          updated = prev.map(m =>
+            m.id === updateId ? { ...m, text: updateToApply!.newText, category: updateToApply!.category || m.category, timestamp: Date.now() } : m
+          );
+        } else {
+          updated = [
+            ...prev,
+            {
+              id: updateToApply!.id,
+              text: updateToApply!.newText,
+              category: updateToApply!.category || 'Geral',
+              connections: updateToApply!.connections || [],
+              timestamp: Date.now()
+            }
+          ];
+        }
+        saveMemoryFactsToFirestore(updated);
+        safeLocalStorageSet('nemon_user_memory', JSON.stringify(updated));
+        return updated;
+      });
+
+      if (updateToApply.isNew) {
+        toast.success("Novo fato adicionado ao DNA!");
+      } else {
+        toast.success("DNA de memória atualizado com sucesso!");
+      }
+    } else if (action === 'ignored') {
+      toast.info("Proposta de DNA ignorada.");
     }
-
-    // 3. Build API history up to the current AI message
-    const historyBefore = chat.messages.slice(0, msgIndex + 1);
-    const apiHistory = historyBefore.map(m => ({
-      role: m.role === 'ai' ? 'model' : 'user',
-      parts: [...(m.files?.map(f => ({ inlineData: { mimeType: f.mimeType, data: f.data } })) || []), { text: m.text }]
-    }));
-
-    // 4. Construct virtual user response
-    const virtualUserText = action === 'accepted'
-      ? "[SISTEMA: O usuário confirmou a atualização do DNA de memória. Continue sua resposta anterior normalmente a partir desse ponto. NÃO tente atualizar, criar ou apagar qualquer memória, e NÃO gere nenhuma tag de memória (<MEMORY>, <UPDATE_MEMORY>, <DELETE_MEMORY>) para este turno de continuação.]"
-      : "[SISTEMA: O usuário recusou a atualização de memória proposta. Mantenha a memória exatamente como estava antes (sem fazer alterações) e continue sua resposta anterior normalmente a partir desse ponto. NÃO registre fatos sobre esta recusa no DNA, e NÃO gere nenhuma tag de memória (<MEMORY>, <UPDATE_MEMORY>, <DELETE_MEMORY>) para este turno.]";
-
-    // 5. Execute request behind the scenes, appending to the same AI message
-    executeAIRequest(
-      activeChatId,
-      virtualUserText,
-      [], // No files
-      apiHistory,
-      false, // isFirstMessage
-      messageId, // replaceId
-      true, // isAppending
-      originalText,
-      originalThoughts
-    );
-  }, [activeChatId, chats, memoryFacts, saveMemoryFactsToFirestore, executeAIRequest]);
+  }, [activeChatId, chats, saveMemoryFactsToFirestore, toast]);
 
   const handleScroll = useCallback(() => {
     if (chatWindowRef.current) {

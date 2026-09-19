@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compileProjectToHtml } from './previewCompiler';
+import { compileProjectToHtml, generateSandboxedRunnerHtml } from './previewCompiler';
 
 describe('compileProjectToHtml', () => {
   it('compiles single-file HTML and injects telemetry script', () => {
@@ -42,5 +42,16 @@ describe('compileProjectToHtml', () => {
     };
     const html = compileProjectToHtml(files);
     expect(html).toContain('createMemoryStorage');
+  });
+
+  it('generateSandboxedRunnerHtml wraps code in an isolated iframe without allow-same-origin', () => {
+    const compiled = '<!DOCTYPE html><html><body><h1>Safe App</h1></body></html>';
+    const runnerHtml = generateSandboxedRunnerHtml(compiled);
+
+    expect(runnerHtml).toContain('<iframe');
+    expect(runnerHtml).toContain('sandbox="allow-scripts allow-modals allow-forms allow-popups"');
+    // Crucial: strictly ensure allow-same-origin is NOT present
+    expect(runnerHtml).not.toContain('allow-same-origin');
+    expect(runnerHtml).toContain('srcdoc = code');
   });
 });

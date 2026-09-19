@@ -81,4 +81,7 @@ export interface PendingMemoryUpdate {
   category: string;
   oldText: string;
   newText: string;
+  connections?: string[];
+  isNew?: boolean;
+  resolved?: 'accepted' | 'ignored';
 }

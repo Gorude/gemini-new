@@ -118,3 +118,11 @@ When directives conflict, resolve them in this exact descending order:
   - Toggles and switches must be native micro-switches: compact outer track (`w-6 h-3.5` or `w-7 h-4`), sliding white knob (`w-2.5 h-2.5 bg-white rounded-full shadow-xs`), unified container (`bg-(--bg-main) border border-(--border-light) hover:border-(--border-main) rounded-lg`), with subtle semantic green/zinc active state, never shouting text inside colored bubbles.
   - Brand Iconography: The Nemon logo (`<NemonIcon>`) is the exclusive mark of Nemon intelligence (270° white main arc + 90° detached `#FF5500` orange slice). When loading or generating, use `<NemonIcon animated size={...} />`.
 
+# 14. Continuous Deployment & Git Synchronization Standard
+- Após qualquer modificação funcional, correção ou refatoração:
+  - Garantir que a suíte de testes e o linter passem (`npm run test:run` e `npm run lint`).
+  - Gerar o bundle de produção atualizado (`npm run build`).
+  - Realizar o commit e push das alterações para o repositório remoto no GitHub (`git push origin main`).
+  - Executar o deploy imediato para o Firebase Hosting (`firebase deploy --only hosting` no diretório `gemini-react`).
+
+

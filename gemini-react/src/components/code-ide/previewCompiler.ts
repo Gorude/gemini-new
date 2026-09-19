@@ -160,3 +160,39 @@ export function compileProjectToHtml(files: Record<string, string>): string {
 
   return bundled;
 }
+
+/**
+ * Gera um invólucro HTML seguro em tela cheia com iframe sandboxed (sem allow-same-origin),
+ * garantindo isolamento total do código do usuário/IA ao abrir em nova aba do navegador.
+ */
+export function generateSandboxedRunnerHtml(compiledHtml: string): string {
+  const safeJson = JSON.stringify(compiledHtml).replace(/</g, '\\u003c');
+  return `<!DOCTYPE html>
+<html lang="pt-BR" style="height:100%;margin:0;padding:0;overflow:hidden;background:#09090b;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview — Nemon Sandbox</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #09090b; }
+    iframe { width: 100%; height: 100%; border: none; display: block; background: #ffffff; }
+  </style>
+</head>
+<body>
+  <iframe
+    id="sandbox-runner"
+    sandbox="allow-scripts allow-modals allow-forms allow-popups"
+    title="Nemon Secure Sandbox"
+  ></iframe>
+  <script>
+    const code = ${safeJson};
+    const frame = document.getElementById('sandbox-runner');
+    if (frame) {
+      frame.srcdoc = code;
+    }
+  </script>
+</body>
+</html>`;
+}
+
