@@ -10,7 +10,7 @@ import {
   FileText, 
   Trash2, 
   Download, 
-  AlertCircle, 
+  AlertCircle,
   Lightbulb, 
   ChevronRight,
   Edit2,
@@ -22,7 +22,7 @@ import {
   GitBranch,
   MapPin,
   ExternalLink,
-  Plus
+  Dna
 } from 'lucide-react';
 import { type Message, safeMarkdown } from '../services/gemini';
 import { MODEL_LIMITS } from '../constants';
@@ -55,7 +55,6 @@ interface MessageItemProps {
   onFactCheck: (id: string) => void;
   onCancelFactCheck?: (id: string) => void;
   onSelectionChange?: (text: string, pos: { x: number, y: number }, messageId: string) => void;
-  onResolveMemoryUpdate?: (messageId: string, updateId: string, action: 'accepted' | 'ignored') => void;
   // Falar em voz alta (TTS) desta mensagem — botão + player abaixo (como no LIVE).
   ttsStatus?: 'generating' | 'done' | 'error';
   ttsBuffer?: AudioBuffer | null;
@@ -91,7 +90,6 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
   onFactCheck,
   onCancelFactCheck,
   onSelectionChange,
-  onResolveMemoryUpdate,
   ttsStatus,
   ttsBuffer,
   ttsFailedRegions,
@@ -451,6 +449,14 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                       </div>
                     );
                   }
+                  if (tool === 'dna_memory' || tool === 'save_memory' || tool === 'update_memory' || tool === 'memory') {
+                    return (
+                      <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 border border-purple-500/25 rounded-full text-[10px] font-bold text-purple-400 shadow-xs">
+                        <Dna className="w-3 h-3 text-purple-400 shrink-0" />
+                        DNA ATUALIZADO
+                      </div>
+                    );
+                  }
                   return (
                     <div key={tool} className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 border border-purple-500/25 rounded-full text-[10px] font-bold text-purple-400 shadow-xs">
                       <span className="text-[10px]">⚙</span>
@@ -458,6 +464,13 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {(!msg.toolsUsed || !msg.toolsUsed.some(t => t.includes('memory'))) && msg.pendingMemoryUpdates && msg.pendingMemoryUpdates.length > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 border border-purple-500/25 rounded-full text-[10px] font-bold text-purple-400 shadow-xs">
+                <Dna className="w-3 h-3 text-purple-400 shrink-0" />
+                DNA ATUALIZADO
               </div>
             )}
 
@@ -532,94 +545,6 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
             </div>
           )}
 
-          {msg.pendingMemoryUpdates && msg.pendingMemoryUpdates.length > 0 && (
-            <div className="mt-4 bg-(--bg-sidebar)/30 border border-(--border-light) rounded-[0.75rem] p-3 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex items-start gap-2.5 mb-2.5">
-                <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400 shrink-0">
-                  <Brain className="w-3.5 h-3.5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: 'var(--accent-text)' }}>
-                    {msg.pendingMemoryUpdates.every(u => !u.oldText || u.isNew) ? 'Adicionar ao DNA de Memória?' : 'Atualizar DNA de Memória?'}
-                  </h4>
-                  <p className="text-[9.5px] text-(--text-secondary) mt-0.5 leading-normal">
-                    {msg.pendingMemoryUpdates.every(u => !u.oldText || u.isNew)
-                      ? 'Identifiquei novas informações relevantes sobre você. Deseja registrá-las no seu DNA?'
-                      : 'Identifiquei uma contradição ou nova informação sobre você. Deseja atualizar seu DNA?'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2 mb-3">
-                {msg.pendingMemoryUpdates.map((upd, idx) => {
-                  const isResolved = !!upd.resolved;
-                  const isNewFact = !upd.oldText || upd.isNew;
-                  return (
-                    <div key={idx} className="bg-(--bg-main)/40 border border-(--border-light)/50 rounded-xl p-3 text-[10.5px]">
-                      <div className="font-bold text-[8px] uppercase tracking-wider opacity-50 mb-1">
-                        Categoria: {upd.category}
-                      </div>
-                      {isNewFact ? (
-                        <div className="text-emerald-400 font-semibold wrap-break-word flex items-start gap-1.5">
-                          <Plus className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-400" />
-                          <span>Novo fato: "{upd.newText}"</span>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="line-through text-red-400/80 mb-1.5 wrap-break-word">
-                            Antigo: "{upd.oldText}"
-                          </div>
-                          <div className="text-emerald-400 font-semibold wrap-break-word">
-                            Novo: "{upd.newText}"
-                          </div>
-                        </>
-                      )}
-                      {isResolved && (
-                        <div className="mt-2.5 pt-2 border-t border-(--border-light)/30 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider">
-                          {upd.resolved === 'accepted' ? (
-                            <span className="text-emerald-400 flex items-center gap-1">
-                              <Check className="w-3.5 h-3.5" /> {isNewFact ? 'Registrado no DNA' : 'DNA Atualizado'}
-                            </span>
-                          ) : (
-                            <span className="text-(--text-placeholder) flex items-center gap-1">
-                              <AlertCircle className="w-3.5 h-3.5" /> Ignorado
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Show action buttons ONLY if not resolved yet */}
-              {!msg.pendingMemoryUpdates.some(upd => upd.resolved) && (
-                <div className="flex justify-end gap-2 text-[10.5px]">
-                  <button 
-                    onClick={() => {
-                      msg.pendingMemoryUpdates?.forEach(upd => {
-                        onResolveMemoryUpdate?.(msg.id, upd.id, 'ignored');
-                      });
-                    }}
-                    className="px-3 py-1.5 rounded-xl font-semibold text-(--text-secondary) hover:bg-(--bg-chat-hover) transition-all cursor-pointer"
-                  >
-                    Ignorar
-                  </button>
-                  <button 
-                    onClick={() => {
-                      msg.pendingMemoryUpdates?.forEach(upd => {
-                        onResolveMemoryUpdate?.(msg.id, upd.id, 'accepted');
-                      });
-                    }}
-                    className="px-3 py-1.5 rounded-xl font-bold text-white shadow-lg transition-all cursor-pointer"
-                    style={{ background: 'var(--accent)', boxShadow: '0 4px 12px var(--accent-glow)' }}
-                  >
-                    {msg.pendingMemoryUpdates.every(u => !u.oldText || u.isNew) ? 'Adicionar ao DNA' : 'Atualizar DNA'}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
           {msg.continuationText ? (
             <div

@@ -41,7 +41,6 @@ interface MessageListProps {
   onFactCheck: (id: string) => void;
   onCancelFactCheck?: (id: string) => void;
   onSelectionChange?: (text: string, pos: { x: number, y: number }, messageId: string) => void;
-  onResolveMemoryUpdate?: (messageId: string, updateId: string, action: 'accepted' | 'ignored') => void;
   hasFreeApiKey: boolean;
   onOpenSettings: (tab: 'geral' | 'modelos' | 'api' | 'personalidades' | 'dna') => void;
   // Falar em voz alta as mensagens (TTS) — áudio por id de mensagem + player.
@@ -80,7 +79,6 @@ const MessageList: React.FC<MessageListProps> = ({
   onFactCheck,
   onCancelFactCheck,
   onSelectionChange,
-  onResolveMemoryUpdate,
   hasFreeApiKey,
   onOpenSettings,
   chatTts,
@@ -315,7 +313,6 @@ const MessageList: React.FC<MessageListProps> = ({
                 onFactCheck={onFactCheck}
                 onCancelFactCheck={onCancelFactCheck}
                 onSelectionChange={onSelectionChange}
-                onResolveMemoryUpdate={onResolveMemoryUpdate}
               />
             );
           })}

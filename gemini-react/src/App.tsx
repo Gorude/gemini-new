@@ -53,7 +53,7 @@ import {
 import {
   restrictToVerticalAxis
 } from '@dnd-kit/modifiers';
-import { Lock, Unlock, GripVertical, Code, Bell } from 'lucide-react';
+import { Lock, Unlock, GripVertical, Code, Bell, Dna } from 'lucide-react';
 
 import {
   generateGeminiContent,
@@ -85,7 +85,6 @@ import {
   type PendingFile,
   type Personality,
   type MemoryFact,
-  type PendingMemoryUpdate,
   type Folder,
   type Skill
 } from './types';
@@ -1639,53 +1638,81 @@ function App() {
     }
   }, []);
 
-  const parseMemoryTags = useCallback((str: string, isFinal: boolean = false, onFindUpdates?: (updates: PendingMemoryUpdate[]) => void) => {
+  const parseMemoryTags = useCallback((str: string, isFinal: boolean = false, onMemoryUpdated?: () => void) => {
     if (isFinal) {
-      const { proposals, autoDeletes, cleanText } = parseAllMemoryProposals(str, memoryFacts);
+      const { proposals, autoDeletes, cleanText } = parseAllMemoryProposals(str, memoryFactsRef.current);
+      let didUpdate = false;
 
       // Se houver deleções automáticas
       if (autoDeletes.length > 0) {
+        didUpdate = true;
         setMemoryFacts(prev => {
           const updated = prev.filter(m => !autoDeletes.includes(m.id));
+          memoryFactsRef.current = updated;
           saveMemoryFactsToFirestore(updated);
           safeLocalStorageSet('nemon_user_memory', JSON.stringify(updated));
           return updated;
         });
       }
 
-      // Se houver propostas (novos fatos ou atualizações)
+      // Se houver propostas (novos fatos ou atualizações) -> persiste automaticamente no DNA
       if (proposals.length > 0) {
-        if (onFindUpdates) {
-          onFindUpdates(proposals);
-        } else {
-          // Fallback para contextos sem UI interativa de chat (ex: Live Mode)
-          setMemoryFacts(prev => {
-            let updated = [...prev];
-            for (const prop of proposals) {
-              if (prop.isNew) {
-                updated.push({
-                  id: prop.id,
-                  text: prop.newText,
-                  category: prop.category || 'Geral',
-                  connections: prop.connections || [],
-                  timestamp: Date.now()
-                });
-              } else {
-                updated = updated.map(m => m.id === prop.id ? { ...m, text: prop.newText, category: prop.category || m.category, timestamp: Date.now() } : m);
-              }
+        didUpdate = true;
+        setMemoryFacts(prev => {
+          let updated = [...prev];
+          for (const prop of proposals) {
+            if (prop.isNew) {
+              updated.push({
+                id: prop.id,
+                text: prop.newText,
+                category: prop.category || 'Geral',
+                connections: prop.connections || [],
+                timestamp: Date.now()
+              });
+            } else {
+              updated = updated.map(m => m.id === prop.id ? { ...m, text: prop.newText, category: prop.category || m.category, timestamp: Date.now() } : m);
             }
-            saveMemoryFactsToFirestore(updated);
-            safeLocalStorageSet('nemon_user_memory', JSON.stringify(updated));
-            return updated;
-          });
-        }
+          }
+          memoryFactsRef.current = updated;
+          saveMemoryFactsToFirestore(updated);
+          safeLocalStorageSet('nemon_user_memory', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      if (didUpdate) {
+        onMemoryUpdated?.();
       }
 
       return cleanText;
     }
 
     return cleanMemoryTags(str);
-  }, [memoryFacts, saveMemoryFactsToFirestore]);
+  }, [saveMemoryFactsToFirestore]);
+
+  // Toca um sininho curto (chime de duas notas) reutilizando o contexto de áudio do LIVE.
+  const playToolBell = useCallback(() => {
+    const ctx = liveAudioContextRef.current;
+    if (!ctx) return;
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+      // Duas notas (Lá5 → Mi6) com decaimento rápido — soa como um "ding" agradável.
+      [{ f: 880, t: 0 }, { f: 1318.5, t: 0.08 }].forEach(({ f, t }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        gain.gain.setValueAtTime(0.0001, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.15, now + t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.32);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + t);
+        osc.stop(now + t + 0.36);
+      });
+    } catch { /* ignore */ }
+  }, []);
 
   const executeAIRequest = useCallback(async (
     targetChatId: string,
@@ -2011,9 +2038,9 @@ function App() {
       }
       finalCleanedText = finalCleanedText.replace(/<\/thinking>/g, '').replace(/<thinking>/g, '').trim();
 
-      let updatesFound: PendingMemoryUpdate[] = [];
-      let finalCleanText = stripSearchMarkers(parseMemoryTags(finalCleanedText, true, (upds) => {
-        updatesFound = upds;
+      let memoryUpdated = false;
+      let finalCleanText = stripSearchMarkers(parseMemoryTags(finalCleanedText, true, () => {
+        memoryUpdated = true;
       }).trim());
 
       // F8: extrai marcadores [MAP: …] → locais embutidos + remove do texto exibido.
@@ -2037,8 +2064,8 @@ function App() {
             "Você é o Nemon. Resuma o raciocínio em uma resposta final útil."
           );
           if (recoveryRes.text) {
-            finalCleanText = parseMemoryTags(recoveryRes.text, true, (upds) => {
-              updatesFound = [...updatesFound, ...upds];
+            finalCleanText = parseMemoryTags(recoveryRes.text, true, () => {
+              memoryUpdated = true;
             }).trim();
           }
         } catch (e) {
@@ -2047,6 +2074,14 @@ function App() {
         }
       } else if (!finalCleanText && finalThoughts) {
         finalCleanText = finalThoughts;
+      }
+
+      if (memoryUpdated) {
+        toolsUsedForMessage.push('dna_memory');
+        playToolBell();
+        setLiveToolToast({ id: Date.now(), label: 'Memória DNA Atualizada' });
+        if (toolToastTimeoutRef.current) clearTimeout(toolToastTimeoutRef.current);
+        toolToastTimeoutRef.current = window.setTimeout(() => setLiveToolToast(null), 2800);
       }
 
       setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === targetChatId ? {
@@ -2061,10 +2096,7 @@ function App() {
           isVerifying: false,
           sources: [...allSources],
           toolsUsed: toolsUsedForMessage.length > 0 ? Array.from(new Set(toolsUsedForMessage)) : m.toolsUsed,
-          maps: isAppending ? (m.maps || finalMaps) : (finalMaps.length > 0 ? finalMaps : undefined),
-          pendingMemoryUpdates: updatesFound.length > 0
-            ? [...(m.pendingMemoryUpdates || []), ...updatesFound]
-            : m.pendingMemoryUpdates
+          maps: isAppending ? (m.maps || finalMaps) : (finalMaps.length > 0 ? finalMaps : undefined)
         } : m)
       } : c));
 
@@ -2112,7 +2144,7 @@ function App() {
       currentAiMsgIdRef.current = null;
       setChats(prev => prev);
     }
-  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, parseMemoryTags, searchModelId, enabledChatToolIds, mcpEndpoint]);
+  }, [model, webSearchEnabled, thinkingEnabled, imageGenEnabled, imagenModel, aspectRatio, paidApiKey, memoryFacts, personalities, parseMemoryTags, searchModelId, enabledChatToolIds, mcpEndpoint, playToolBell]);
 
   const handleStopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -2556,7 +2588,12 @@ function App() {
         // NÃO é gravada como mensagens no chat em que o usuário estava antes.
         // Ainda processamos tags de memória (DNA) da fala da IA, se habilitado.
         if (role === 'ai' && useMemory) {
-          parseMemoryTags(text, true);
+          parseMemoryTags(text, true, () => {
+            playToolBell();
+            setLiveToolToast({ id: Date.now(), label: 'Memória DNA Atualizada' });
+            if (toolToastTimeoutRef.current) clearTimeout(toolToastTimeoutRef.current);
+            toolToastTimeoutRef.current = window.setTimeout(() => setLiveToolToast(null), 2800);
+          });
         }
       },
       onAudioData: (chunk) => {
@@ -2684,30 +2721,6 @@ function App() {
 
     resetProactivityState("Interrupção manual/VAD");
   }, [resetProactivityState, finalizeAiTurnAudio]);
-
-  // Toca um sininho curto (chime de duas notas) reutilizando o contexto de áudio do LIVE.
-  const playToolBell = useCallback(() => {
-    const ctx = liveAudioContextRef.current;
-    if (!ctx) return;
-    try {
-      if (ctx.state === 'suspended') ctx.resume();
-      const now = ctx.currentTime;
-      // Duas notas (Lá5 → Mi6) com decaimento rápido — soa como um "ding" agradável.
-      [{ f: 880, t: 0 }, { f: 1318.5, t: 0.08 }].forEach(({ f, t }) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = f;
-        gain.gain.setValueAtTime(0.0001, now + t);
-        gain.gain.exponentialRampToValueAtTime(0.15, now + t + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.32);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + t);
-        osc.stop(now + t + 0.36);
-      });
-    } catch { /* ignore */ }
-  }, []);
 
   // Feedback quando o modelo usa uma ferramenta no LIVE: toca o sino e mostra um toast breve.
   const handleLiveToolUsed = useCallback((name: string) => {
@@ -3193,67 +3206,7 @@ function App() {
     executeAIRequest(targetId, text, files, apiHistory, isFirst);
   }, [activeChatId, activeChat, executeAIRequest, isLiveActive, resetProactivityState, selectedPersonalityId, model]);
 
-  const handleResolveMemoryUpdate = useCallback((messageId: string, updateId: string, action: 'accepted' | 'ignored') => {
-    let updateToApply: PendingMemoryUpdate | null = null;
-    const chat = chats.find(c => c.id === activeChatId);
-    let msgIndex = -1;
 
-    if (chat) {
-      msgIndex = chat.messages.findIndex(m => m.id === messageId);
-      const msg = msgIndex !== -1 ? chat.messages[msgIndex] : null;
-      if (msg && msg.pendingMemoryUpdates) {
-        updateToApply = msg.pendingMemoryUpdates.find(upd => upd.id === updateId) || null;
-      }
-    }
-
-    if (msgIndex === -1 || !chat) return;
-
-    // 1. Mark as resolved in the state
-    setChats((prev: ChatSession[]) => prev.map((c: ChatSession) => c.id === activeChatId ? {
-      ...c,
-      messages: c.messages.map((m: Message) => m.id === messageId ? {
-        ...m,
-        pendingMemoryUpdates: m.pendingMemoryUpdates?.map(upd =>
-          upd.id === updateId ? { ...upd, resolved: action } : upd
-        )
-      } : m)
-    } : c));
-
-    // 2. Persist in memoryFacts, Firestore, and LocalStorage if accepted
-    if (action === 'accepted' && updateToApply) {
-      setMemoryFacts((prev: MemoryFact[]) => {
-        const exists = prev.some(m => m.id === updateId);
-        let updated: MemoryFact[];
-        if (exists) {
-          updated = prev.map(m =>
-            m.id === updateId ? { ...m, text: updateToApply!.newText, category: updateToApply!.category || m.category, timestamp: Date.now() } : m
-          );
-        } else {
-          updated = [
-            ...prev,
-            {
-              id: updateToApply!.id,
-              text: updateToApply!.newText,
-              category: updateToApply!.category || 'Geral',
-              connections: updateToApply!.connections || [],
-              timestamp: Date.now()
-            }
-          ];
-        }
-        saveMemoryFactsToFirestore(updated);
-        safeLocalStorageSet('nemon_user_memory', JSON.stringify(updated));
-        return updated;
-      });
-
-      if (updateToApply.isNew) {
-        toast.success("Novo fato adicionado ao DNA!");
-      } else {
-        toast.success("DNA de memória atualizado com sucesso!");
-      }
-    } else if (action === 'ignored') {
-      toast.info("Proposta de DNA ignorada.");
-    }
-  }, [activeChatId, chats, saveMemoryFactsToFirestore, toast]);
 
   const handleScroll = useCallback(() => {
     if (chatWindowRef.current) {
@@ -4238,7 +4191,6 @@ function App() {
                       }}
                       onToggleSources={setExpandedSourcesMsgId}
                       onSelectionChange={(text, pos, msgId) => setSelectionData({ text, pos, messageId: msgId })}
-                      onResolveMemoryUpdate={handleResolveMemoryUpdate}
                       hasFreeApiKey={!!defaultApiKey}
                       onOpenSettings={handleOpenSettings}
                       chatTts={chatTts}
@@ -4366,17 +4318,23 @@ function App() {
         />
       )}
 
-      {/* Toast: modelo usou uma ferramenta no modo LIVE */}
-      {isLiveActive && liveToolToast && (
+      {/* Toast no topo: modelo usou uma ferramenta no modo LIVE ou atualizou o DNA de memória */}
+      {liveToolToast && (
         <div
           key={liveToolToast.id}
-          className="fixed top-6 left-1/2 -translate-x-1/2 z-[130] flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-[#111111]/90 backdrop-blur-xl border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.4)] animate-in fade-in slide-in-from-top-3 duration-300"
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-[130] flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-[#111111]/90 backdrop-blur-xl border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.4)] animate-in fade-in slide-in-from-top-3 duration-300 pointer-events-none"
         >
           <div className="w-6 h-6 rounded-full bg-(--accent-bg) flex items-center justify-center text-(--accent-text)">
-            <Bell className="w-3.5 h-3.5" />
+            {liveToolToast.label.includes('Memória') || liveToolToast.label.includes('memória') || liveToolToast.label.includes('DNA') ? (
+              <Dna className="w-3.5 h-3.5" />
+            ) : (
+              <Bell className="w-3.5 h-3.5" />
+            )}
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-(--text-placeholder)">Ferramenta usada</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-(--text-placeholder)">
+              {liveToolToast.label.includes('Memória') || liveToolToast.label.includes('DNA') ? 'DNA de Memória' : 'Ferramenta usada'}
+            </span>
             <span className="text-[12px] font-semibold text-white">{liveToolToast.label}</span>
           </div>
         </div>
