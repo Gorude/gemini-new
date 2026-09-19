@@ -36,7 +36,9 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
     const lowerQuery = query.toLowerCase();
     const matches: SearchResult[] = [];
 
-    chats.forEach(chat => {
+    for (const chat of chats) {
+      if (matches.length >= 40) break;
+
       // 1. Check title match
       if (chat.title.toLowerCase().includes(lowerQuery)) {
         matches.push({
@@ -48,7 +50,8 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
       }
 
       // 2. Check message content match
-      chat.messages.forEach(msg => {
+      for (const msg of chat.messages) {
+        if (matches.length >= 40) break;
         if (msg.text && msg.text.toLowerCase().includes(lowerQuery)) {
           matches.push({
             chatId: chat.id,
@@ -60,8 +63,8 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
             matchType: 'message'
           });
         }
-      });
-    });
+      }
+    }
 
     return matches.slice(0, 15); // Limit results for clean UI & performance
   }, [query, chats]);
@@ -125,7 +128,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
       <span>
         {parts.map((part, i) => 
           regex.test(part) 
-            ? <mark key={i} className="bg-blue-500/20 text-blue-400 font-semibold px-0.5 rounded-sm">{part}</mark> 
+            ? <mark key={i} className="bg-(--border-main) text-(--text-bold) font-semibold px-0.5 rounded-xs">{part}</mark> 
             : part
         )}
       </span>
@@ -150,7 +153,10 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ chats, onClose, o
             type="text"
             placeholder="Pesquisar títulos ou conteúdos nas conversas..."
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIndex(0);
+            }}
             className="w-full bg-transparent border-none text-(--text-primary) outline-none text-sm placeholder-(--text-placeholder)"
           />
           <button 

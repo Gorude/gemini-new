@@ -71,7 +71,41 @@ describe('memoryUtils', () => {
     const formatted = formatMemoryContext(facts, 3);
     const lines = formatted.split('\n');
     expect(lines.length).toBe(3);
-    // Deve conter os mais recentes (id-9, id-8, id-7)
     expect(formatted).toContain('id-9');
   });
+
+  it('suporta atributos em qualquer ordem e tags case-insensitive (<memory>, <Update_Memory>)', () => {
+    const rawAiText = `
+      Informações recebidas:
+      <memory connections="React, TypeScript" category="TECNOLOGIA">
+        Especialista em desenvolvimento web frontend
+      </memory>
+      <Update_Memory category="PERFIL" id="2">O usuário completou 20 anos</Update_Memory>
+      <delete_memory id="1"/>
+    `;
+
+    const { cleanText, proposals, autoDeletes } = parseAllMemoryProposals(rawAiText, existingFacts);
+
+    expect(cleanText).not.toContain('<memory');
+    expect(cleanText).not.toContain('<Update_Memory');
+    expect(cleanText).not.toContain('<delete_memory');
+    expect(cleanText).toContain('Informações recebidas:');
+
+    // Novo fato com connections antes de category
+    const newFact = proposals.find(p => p.isNew);
+    expect(newFact).toBeDefined();
+    expect(newFact?.category).toBe('TECNOLOGIA');
+    expect(newFact?.connections).toEqual(['React', 'TypeScript']);
+    expect(newFact?.newText).toBe('Especialista em desenvolvimento web frontend');
+
+    // Update com category antes de id
+    const updateFact = proposals.find(p => !p.isNew);
+    expect(updateFact).toBeDefined();
+    expect(updateFact?.id).toBe('2');
+    expect(updateFact?.newText).toBe('O usuário completou 20 anos');
+
+    // Auto delete com tag em minúsculo
+    expect(autoDeletes).toEqual(['1']);
+  });
 });
+

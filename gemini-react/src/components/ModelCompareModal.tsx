@@ -3,6 +3,7 @@ import { X, Send, Check, Loader2, Columns2, Eye, Code2, MessageSquare, RotateCcw
 import { streamGeminiContent, safeMarkdown } from '../services/gemini';
 import { StreamSmoother } from '../services/streamSmoother';
 import { extractPreviewableCode, buildPreviewSrcDoc } from '../utils/extractCode';
+import { generateSandboxedRunnerHtml } from './code-ide/previewCompiler';
 
 interface ModelOpt { id: string; name: string }
 
@@ -207,7 +208,9 @@ export default function ModelCompareModal({ models, defaultA, defaultB, onClose,
   }, [expanded]);
 
   const openInNewTab = (code: string, lang: string) => {
-    const blob = new Blob([buildPreviewSrcDoc(code, lang)], { type: 'text/html' });
+    const rawDoc = buildPreviewSrcDoc(code, lang);
+    const sandboxedDoc = generateSandboxedRunnerHtml(rawDoc);
+    const blob = new Blob([sandboxedDoc], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 10000);

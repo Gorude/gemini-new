@@ -112,6 +112,10 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
           const nodes = graphData.nodes;
           
           nodes.forEach((a: any, i: number) => {
+            if (typeof a.x !== 'number' || isNaN(a.x) || typeof a.y !== 'number' || isNaN(a.y)) return;
+            if (typeof a.vx !== 'number' || isNaN(a.vx)) a.vx = 0;
+            if (typeof a.vy !== 'number' || isNaN(a.vy)) a.vy = 0;
+
             const dxC = centerX - a.x;
             const dyC = centerY - a.y;
             // Radial energy pull
@@ -121,6 +125,10 @@ const DnaGraph: React.FC<DnaGraphProps> = ({ facts, focusMode, onNodeClick }) =>
             // Soft-body Collision
             for (let j = i + 1; j < nodes.length; j++) {
               const b: any = nodes[j];
+              if (typeof b.x !== 'number' || isNaN(b.x) || typeof b.y !== 'number' || isNaN(b.y)) continue;
+              if (typeof b.vx !== 'number' || isNaN(b.vx)) b.vx = 0;
+              if (typeof b.vy !== 'number' || isNaN(b.vy)) b.vy = 0;
+
               const dx = a.x - b.x;
               const dy = a.y - b.y;
               const distSq = dx * dx + dy * dy;

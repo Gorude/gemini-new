@@ -91,7 +91,7 @@ import {
 
 import { v4 as uuidv4 } from 'uuid';
 import { sanitizeChatForStorage, safeLocalStorageSet } from './utils/storageUtils';
-import { parseAllMemoryProposals, formatMemoryContext } from './utils/memoryUtils';
+import { parseAllMemoryProposals, formatMemoryContext, cleanMemoryTags } from './utils/memoryUtils';
 
 const DEFAULT_PERSONALITY: Personality = {
   id: 'default',
@@ -1630,12 +1630,8 @@ function App() {
   }, []);
 
   const parseMemoryTags = useCallback((str: string, isFinal: boolean = false, onFindUpdates?: (updates: PendingMemoryUpdate[]) => void) => {
-    const memoryTagRegex = /<MEMORY(?:\s+category=['"]([^'"]*)['"])?(?:\s+connections=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/MEMORY>/g;
-    const updateTagRegex = /<UPDATE_MEMORY\s+id=['"]([^'"]*)['"](?:\s+category=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/UPDATE_MEMORY>/g;
-    const deleteTagRegex = /<DELETE_MEMORY\s+id=['"]([^'"]*?)['"]\s*\/>/g;
-
     if (isFinal) {
-      const { proposals, autoDeletes } = parseAllMemoryProposals(str, memoryFacts);
+      const { proposals, autoDeletes, cleanText } = parseAllMemoryProposals(str, memoryFacts);
 
       // Se houver deleções automáticas
       if (autoDeletes.length > 0) {
@@ -1674,13 +1670,11 @@ function App() {
           });
         }
       }
+
+      return cleanText;
     }
 
-    return str
-      .replace(memoryTagRegex, '')
-      .replace(updateTagRegex, '')
-      .replace(deleteTagRegex, '')
-      .trim();
+    return cleanMemoryTags(str);
   }, [memoryFacts, saveMemoryFactsToFirestore]);
 
   const executeAIRequest = useCallback(async (

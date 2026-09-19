@@ -50,6 +50,18 @@ const BarVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser }
     const dataArray = new Uint8Array(bufferLength);
     let animationId: number;
 
+    const rootStyle = getComputedStyle(document.documentElement);
+    const accentText = rootStyle.getPropertyValue('--accent-text').trim() || '#a1a1aa';
+    const accentGlow = rootStyle.getPropertyValue('--accent-glow').trim() || 'rgba(161, 161, 170, 0.5)';
+
+    const drawCapsule = (context: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+      if (typeof (context as any).roundRect === 'function') {
+        (context as any).roundRect(x, y, w, h, r);
+      } else {
+        context.rect(x, y, w, h);
+      }
+    };
+
     const render = () => {
       animationId = requestAnimationFrame(render);
       analyser.getByteFrequencyData(dataArray);
@@ -79,10 +91,10 @@ const BarVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser }
         // Desenhar cápsula arredondada
         ctx.save();
         ctx.globalAlpha = 0.4 + percent * 0.6;
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim() || '#a1a1aa';
+        ctx.fillStyle = accentText;
         ctx.beginPath();
         // Usando roundRect para cantos arredondados estilo cápsula
-        (ctx as any).roundRect(x, y, barWidth, barHeight, barWidth / 2);
+        drawCapsule(ctx, x, y, barWidth, barHeight, barWidth / 2);
         ctx.fill();
         ctx.restore();
 
@@ -90,8 +102,8 @@ const BarVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser }
         if (percent > 0.5) {
           ctx.save();
           ctx.shadowBlur = 15;
-          ctx.shadowColor = getComputedStyle(document.documentElement).getPropertyValue('--accent-glow').trim() || 'rgba(161, 161, 170, 0.5)';
-          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim() || '#a1a1aa';
+          ctx.shadowColor = accentGlow;
+          ctx.fillStyle = accentText;
           ctx.fill();
           ctx.restore();
         }
@@ -126,6 +138,17 @@ const MiniVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser 
     const dataArray = new Uint8Array(bufferLength);
     let animationId: number;
 
+    const rootStyle = getComputedStyle(document.documentElement);
+    const accentText = rootStyle.getPropertyValue('--accent-text').trim() || '#a1a1aa';
+
+    const drawCapsule = (context: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+      if (typeof (context as any).roundRect === 'function') {
+        (context as any).roundRect(x, y, w, h, r);
+      } else {
+        context.rect(x, y, w, h);
+      }
+    };
+
     const render = () => {
       animationId = requestAnimationFrame(render);
       analyser.getByteFrequencyData(dataArray);
@@ -151,9 +174,9 @@ const MiniVisualizer: React.FC<{ analyser: AnalyserNode | null }> = ({ analyser 
 
         ctx.save();
         ctx.globalAlpha = 0.5 + percent * 0.5;
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim() || '#a1a1aa';
+        ctx.fillStyle = accentText;
         ctx.beginPath();
-        (ctx as any).roundRect(x, y, barWidth, barHeight, barWidth / 2);
+        drawCapsule(ctx, x, y, barWidth, barHeight, barWidth / 2);
         ctx.fill();
         ctx.restore();
       }

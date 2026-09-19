@@ -34,15 +34,40 @@ export interface ParsedMemoryResult {
 }
 
 /**
+ * Extrai atributos de uma tag XML de forma tolerante a maiúsculas/minúsculas e quebras de linha.
+ */
+function parseTagAttributes(attrString: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  const attrRegex = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(['"])([\s\S]*?)\2/g;
+  let match: RegExpExecArray | null;
+  while ((match = attrRegex.exec(attrString)) !== null) {
+    attrs[match[1].toLowerCase()] = match[3];
+  }
+  return attrs;
+}
+
+/**
+ * Remove todas as tags de memória (novos fatos, atualizações e deleções) do texto.
+ */
+export function cleanMemoryTags(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/<MEMORY\b[^>]*>[\s\S]*?<\/MEMORY>/gi, '')
+    .replace(/<UPDATE_MEMORY\b[^>]*>[\s\S]*?<\/UPDATE_MEMORY>/gi, '')
+    .replace(/<DELETE_MEMORY\b[^>]*?(?:\/>|>[\s\S]*?<\/DELETE_MEMORY>)/gi, '')
+    .trim();
+}
+
+/**
  * Analisa as tags de memória na resposta da IA e extrai propostas para confirmação visual:
  * - <MEMORY>: Proposta de novo fato (isNew = true, oldText = '').
  * - <UPDATE_MEMORY>: Proposta de atualização/contradição (isNew = false, oldText preenchido).
  * - <DELETE_MEMORY>: Remoção de fatos obsoletos por ID.
  */
 export function parseAllMemoryProposals(str: string, currentFacts: MemoryFact[]): ParsedMemoryResult {
-  const memoryTagRegex = /<MEMORY(?:\s+category=['"]([^'"]*)['"])?(?:\s+connections=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/MEMORY>/g;
-  const updateTagRegex = /<UPDATE_MEMORY\s+id=['"]([^'"]*)['"](?:\s+category=['"]([^'"]*)['"])?>\s*([\s\S]*?)\s*<\/UPDATE_MEMORY>/g;
-  const deleteTagRegex = /<DELETE_MEMORY\s+id=['"]([^'"]*?)['"]\s*\/>/g;
+  const memoryTagRegex = /<MEMORY\b([^>]*)>([\s\S]*?)<\/MEMORY>/gi;
+  const updateTagRegex = /<UPDATE_MEMORY\b([^>]*)>([\s\S]*?)<\/UPDATE_MEMORY>/gi;
+  const deleteTagRegex = /<DELETE_MEMORY\b([^>]*?)(?:\/>|>[\s\S]*?<\/DELETE_MEMORY>)/gi;
 
   const proposals: PendingMemoryUpdate[] = [];
   const autoDeletes: string[] = [];
@@ -51,9 +76,12 @@ export function parseAllMemoryProposals(str: string, currentFacts: MemoryFact[])
   // 1. Extração de novos fatos (<MEMORY>)
   let match: RegExpExecArray | null;
   while ((match = memoryTagRegex.exec(str)) !== null) {
-    const categoryValue = match[1]?.trim() || 'Diversos';
-    const connectionsValue = match[2] ? match[2].split(',').map((s: string) => s.trim()).filter(Boolean) : [];
-    const textValue = match[3]?.trim();
+    const attrs = parseTagAttributes(match[1] || '');
+    const categoryValue = attrs['category']?.trim() || 'Diversos';
+    const connectionsValue = attrs['connections']
+      ? attrs['connections'].split(',').map((s: string) => s.trim()).filter(Boolean)
+      : [];
+    const textValue = match[2]?.trim();
 
     if (textValue && !isDuplicateMemory(currentFacts, textValue)) {
       const norm = normalizeText(textValue);
@@ -74,9 +102,10 @@ export function parseAllMemoryProposals(str: string, currentFacts: MemoryFact[])
   // 2. Extração de contradições / atualizações (<UPDATE_MEMORY>)
   updateTagRegex.lastIndex = 0;
   while ((match = updateTagRegex.exec(str)) !== null) {
-    const idValue = match[1]?.trim();
-    const categoryValue = match[2]?.trim();
-    const textValue = match[3]?.trim();
+    const attrs = parseTagAttributes(match[1] || '');
+    const idValue = attrs['id']?.trim();
+    const categoryValue = attrs['category']?.trim();
+    const textValue = match[2]?.trim();
 
     if (!idValue || !textValue) continue;
 
@@ -92,7 +121,7 @@ export function parseAllMemoryProposals(str: string, currentFacts: MemoryFact[])
         });
       }
     } else {
-      // Se o modelo alucinou um ID inexistente mas enviou atualização, propõe como novo fato
+      // Se o modelo referenciou um ID inexistente mas enviou atualização, propõe como novo fato
       if (!isDuplicateMemory(currentFacts, textValue)) {
         proposals.push({
           id: uuidv4(),
@@ -108,18 +137,15 @@ export function parseAllMemoryProposals(str: string, currentFacts: MemoryFact[])
   // 3. Extração de deleções (<DELETE_MEMORY>)
   deleteTagRegex.lastIndex = 0;
   while ((match = deleteTagRegex.exec(str)) !== null) {
-    const idValue = match[1]?.trim();
+    const attrs = parseTagAttributes(match[1] || '');
+    const idValue = attrs['id']?.trim();
     if (idValue) {
       autoDeletes.push(idValue);
     }
   }
 
   // 4. Limpeza de todas as tags do texto final para exibição ao usuário
-  const cleanText = str
-    .replace(memoryTagRegex, '')
-    .replace(updateTagRegex, '')
-    .replace(deleteTagRegex, '')
-    .trim();
+  const cleanText = cleanMemoryTags(str);
 
   return { cleanText, proposals, autoDeletes };
 }
