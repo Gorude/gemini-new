@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { MODEL_OPTIONS, IMAGEN_OPTIONS, LIVE_MODEL_OPTIONS, CUSTOM_MODEL_PROVIDERS, getModelContextWindow, getModelCapabilities, CAPABILITY_META, estimateTokens, formatTokenCount, type CustomModel, type ModelCapability } from '../constants';
 import { type PendingFile } from '../types';
+import { useToast } from '../hooks/useToast';
 
 // Ícone (lucide) de cada capacidade de modelo, para os badges do seletor.
 const CAPABILITY_ICON: Record<ModelCapability, LucideIcon> = {
@@ -108,6 +109,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
+  const toast = useToast();
 
   // Click/touch outside to close model selector menu
   useEffect(() => {
@@ -176,11 +178,24 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB (teto inline da API Gemini)
+
   const processFile = (file: File) => {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      toast.error(`O arquivo "${file.name}" excede o limite máximo de 20 MB.`);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      const base64 = (event.target?.result as string).split(',')[1];
-      setPendingFiles(prev => [...prev, { name: file.name, data: base64, mimeType: file.type }]);
+      const result = event.target?.result as string;
+      if (!result) return;
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      const mime = file.type || 'application/octet-stream';
+      setPendingFiles(prev => [...prev, { name: file.name, data: base64, mimeType: mime }]);
+    };
+    reader.onerror = () => {
+      toast.error(`Falha ao ler o arquivo "${file.name}".`);
     };
     reader.readAsDataURL(file);
   };

@@ -220,13 +220,19 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({
         
         if (flexibleRegex.test(textWithMarkers)) {
           const className = res.isVerified ? 'fact-verified' : 'fact-unverified';
-          const sourceLink = res.isVerified && res.sourceUrl 
-            ? `<a href="${res.sourceUrl}" target="_blank" class="fact-link" title="Ver fonte original">🔗</a>` 
-            : '';
+          let sourceLink = '';
+          if (res.isVerified && res.sourceUrl) {
+            const rawUrl = res.sourceUrl.trim();
+            if (/^https?:\/\//i.test(rawUrl)) {
+              const safeUrl = rawUrl.replace(/"/g, '&quot;');
+              sourceLink = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="fact-link" title="Ver fonte original">🔗</a>`;
+            }
+          }
+          const safeExplanation = (res.explanation || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           
           // Render segment markdown and strip wrapping <p> tags so it stays inline
           const renderedSegment = safeMarkdown(res.segment).replace(/^\s*<p>([\s\S]*?)<\/p>\s*$/, '$1').trim();
-          markers[markerId] = `<span class="${className}" title="${res.explanation || ''}">${renderedSegment}${sourceLink}</span>`;
+          markers[markerId] = `<span class="${className}" title="${safeExplanation}">${renderedSegment}${sourceLink}</span>`;
           textWithMarkers = textWithMarkers.replace(flexibleRegex, markerId);
         }
       });

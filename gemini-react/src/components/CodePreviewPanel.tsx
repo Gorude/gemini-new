@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, ExternalLink, Copy, Check } from 'lucide-react';
+import { generateSandboxedRunnerHtml } from './code-ide/previewCompiler';
 
 interface CodePreviewPanelProps {
   code: string;
@@ -22,7 +23,8 @@ export default function CodePreviewPanel({ code, lang, onClose }: CodePreviewPan
     : code;
 
   const openNewTab = () => {
-    const blob = new Blob([srcDoc], { type: 'text/html' });
+    const sandboxedHtml = generateSandboxedRunnerHtml(srcDoc);
+    const blob = new Blob([sandboxedHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 10000);

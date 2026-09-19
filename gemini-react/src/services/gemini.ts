@@ -341,10 +341,16 @@ export function safeMarkdown(content: string): string {
     /<img\s+[^>]*?src=["']file:[^"']*["'][^>]*?\/?>/gi,
     '<span class="text-zinc-500 text-xs italic">[Arquivo local]</span>'
   );
-  html = html.replace(
-    /<(iframe|script|link|video|audio|source)\s+[^>]*?(?:src|href)=["']file:[^"']*["'][^>]*?\/?>/gi,
-    ''
-  );
+
+  // 7. Sanitização ativa contra XSS e injeção de HTML malicioso
+  // Remove tags executáveis inteiras com seu conteúdo
+  html = html.replace(/<(script|style|iframe|object|embed|form)[\s\S]*?<\/\1>/gi, '');
+  // Remove tags perigosas órfãs ou auto-fechadas
+  html = html.replace(/<\/?(script|style|iframe|object|embed|form|meta|base|link)\b[^>]*>/gi, '');
+  // Remove manipuladores de evento inline (ex: onload=, onerror=, onclick=)
+  html = html.replace(/\s+on[a-z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  // Neutraliza pseudo-protocolos perigosos (javascript:, vbscript:, data:text/html) em href e src
+  html = html.replace(/(?:href|src)\s*=\s*["']\s*(?:javascript|vbscript|data\s*:\s*text\/html)[^"']*["']/gi, 'href="#"');
 
   return html;
 }
@@ -1416,6 +1422,11 @@ export async function* streamGeminiContent(
       }
     }
   } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // Ignora erro se stream já concluída ou cancelada
+    }
     reader.releaseLock();
     // API RESPONSE LOGGING
     logger.addLog("api-response", `Response: ${model} completed`, {

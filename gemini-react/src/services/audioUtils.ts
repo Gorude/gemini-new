@@ -10,19 +10,27 @@ export function floatToPcm16(float32Array: Float32Array): string {
     const s = Math.max(-1, Math.min(1, float32Array[i]));
     int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
   }
-  return btoa(String.fromCharCode(...new Uint8Array(int16Array.buffer)));
+  const uint8 = new Uint8Array(int16Array.buffer);
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < uint8.length; i += chunkSize) {
+    binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
 }
 
 /**
  * Converts Int16 PCM (Base64) to Float32Array for AudioContext playback
  */
 export function pcm16ToFloat(base64: string): Float32Array {
+  if (!base64) return new Float32Array(0);
   const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
+  const validLength = binaryString.length - (binaryString.length % 2);
+  const bytes = new Uint8Array(validLength);
+  for (let i = 0; i < validLength; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
-  const int16Array = new Int16Array(bytes.buffer);
+  const int16Array = new Int16Array(bytes.buffer, bytes.byteOffset, validLength / 2);
   const float32Array = new Float32Array(int16Array.length);
   for (let i = 0; i < int16Array.length; i++) {
     float32Array[i] = int16Array[i] / 32768;

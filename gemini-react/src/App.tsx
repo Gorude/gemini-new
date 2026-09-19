@@ -898,6 +898,18 @@ function App() {
     localStorage.setItem('nemon_memory_model', memoryModelId);
   }, [memoryModelId]);
 
+  // Limpeza determinística de recursos WebAudio ao desmontar o componente principal
+  useEffect(() => {
+    return () => {
+      chatTtsCtxRef.current?.close().catch(() => {});
+      chatTtsCtxRef.current = null;
+      dictationCtxRef.current?.close().catch(() => {});
+      dictationCtxRef.current = null;
+      liveAudioContextRef.current?.close().catch(() => {});
+      liveAudioContextRef.current = null;
+    };
+  }, []);
+
   useEffect(() => { localStorage.setItem('nemon_search_model', searchModelId); }, [searchModelId]);
   useEffect(() => { localStorage.setItem('nemon_factcheck_model', factCheckModelId); }, [factCheckModelId]);
   useEffect(() => { localStorage.setItem('nemon_chat_tools', JSON.stringify(enabledChatToolIds)); }, [enabledChatToolIds]);

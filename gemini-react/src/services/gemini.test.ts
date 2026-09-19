@@ -71,6 +71,23 @@ describe('safeMarkdown', () => {
     expect(html).not.toContain('src="file:');
     expect(html).toContain('meu-script');
   });
+
+  it('neutraliza vetores de XSS (script, iframe, manipuladores on* e javascript:)', () => {
+    const malicious = `
+      # Título seguro
+      <script>alert("hack")</script>
+      <img src="x" onerror="alert('xss')" />
+      <iframe src="https://evil.com"></iframe>
+      [Link suspeito](javascript:alert('pwned'))
+    `;
+    const html = safeMarkdown(malicious);
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('alert("hack")');
+    expect(html).not.toContain('onerror=');
+    expect(html).not.toContain('<iframe');
+    expect(html).not.toContain('href="javascript:');
+    expect(html).toContain('Título seguro');
+  });
 });
 
 describe('resolveProvider', () => {

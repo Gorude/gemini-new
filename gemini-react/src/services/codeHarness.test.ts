@@ -55,6 +55,16 @@ describe('applyFileEdit', () => {
     expect(res.success).toBe(true);
     expect(res.newContent).toContain('const x = 2;');
   });
+
+  it('preserva caracteres cifrão e padrões especiais ($1, $&, $$, $VAR) sem corromper código', () => {
+    const code = `const format = (val) => val;\nconst regex = /test/;`;
+    const target = `const format = (val) => val;`;
+    const replacement = `const format = (val) => '$' + val.replace(/(\\d+)/, '$1-$&'); // $VAR $$ref`;
+
+    const res = applyFileEdit(code, target, replacement);
+    expect(res.success).toBe(true);
+    expect(res.newContent).toContain("'$' + val.replace(/(\\d+)/, '$1-$&'); // $VAR $$ref");
+  });
 });
 
 describe('robustParseToolArgs', () => {

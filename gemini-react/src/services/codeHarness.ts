@@ -49,7 +49,7 @@ export function applyFileEdit(
 
   // 1. Casamento exato
   if (currentContent.includes(targetContent)) {
-    const newContent = currentContent.replace(targetContent, replacementContent);
+    const newContent = currentContent.replace(targetContent, () => replacementContent);
     return { success: true, newContent };
   }
 
@@ -59,7 +59,7 @@ export function applyFileEdit(
   const normReplacement = replacementContent.replace(/\r\n/g, '\n');
 
   if (normCurrent.includes(normTarget)) {
-    const newContent = normCurrent.replace(normTarget, normReplacement);
+    const newContent = normCurrent.replace(normTarget, () => normReplacement);
     return { success: true, newContent };
   }
 
