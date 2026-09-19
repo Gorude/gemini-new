@@ -63,6 +63,14 @@ describe('safeMarkdown', () => {
     const html = safeMarkdown('- item um\n- item dois');
     expect(html).not.toMatch(/<li>\s*<p>/);
   });
+
+  it('sanitiza links e imagens file:/// evitando violacao de seguranca em HTTPS', () => {
+    const md = 'Consulte o arquivo [meu-script](file:///C:/Users/app/script.js) e a foto ![logo](file:///C:/Users/app/logo.png)';
+    const html = safeMarkdown(md);
+    expect(html).not.toContain('href="file:');
+    expect(html).not.toContain('src="file:');
+    expect(html).toContain('meu-script');
+  });
 });
 
 describe('resolveProvider', () => {

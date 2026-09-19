@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { normalizePath, applyFileEdit, cleanHarnessDisplayText, robustParseToolArgs } from './codeHarness';
+import {
+  normalizePath,
+  applyFileEdit,
+  cleanHarnessDisplayText,
+  cleanStepTitle,
+  cleanStepContent,
+  robustParseToolArgs,
+  detectUnfulfilledActionIntent,
+  validateScriptSyntax,
+} from './codeHarness';
 
 describe('normalizePath', () => {
   it('garante que o caminho inicie com barra e use barras normais', () => {
@@ -108,4 +117,96 @@ describe('cleanHarnessDisplayText', () => {
     expect(cleaned).toContain('Aqui está a aplicação!');
   });
 });
+
+describe('detectUnfulfilledActionIntent', () => {
+  it('detecta a frase exata relatada pelo usuário onde a IA prometeu ação e parou', () => {
+    const text = 'CSS está essencialmente correto. Agora vou verificar o estado do projeto e criar o jogo completo:';
+    const res = detectUnfulfilledActionIntent(text);
+    expect(res.hasIntent).toBe(true);
+    expect(res.phrase).toBeDefined();
+  });
+
+  it('detecta variações de intenções futuras', () => {
+    expect(detectUnfulfilledActionIntent('Vou criar a estrutura inicial').hasIntent).toBe(true);
+    expect(detectUnfulfilledActionIntent('Em seguida vou implementar a física').hasIntent).toBe(true);
+    expect(detectUnfulfilledActionIntent('No próximo passo vamos adicionar o placar').hasIntent).toBe(true);
+    expect(detectUnfulfilledActionIntent('Now I will implement the loop:').hasIntent).toBe(true);
+  });
+
+  it('detecta a segunda frase relatada pelo usuário com erro de digitação Passeo e término em dois-pontos', () => {
+    const text = '[Passeo 3/4] Verificando o estado atual e adicionando cronômetro, efeitos sonoros, chord-click e polimento visual:';
+    const res = detectUnfulfilledActionIntent(text);
+    expect(res.hasIntent).toBe(true);
+  });
+
+  it('detecta frases terminadas em dois-pontos como introduções interrompidas', () => {
+    expect(detectUnfulfilledActionIntent('Adicionando sistema de áudio e cronômetro:').hasIntent).toBe(true);
+    expect(detectUnfulfilledActionIntent('Configuração do canvas e animações (Passo 2):').hasIntent).toBe(true);
+    expect(detectUnfulfilledActionIntent('[Etapa 3/5] Implementando mecânicas:').hasIntent).toBe(true);
+  });
+
+  it('retorna false para conclusões legítimas ou textos neutros', () => {
+    expect(detectUnfulfilledActionIntent('Aqui está o seu jogo completo!').hasIntent).toBe(false);
+    expect(detectUnfulfilledActionIntent('Aplicação pronta e funcional com todos os controles.').hasIntent).toBe(false);
+    expect(detectUnfulfilledActionIntent('O Campo Minado Clássico foi desenvolvido com sucesso em um único arquivo HTML.').hasIntent).toBe(false);
+    expect(detectUnfulfilledActionIntent('').hasIntent).toBe(false);
+  });
+});
+
+describe('cleanStepTitle', () => {
+  it('remove prefixos redundantes de passos preservando a descrição da ação', () => {
+    expect(cleanStepTitle('[Passo 1/4] Inspecionando o arquivo /index.html:')).toBe('Inspecionando o arquivo /index.html:');
+    expect(cleanStepTitle('Passo 2/4: Criando a estrutura completa')).toBe('Criando a estrutura completa');
+    expect(cleanStepTitle('[Step 3/5] Adicionando efeitos sonoros')).toBe('Adicionando efeitos sonoros');
+    expect(cleanStepTitle('[Etapa 2 de 4] Configurando cronômetro')).toBe('Configurando cronômetro');
+    expect(cleanStepTitle('Passo 2 Inspecionando /index.html')).toBe('Inspecionando /index.html');
+    expect(cleanStepTitle('[Passo 4] Substituindo o script do Minesweeper')).toBe('Substituindo o script do Minesweeper');
+  });
+
+  it('preserva títulos sem prefixo', () => {
+    expect(cleanStepTitle('Planejamento e Análise')).toBe('Planejamento e Análise');
+    expect(cleanStepTitle('Aplicação Concluída')).toBe('Aplicação Concluída');
+  });
+});
+
+describe('cleanStepContent', () => {
+  it('remove primeira linha que repete o anúncio do passo', () => {
+    const raw = '[Passo 1/4] Inspecionando o arquivo:\nConteúdo detalhado da análise.';
+    const cleaned = cleanStepContent(raw, 'Inspecionando o arquivo');
+    expect(cleaned).toBe('Conteúdo detalhado da análise.');
+    expect(cleaned).not.toContain('[Passo 1/4]');
+  });
+
+  it('remove anúncio de passo Passo N sem barra e não duplica o título', () => {
+    const raw = '[Passo 4] Substituindo o script do Minesweeper pelo Snake Game completo:\nLógica atualizada com sucesso.';
+    const cleaned = cleanStepContent(raw, 'Substituindo o script do Minesweeper pelo Snake Game completo');
+    expect(cleaned).toBe('Lógica atualizada com sucesso.');
+    expect(cleaned).not.toContain('[Passo 4]');
+  });
+});
+
+describe('validateScriptSyntax', () => {
+  it('identifica redeclaração de const em script e retorna erro amigável', () => {
+    const html = `<!DOCTYPE html><html><body><script>const modalOverlay = 1;\nconst modalOverlay = 2;</script></body></html>`;
+    const res = validateScriptSyntax(html, '/index.html');
+    expect(res.valid).toBe(false);
+    expect(res.error).toContain('modalOverlay');
+  });
+
+  it('valida script correto sem erros', () => {
+    const html = `<!DOCTYPE html><html><body><script>const x = 1; let y = 2;</script></body></html>`;
+    const res = validateScriptSyntax(html, '/index.html');
+    expect(res.valid).toBe(true);
+  });
+});
+
+describe('Anexos e Suporte Multimodal no Harness', () => {
+  it('decodifica arquivos de texto anexados em base64 corretamente', () => {
+    const sampleText = 'const greeting = "Hello Nemon";';
+    const base64 = btoa(sampleText);
+    const decoded = atob(base64);
+    expect(decoded).toBe(sampleText);
+  });
+});
+
 

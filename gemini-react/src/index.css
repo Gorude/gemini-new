@@ -999,8 +999,8 @@ body {
   }
 }
 
-/* Sandpack VS Code styling overrides */
-.sp-wrapper {
+/* Native CodeMirror 6 Editor styling */
+.native-code-editor {
   height: 100% !important;
   width: 100% !important;
   display: flex !important;
@@ -1010,41 +1010,23 @@ body {
   min-width: 0 !important;
   overflow: hidden !important;
 }
-.sp-layout {
-  border: none !important;
-  background: transparent !important;
-  border-radius: 0 !important;
+
+.native-code-editor .cm-editor {
   height: 100% !important;
   width: 100% !important;
-  flex: 1 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  min-height: 0 !important;
+  outline: none !important;
 }
-.sp-code-editor {
+
+.native-code-editor .cm-scroller {
   height: 100% !important;
   width: 100% !important;
-  display: flex !important;
-  flex-direction: column !important;
-  flex: 1 1 0% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
+  overflow-anchor: none !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
 }
-.sp-cm, .cm-editor, .cm-scroller {
-  height: 100% !important;
-  width: 100% !important;
-  flex: 1 1 0% !important;
-  min-height: 0 !important;
+
+.native-code-editor .cm-content {
+  padding-bottom: 50px !important;
 }
-.sp-preview-container {
-  height: 100% !important;
-  width: 100% !important;
-  background: #0d1117 !important;
-}
-.sp-preview-iframe {
-  height: 100% !important;
-  width: 100% !important;
-  border: none !important;
-}
+
 
 

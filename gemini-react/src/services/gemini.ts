@@ -302,7 +302,17 @@ export function safeMarkdown(content: string): string {
   // This forces "tight" mode for almost everything by default.
   const tightenedContent = content.replace(/(\n\s*){2,}/g, "\n\n");
 
-  let html = marked.parse(tightenedContent) as string;
+  // 0. Previne erros de segurança de navegação/carregamento de file:/// em HTTPS
+  // Higieniza links e imagens em markdown antes do parse
+  const sanitizedContent = (tightenedContent || '')
+    .replace(/!\[(.*?)\]\(file:\/\/[^)]*\)/gi, '`[$1]`')
+    .replace(/\[(.*?)\]\(file:\/\/[^)]*\)/gi, '`$1`')
+    .replace(/\bfile:\/\/\/[^\s\)\"\'\>]+/gi, (match) => {
+      const parts = match.split('/');
+      return parts[parts.length - 1] || match;
+    });
+
+  let html = marked.parse(sanitizedContent) as string;
 
   // 2. Aggressive List Cleanup: Strip ANY <p> tags that are direct children of <li>
   // We do this in a loop to catch nested or multiple paragraphs.
@@ -321,6 +331,20 @@ export function safeMarkdown(content: string): string {
   // 5. Tables ───────────────────────────────────────────────────────────────
   html = html.replace(/<table/g, '<div class="table-wrapper"><table');
   html = html.replace(/<\/table>/g, "</table></div>");
+
+  // 6. Previne erros de segurança de navegação em HTTPS (navegadores bloqueiam links e carregamento file:///)
+  html = html.replace(
+    /<a\s+[^>]*?href=["']file:[^"']*["'][^>]*?>(.*?)<\/a>/gi,
+    '<span class="font-mono text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded text-xs" title="Caminho local">$1</span>'
+  );
+  html = html.replace(
+    /<img\s+[^>]*?src=["']file:[^"']*["'][^>]*?\/?>/gi,
+    '<span class="text-zinc-500 text-xs italic">[Arquivo local]</span>'
+  );
+  html = html.replace(
+    /<(iframe|script|link|video|audio|source)\s+[^>]*?(?:src|href)=["']file:[^"']*["'][^>]*?\/?>/gi,
+    ''
+  );
 
   return html;
 }

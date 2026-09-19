@@ -1,3 +1,5 @@
+import type { PendingFile } from './index';
+
 export interface CodeProject {
   id: string;
   name: string;
@@ -14,17 +16,49 @@ export const DEFAULT_PROJECT_FILES: Record<string, string> = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Minha Aplicação</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        background-color: #09090b;
+        color: #f4f4f5;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, sans-serif;
+        padding: 1rem;
+      }
+      .card {
+        max-width: 28rem;
+        width: 100%;
+        text-align: center;
+        padding: 2rem;
+        border-radius: 1rem;
+        background: rgba(24, 24, 27, 0.6);
+        border: 1px solid #27272a;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        backdrop-filter: blur(4px);
+      }
+      .icon-box {
+        width: 3rem;
+        height: 3rem;
+        border-radius: 0.75rem;
+        background: linear-gradient(to top right, #f59e0b, #ea580c);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 1.25rem;
+      }
+      h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; letter-spacing: -0.025em; }
+      p { color: #a1a1aa; font-size: 0.875rem; line-height: 1.5; }
+    </style>
   </head>
-  <body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col items-center justify-center p-4 font-sans">
-    <div class="max-w-md w-full text-center space-y-4 p-8 rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-2xl backdrop-blur-sm">
-      <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center mx-auto text-xl shadow-lg">
-        ✨
-      </div>
-      <h1 class="text-2xl font-bold tracking-tight">Pronto para criar</h1>
-      <p class="text-zinc-400 text-sm">
-        Descreva o que você deseja construir no chat ao lado para gerar sua aplicação em tempo real.
-      </p>
+  <body>
+    <div class="card">
+      <div class="icon-box">✨</div>
+      <h1>Pronto para criar</h1>
+      <p>Descreva o que você deseja construir no chat ao lado para gerar sua aplicação em tempo real.</p>
     </div>
   </body>
 </html>`
@@ -37,19 +71,37 @@ export interface HarnessAction {
   type: HarnessActionType;
   path?: string;
   detail?: string;
-  status: 'pending' | 'success' | 'error';
+  status: 'pending' | 'success' | 'error' | 'warning';
   error?: string;
   diff?: {
     targetContent?: string;
     replacementContent?: string;
+    oldContent?: string;
+    newContent?: string;
+    isFullRewrite?: boolean;
   };
+}
+
+export interface HarnessStepBlock {
+  id: string;
+  stepNumber: number;
+  totalSteps?: number;
+  title?: string;
+  thoughts?: string;
+  content?: string;
+  actions: HarnessAction[];
+  status: 'running' | 'completed' | 'error';
+  timestamp: number;
 }
 
 export interface AgentChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  files?: PendingFile[];
   thoughts?: string;
   actions?: HarnessAction[];
+  steps?: HarnessStepBlock[];
   timestamp: number;
 }
+
